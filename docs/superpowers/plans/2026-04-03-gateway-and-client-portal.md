@@ -4,7 +4,7 @@
 
 **Goal:** Add a single SSE gateway endpoint per client with progressive tool disclosure, a self-service client portal for toggling MCPs, and an admin catalogue for managing available MCP servers.
 
-**Architecture:** A new `mcp_catalogue` Supabase table holds published MCP servers. Clients pick from it via `/portal/mcps` (stored in `allowed_mcp_resources[]`). The `/gateway/{client_id}` SSE endpoint validates the client's Bearer token, then exposes 4 meta-tools (`search_tools`, `list_mcps`, `list_tools`, `call_tool`) that proxy to upstream SSE servers. The client portal authenticates with `client_id`+`client_secret` and issues a signed session cookie.
+**Architecture:** A new `mcp_catalogue` Supabase table holds published MCP servers. Clients pick from it via `/portal/mcps` (stored in `allowed_mcp_resources[]`). The `/gateway/{client_id}` SSE endpoint validates the client's Bearer token, then exposes 4 meta-tools (`search_tools`, `list_mcps`, `list_tools`, `call_tool`) that proxy to upstream SSE servers. The client portal authenticates with **username + password** (set on first login via a one-time setup link sent in the approval email). `oauth_clients` gains `portal_username` and `portal_password_hash` columns. A `portal_setup_tokens` table holds the one-time 24h setup tokens.
 
 **Tech Stack:** FastAPI, FastMCP (SSE), `mcp` Python library (upstream client), `itsdangerous` (signed cookies), Jinja2, Supabase, existing CSS token system + Phosphor icons.
 
@@ -15,33 +15,54 @@
 **Files:**
 - No source files — Supabase migration only
 
-- [ ] **Step 1: Apply migration via Supabase MCP**
+- [ ] **Step 1: Apply mcp_catalogue migration**
 
-Run this SQL via `mcp__plugin_supabase_supabase__apply_migration` with project_id `bwbghsnnrszdcmwqzjwv`, name `create_mcp_catalogue`:
+Run via `mcp__plugin_supabase_supabase__apply_migration`, project_id `bwbghsnnrszdcmwqzjwv`, name `create_mcp_catalogue`:
 
 ```sql
 CREATE TABLE public.mcp_catalogue (
-  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  slug            text        UNIQUE NOT NULL,
-  name            text        NOT NULL,
-  description     text        NOT NULL,
-  category        text        NOT NULL,
-  upstream_url    text        NOT NULL,
-  upstream_api_key text       NOT NULL DEFAULT '',
-  is_published    boolean     NOT NULL DEFAULT false,
-  created_at      timestamptz NOT NULL DEFAULT now()
+  id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug             text        UNIQUE NOT NULL,
+  name             text        NOT NULL,
+  description      text        NOT NULL,
+  category         text        NOT NULL,
+  upstream_url     text        NOT NULL,
+  upstream_api_key text        NOT NULL DEFAULT '',
+  is_published     boolean     NOT NULL DEFAULT false,
+  created_at       timestamptz NOT NULL DEFAULT now()
 );
 ```
 
-- [ ] **Step 2: Verify table exists**
+- [ ] **Step 2: Apply portal auth migration**
+
+Run via `mcp__plugin_supabase_supabase__apply_migration`, name `portal_auth_columns`:
+
+```sql
+ALTER TABLE public.oauth_clients
+  ADD COLUMN IF NOT EXISTS portal_username      text,
+  ADD COLUMN IF NOT EXISTS portal_password_hash text;
+
+CREATE TABLE public.portal_setup_tokens (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id   text        NOT NULL REFERENCES public.oauth_clients(client_id) ON DELETE CASCADE,
+  token_hash  text        NOT NULL UNIQUE,
+  expires_at  timestamptz NOT NULL,
+  used_at     timestamptz
+);
+
+CREATE INDEX portal_setup_tokens_token_hash_idx ON public.portal_setup_tokens (token_hash);
+```
+
+- [ ] **Step 3: Verify tables exist**
 
 Run via `mcp__plugin_supabase_supabase__execute_sql`:
 ```sql
-SELECT slug, name, is_published FROM public.mcp_catalogue LIMIT 1;
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'oauth_clients' AND column_name IN ('portal_username','portal_password_hash');
 ```
-Expected: empty result with no error.
+Expected: 2 rows.
 
-- [ ] **Step 3: Seed the Linguist entry**
+- [ ] **Step 4: Seed the Linguist entry**
 
 ```sql
 INSERT INTO public.mcp_catalogue (slug, name, description, category, upstream_url, upstream_api_key, is_published)
@@ -56,11 +77,11 @@ VALUES (
 );
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add -A
-git commit -m "feat: mcp_catalogue DB migration and linguist seed"
+git commit -m "feat: mcp_catalogue + portal auth DB migrations, linguist seed"
 ```
 
 ---
@@ -385,7 +406,11 @@ git commit -m "feat: admin MCP catalogue — CRUD + publish toggle"
 - Create: `src/portal/__init__.py`
 - Create: `src/portal/routes.py`
 - Create: `src/portal/templates/portal_login.html`
+- Create: `src/portal/templates/portal_setup_password.html`
 - Create: `src/portal/templates/portal_base.html`
+- Modify: `src/email.py` (add setup link to approval email)
+- Modify: `src/oauth/routes.py` (generate setup token on reg_approve)
+- Modify: `src/admin/routes.py` (generate setup token on admin approve)
 - Modify: `main.py`
 
 - [ ] **Step 1: Create src/portal/__init__.py**
@@ -399,19 +424,19 @@ git commit -m "feat: admin MCP catalogue — CRUD + publish toggle"
 ```python
 from __future__ import annotations
 
+import hashlib
 import os
-import secrets as _secrets
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Cookie, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from src.config import get_settings
-from src.crypto import verify_secret
+from src.crypto import generate_token, hash_secret, verify_secret
 from src.db import get_db
-from src.oauth.provider import SupabaseOAuthProvider
 
 router = APIRouter(prefix="/portal")
 
@@ -420,6 +445,7 @@ templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 
 _SESSION_MAX_AGE = 60 * 60 * 8  # 8 hours
 _COOKIE_NAME = "portal_session"
+_SETUP_TOKEN_TTL_HOURS = 24
 
 
 def _serializer() -> URLSafeTimedSerializer:
@@ -439,7 +465,6 @@ def _verify_session(token: str) -> Optional[str]:
 
 
 def _require_portal_client(request: Request) -> str:
-    """Dependency: returns client_id from session cookie or raises redirect."""
     token = request.cookies.get(_COOKIE_NAME)
     if not token:
         raise HTTPException(status_code=302, headers={"Location": "/portal/login"})
@@ -455,6 +480,47 @@ def _get_client(client_id: str) -> Optional[dict]:
     return result.data[0] if result.data else None
 
 
+def _hash_setup_token(raw: str) -> str:
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def create_setup_token(client_id: str) -> str:
+    """Generate a one-time setup token, store hash in DB, return raw token."""
+    raw = generate_token(32)
+    token_hash = _hash_setup_token(raw)
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=_SETUP_TOKEN_TTL_HOURS)).isoformat()
+    get_db().table("portal_setup_tokens").insert({
+        "client_id": client_id,
+        "token_hash": token_hash,
+        "expires_at": expires_at,
+    }).execute()
+    return raw
+
+
+def _redeem_setup_token(raw: str) -> Optional[str]:
+    """Validate token, return client_id if valid and unused. Returns None if invalid."""
+    token_hash = _hash_setup_token(raw)
+    db = get_db()
+    result = db.table("portal_setup_tokens").select("*").eq("token_hash", token_hash).limit(1).execute()
+    if not result.data:
+        return None
+    row = result.data[0]
+    if row.get("used_at"):
+        return None
+    expires_at = datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires_at:
+        return None
+    return row["client_id"]
+
+
+def _consume_setup_token(raw: str) -> None:
+    """Mark token as used."""
+    token_hash = _hash_setup_token(raw)
+    get_db().table("portal_setup_tokens").update({
+        "used_at": datetime.now(timezone.utc).isoformat()
+    }).eq("token_hash", token_hash).execute()
+
+
 # ── Login ─────────────────────────────────────────────────────────────────────
 
 @router.get("/login", response_class=HTMLResponse)
@@ -467,24 +533,91 @@ async def portal_login_get(request: Request):
 @router.post("/login", response_class=HTMLResponse)
 async def portal_login_post(
     request: Request,
-    client_id: str = Form(...),
-    client_secret: str = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
 ):
-    provider = SupabaseOAuthProvider()
-    client = provider.get_client(client_id)
-    if client is None or not client.is_active or not verify_secret(client_secret, client.client_secret_hash):
+    db = get_db()
+    result = db.table("oauth_clients").select("*").eq("portal_username", username).eq("is_active", True).limit(1).execute()
+    client = result.data[0] if result.data else None
+
+    if client is None:
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
-            context={"error": "Invalid client ID or secret"},
+            context={"error": "Invalid username or password"}, status_code=401,
+        )
+    if not client.get("portal_password_hash"):
+        return templates.TemplateResponse(
+            request=request, name="portal_login.html",
+            context={"error": "Account not yet set up. Please use the setup link from your approval email."},
             status_code=401,
         )
+    if not verify_secret(password, client["portal_password_hash"]):
+        return templates.TemplateResponse(
+            request=request, name="portal_login.html",
+            context={"error": "Invalid username or password"}, status_code=401,
+        )
+
     response = RedirectResponse(url="/portal/", status_code=303)
     response.set_cookie(
-        _COOKIE_NAME,
-        _sign_session(client_id),
-        httponly=True,
-        samesite="lax",
-        max_age=_SESSION_MAX_AGE,
+        _COOKIE_NAME, _sign_session(client["client_id"]),
+        httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE,
+    )
+    return response
+
+
+# ── Setup password (first login) ──────────────────────────────────────────────
+
+@router.get("/setup-password", response_class=HTMLResponse)
+async def setup_password_get(request: Request, token: str = ""):
+    client_id = _redeem_setup_token(token)
+    if not client_id:
+        return templates.TemplateResponse(
+            request=request, name="portal_login.html",
+            context={"error": "Setup link is invalid or has expired. Contact your administrator."},
+        )
+    client = _get_client(client_id)
+    return templates.TemplateResponse(
+        request=request, name="portal_setup_password.html",
+        context={"token": token, "username": client.get("portal_username", ""), "error": None},
+    )
+
+
+@router.post("/setup-password", response_class=HTMLResponse)
+async def setup_password_post(
+    request: Request,
+    token: str = Form(...),
+    username: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+):
+    client_id = _redeem_setup_token(token)
+    if not client_id:
+        return templates.TemplateResponse(
+            request=request, name="portal_login.html",
+            context={"error": "Setup link is invalid or has expired. Contact your administrator."},
+        )
+    if password != password_confirm:
+        return templates.TemplateResponse(
+            request=request, name="portal_setup_password.html",
+            context={"token": token, "username": username, "error": "Passwords do not match"},
+        )
+    if len(password) < 8:
+        return templates.TemplateResponse(
+            request=request, name="portal_setup_password.html",
+            context={"token": token, "username": username, "error": "Password must be at least 8 characters"},
+        )
+
+    db = get_db()
+    db.table("oauth_clients").update({
+        "portal_username": username.strip(),
+        "portal_password_hash": hash_secret(password),
+    }).eq("client_id", client_id).execute()
+    _consume_setup_token(token)
+
+    response = RedirectResponse(url="/portal/", status_code=303)
+    response.set_cookie(
+        _COOKIE_NAME, _sign_session(client_id),
+        httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE,
     )
     return response
 
@@ -510,10 +643,7 @@ Create `src/portal/templates/portal_login.html`:
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #060E10; --accent: #E8500A; --accent-vivid: #FF5E00;
-    --focus: #115E67; --danger-fg: #FF6B6B;
-  }
+  :root { --bg: #060E10; --accent: #E8500A; --accent-vivid: #FF5E00; --focus: #115E67; --danger-fg: #FF6B6B; }
   body { font-family: 'Avenir Next','Avenir','Segoe UI',Helvetica Neue,Arial,sans-serif; background: var(--bg); display: flex; align-items: center; justify-content: center; min-height: 100vh; }
   .card { background: #fff; border-radius: 12px; padding: 1.75rem; max-width: 400px; width: 100%; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
   .brand { font-size: 0.65rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-vivid); margin-bottom: 1.25rem; }
@@ -531,18 +661,18 @@ Create `src/portal/templates/portal_login.html`:
 <div class="card">
   <div class="brand">DS-MOZ Intelligence</div>
   <h1>Client Portal</h1>
-  <p class="sub">Sign in with your client credentials</p>
+  <p class="sub">Sign in to manage your MCPs and get your gateway config</p>
   {% if error %}
   <div class="error"><i class="ph-light ph-warning"></i> {{ error }}</div>
   {% endif %}
   <form method="post" action="/portal/login">
     <div class="form-group">
-      <label>Client ID</label>
-      <input type="text" name="client_id" required placeholder="mcp_…" autocomplete="username">
+      <label>Username</label>
+      <input type="text" name="username" required autocomplete="username" placeholder="your@email.com">
     </div>
     <div class="form-group">
-      <label>Client Secret</label>
-      <input type="password" name="client_secret" required placeholder="••••••••" autocomplete="current-password">
+      <label>Password</label>
+      <input type="password" name="password" required autocomplete="current-password" placeholder="••••••••">
     </div>
     <button type="submit" class="btn">
       <i class="ph-light ph-sign-in"></i> Sign In
@@ -553,7 +683,132 @@ Create `src/portal/templates/portal_login.html`:
 </html>
 ```
 
-- [ ] **Step 4: Create portal_base.html**
+- [ ] **Step 4: Create portal_setup_password.html**
+
+Create `src/portal/templates/portal_setup_password.html`:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Set Up Your Account — DS-MOZ Intelligence</title>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root { --bg: #060E10; --accent: #E8500A; --accent-vivid: #FF5E00; --focus: #115E67; --danger-fg: #FF6B6B; }
+  body { font-family: 'Avenir Next','Avenir','Segoe UI',Helvetica Neue,Arial,sans-serif; background: var(--bg); display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .card { background: #fff; border-radius: 12px; padding: 1.75rem; max-width: 420px; width: 100%; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
+  .brand { font-size: 0.65rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-vivid); margin-bottom: 1.25rem; }
+  h1 { font-size: 1.2rem; font-weight: 700; color: #0A1C20; margin-bottom: 0.25rem; }
+  .sub { font-size: 0.85rem; color: #5A8A90; margin-bottom: 1.5rem; line-height: 1.5; }
+  .form-group { margin-bottom: 1rem; }
+  label { display: block; font-size: 0.75rem; font-weight: 600; color: #0A1C20; margin-bottom: 0.3rem; }
+  input { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid #D4E8EA; border-radius: 6px; background: #F0F7F8; font-size: 0.875rem; color: #0A1C20; outline: none; }
+  input:focus { border-color: var(--focus); }
+  .btn { width: 100%; padding: 0.65rem; background: var(--accent); color: #fff; border: none; border-radius: 6px; font-size: 0.9rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; margin-top: 0.5rem; }
+  .error { background: #FFF0F0; border: 1px solid #FFB3B3; border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.8rem; color: var(--danger-fg); margin-bottom: 1rem; }
+  .hint { font-size: 0.72rem; color: #91BCC1; margin-top: 0.25rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">DS-MOZ Intelligence</div>
+  <h1>Set Up Your Account</h1>
+  <p class="sub">Choose a username and password to access the client portal. Your username defaults to your email — you can change it.</p>
+  {% if error %}
+  <div class="error"><i class="ph-light ph-warning"></i> {{ error }}</div>
+  {% endif %}
+  <form method="post" action="/portal/setup-password">
+    <input type="hidden" name="token" value="{{ token }}">
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" name="username" required value="{{ username }}" autocomplete="username">
+      <p class="hint">This is what you'll use to sign in.</p>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" name="password" required autocomplete="new-password" placeholder="Min. 8 characters">
+    </div>
+    <div class="form-group">
+      <label>Confirm Password</label>
+      <input type="password" name="password_confirm" required autocomplete="new-password" placeholder="Repeat password">
+    </div>
+    <button type="submit" class="btn">
+      <i class="ph-light ph-check"></i> Create Account & Sign In
+    </button>
+  </form>
+</div>
+</body>
+</html>
+```
+
+- [ ] **Step 5: Update approval email to include setup link**
+
+In `src/email.py`, update `send_approval_email` signature and HTML to include the setup link:
+
+Change the function signature to:
+```python
+async def send_approval_email(
+    contact_name: str,
+    contact_email: str,
+    company_name: str,
+    client_id: str,
+    raw_secret: str,
+    issuer_url: str,
+    setup_token: str,
+) -> None:
+```
+
+Add a `setup_url` variable before building the HTML:
+```python
+setup_url = f"{issuer_url}/portal/setup-password?token={setup_token}"
+```
+
+In `_APPROVAL_HTML`, add after the secret box section:
+
+```html
+  <div class="section">
+    <h2>Access Your Client Portal</h2>
+    <p>Set up your username and password to manage your MCPs and get your gateway config:</p>
+    <a href="{setup_url}" style="display:inline-block;margin-top:0.75rem;padding:0.65rem 1.25rem;background:#E8500A;color:#fff;border-radius:6px;font-weight:700;font-size:0.875rem;text-decoration:none;">Set Up Portal Account →</a>
+    <p style="font-size:0.75rem;color:#91BCC1;margin-top:0.5rem;">This link expires in 24 hours.</p>
+  </div>
+```
+
+Pass `setup_url=setup_url` into the `.format()` call on `_APPROVAL_HTML`.
+
+- [ ] **Step 6: Generate setup token on Telegram approval**
+
+In `src/oauth/routes.py`, in the `reg_approve` block, after the `send_approval_email` call add:
+
+```python
+from src.portal.routes import create_setup_token as _create_setup_token
+# Set portal_username to contact email
+db.table("oauth_clients").update({
+    "portal_username": reg["contact_email"]
+}).eq("client_id", client_id).execute()
+setup_token = _create_setup_token(client_id)
+```
+
+Then pass `setup_token=setup_token` to `send_approval_email(...)`.
+
+- [ ] **Step 7: Generate setup token on admin panel approval**
+
+In `src/admin/routes.py`, in `approve_registration`, after the `asyncio.create_task(em.send_approval_email(...))` block add:
+
+```python
+from src.portal.routes import create_setup_token as _create_setup_token
+db.table("oauth_clients").update({
+    "portal_username": reg["contact_email"]
+}).eq("client_id", client_id).execute()
+setup_token = _create_setup_token(client_id)
+```
+
+Update the `asyncio.create_task` call to pass `setup_token=setup_token`.
+
+- [ ] **Step 8: Create portal_base.html**
 
 Create `src/portal/templates/portal_base.html`:
 

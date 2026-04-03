@@ -23,7 +23,8 @@ Registered clients currently receive a `client_id` and `client_secret` and must 
 | Gateway transport | SSE (matches upstream MCP servers) |
 | Tool disclosure | 4 meta-tools only: `search_tools`, `list_mcps`, `list_tools`, `call_tool` |
 | Upstream protocol | SSE — all deployed MCP servers expose `/sse` |
-| Portal auth | `client_id` + `client_secret` → signed session cookie (`itsdangerous`) |
+| Portal auth | Username + password → signed session cookie (`itsdangerous`). Username defaults to contact email. Password set by client on first login via one-time setup link sent in approval email. |
+| First-login flow | Approval email includes `/portal/setup-password?token=xxx` (24h, single-use). Client sets username + password. Subsequent logins: username + password. |
 | MCP selection storage | Reuse `allowed_mcp_resources: list[str]` on `oauth_clients` — stores list of catalogue `slug` values |
 | New DB table | `mcp_catalogue` — admin-managed, one row per published MCP |
 | Portal layout | Sidebar: Overview / My MCPs / Setup Guide |
@@ -47,6 +48,28 @@ CREATE TABLE public.mcp_catalogue (
   is_published boolean NOT NULL DEFAULT false,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
+```
+
+### New table: `portal_setup_tokens`
+
+```sql
+CREATE TABLE public.portal_setup_tokens (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id   text        NOT NULL REFERENCES public.oauth_clients(client_id) ON DELETE CASCADE,
+  token_hash  text        NOT NULL UNIQUE,   -- SHA-256 of the raw token
+  expires_at  timestamptz NOT NULL,
+  used_at     timestamptz                    -- null until redeemed
+);
+```
+
+### Changes to `oauth_clients`
+
+Add two columns:
+
+```sql
+ALTER TABLE public.oauth_clients
+  ADD COLUMN portal_username     text,        -- defaults to contact_email on approval
+  ADD COLUMN portal_password_hash text;       -- null until client completes setup
 ```
 
 ### Existing: `oauth_clients.allowed_mcp_resources`
@@ -123,19 +146,37 @@ Use `mcp` Python library (`mcp.client.sse.sse_client` + `mcp.client.session.Clie
 
 ### Auth
 
-- `POST /portal/login` — form: `client_id` + `client_secret`
-  - Validates via `get_client()` + `verify_secret()`
-  - On success: sets signed session cookie `portal_session` containing `{"client_id": "..."}` using `itsdangerous.URLSafeTimedSerializer` with `SECRET_KEY` from settings
+- `POST /portal/login` — form: `username` + `password`
+  - Looks up `oauth_clients` by `portal_username`, validates `portal_password_hash` via bcrypt
+  - On success: sets signed session cookie `portal_session` containing `{"client_id": "..."}` via `itsdangerous.URLSafeTimedSerializer` with `SECRET_KEY`
   - On failure: re-renders login with error
+  - If `portal_password_hash` is null (not yet set up): show "Please complete your account setup via the link in your approval email"
 - `POST /portal/logout` — clears cookie, redirects to login
-- All `/portal/*` routes check cookie via `_require_portal_client()` dependency
+- All `/portal/*` routes (except login + setup-password) check cookie via `_require_portal_client()` dependency
+
+### First-login flow
+
+1. On approval (Telegram or admin panel), after creating the OAuth client:
+   - Generate a 32-byte raw token, store `SHA-256(token)` in `portal_setup_tokens` with 24h expiry
+   - Set `portal_username = contact_email` on the `oauth_clients` row
+   - Include setup link in the approval email: `{OAUTH_ISSUER_URL}/portal/setup-password?token={raw_token}`
+2. Client clicks link → `GET /portal/setup-password?token=xxx`
+   - Validates token (hash lookup, not expired, not used)
+   - Shows form: username (pre-filled with email, editable) + new password + confirm password
+3. `POST /portal/setup-password`
+   - Validates token again
+   - Updates `portal_username` and `portal_password_hash` on `oauth_clients`
+   - Marks token as used (`used_at = now()`)
+   - Sets session cookie → redirects to `/portal/`
 
 ### Routes
 
 | Route | Description |
 |---|---|
 | `GET /portal/login` | Login form (standalone, light card layout like register.html) |
-| `POST /portal/login` | Auth handler |
+| `POST /portal/login` | Auth handler — username + password |
+| `GET /portal/setup-password` | First-login password setup form (requires valid token param) |
+| `POST /portal/setup-password` | Save username + password, mark token used, set session |
 | `GET /portal/` | Overview: client name, usage today/month/total, gateway URL |
 | `GET /portal/mcps` | MCP catalogue with toggles showing current selection |
 | `POST /portal/mcps` | Save MCP selection → updates `allowed_mcp_resources` |
@@ -207,7 +248,8 @@ Used for signing portal session cookies.
 | `src/gateway/upstream.py` | Upstream MCP client: fetch tool list, call tool via SSE |
 | `src/admin/templates/catalogue_list.html` | Admin catalogue list |
 | `src/admin/templates/catalogue_form.html` | Admin catalogue create/edit form |
-| `src/portal/templates/portal_login.html` | Client login |
+| `src/portal/templates/portal_login.html` | Client login (username + password) |
+| `src/portal/templates/portal_setup_password.html` | First-login password setup form |
 | `src/portal/templates/portal_base.html` | Portal base layout |
 | `src/portal/templates/portal_overview.html` | Overview tab |
 | `src/portal/templates/portal_mcps.html` | MCP selection tab |
