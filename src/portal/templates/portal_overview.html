@@ -1,0 +1,65 @@
+{% extends "portal_base.html" %}
+{% block title %}Overview — DS-MOZ Intelligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Overview</h1>
+</div>
+
+<div class="card">
+  <h2>Usage</h2>
+  <div class="stat-grid">
+    <div class="stat-box">
+      <div class="stat-num">{{ usage_today }}</div>
+      <div class="stat-label">Today</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">{{ usage_month }}</div>
+      <div class="stat-label">This Month</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" style="color:var(--text-ui)">{{ usage_total }}</div>
+      <div class="stat-label">All Time</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Your Gateway URL</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.5rem;line-height:1.5">
+    Connect Claude Desktop or ChatGPT to this single endpoint to access all your enabled MCP tools.
+  </p>
+  <div class="code-pill">
+    <span id="gateway-url">{{ gateway_url }}</span>
+    <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy URL">
+      <i class="ph-light ph-copy" style="font-size:14px"></i>
+    </button>
+  </div>
+  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem">
+    Use your OAuth access token as the Bearer token when connecting.
+    Visit <a href="/portal/setup" style="color:var(--vivid)">Setup Guide</a> for the full config.
+  </p>
+</div>
+
+<div class="card">
+  <h2>Account</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+    <div>
+      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">Organisation</div>
+      <div style="font-size:0.9rem;color:var(--text-h);font-weight:600">{{ client.client_name }}</div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">Client ID</div>
+      <div style="font-family:monospace;font-size:0.8rem;color:var(--amber)">{{ client.client_id }}</div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">Status</div>
+      <div style="font-size:0.875rem;color:var(--success)">&#9679; Active</div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">MCPs Enabled</div>
+      <div style="font-size:0.875rem;color:var(--text-h)">{{ (client.allowed_mcp_resources or []) | length }}</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

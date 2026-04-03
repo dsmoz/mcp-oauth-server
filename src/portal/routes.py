@@ -203,3 +203,89 @@ async def portal_logout():
     response = RedirectResponse(url="/portal/login", status_code=303)
     response.delete_cookie(_COOKIE_NAME)
     return response
+
+
+# ── Overview ──────────────────────────────────────────────────────────────────
+
+@router.get("/", response_class=HTMLResponse)
+async def portal_overview(request: Request, client_id: str = Depends(_require_portal_client)):
+    client = _get_client(client_id)
+    if not client:
+        raise HTTPException(status_code=401, detail="Client not found")
+
+    db = get_db()
+    from datetime import date, timezone as _tz
+    today = date.today().isoformat()
+    month_start = date.today().replace(day=1).isoformat()
+
+    def _count(query_result) -> int:
+        return query_result.data[0]["count"] if query_result.data else 0
+
+    usage_today = _count(
+        db.table("oauth_usage_logs").select("count", count="exact")
+          .eq("client_id", client_id).gte("called_at", today).execute()
+    )
+    usage_month = _count(
+        db.table("oauth_usage_logs").select("count", count="exact")
+          .eq("client_id", client_id).gte("called_at", month_start).execute()
+    )
+    usage_total = _count(
+        db.table("oauth_usage_logs").select("count", count="exact")
+          .eq("client_id", client_id).execute()
+    )
+
+    from src.config import get_settings
+    gateway_url = f"{get_settings().OAUTH_ISSUER_URL}/gateway/{client_id}"
+
+    return templates.TemplateResponse(
+        request=request, name="portal_overview.html", context={
+            "client": client,
+            "active_nav": "overview",
+            "usage_today": usage_today,
+            "usage_month": usage_month,
+            "usage_total": usage_total,
+            "gateway_url": gateway_url,
+        }
+    )
+
+
+# ── MCP selection ─────────────────────────────────────────────────────────────
+
+@router.get("/mcps", response_class=HTMLResponse)
+async def portal_mcps_get(request: Request, client_id: str = Depends(_require_portal_client)):
+    client = _get_client(client_id)
+    if not client:
+        raise HTTPException(status_code=401, detail="Client not found")
+
+    db = get_db()
+    catalogue = db.table("mcp_catalogue").select("*").eq("is_published", True).order("name").execute().data or []
+    enabled = set(client.get("allowed_mcp_resources") or [])
+
+    return templates.TemplateResponse(
+        request=request, name="portal_mcps.html", context={
+            "client": client,
+            "active_nav": "mcps",
+            "catalogue": catalogue,
+            "enabled": enabled,
+        }
+    )
+
+
+@router.post("/mcps", response_class=HTMLResponse)
+async def portal_mcps_post(request: Request, client_id: str = Depends(_require_portal_client)):
+    client = _get_client(client_id)
+    if not client:
+        raise HTTPException(status_code=401, detail="Client not found")
+
+    form = await request.form()
+    db = get_db()
+    catalogue = db.table("mcp_catalogue").select("slug").eq("is_published", True).execute().data or []
+    valid_slugs = {row["slug"] for row in catalogue}
+
+    selected = [slug for slug in form.getlist("mcps") if slug in valid_slugs]
+
+    db.table("oauth_clients").update({
+        "allowed_mcp_resources": selected,
+    }).eq("client_id", client_id).execute()
+
+    return RedirectResponse(url="/portal/mcps", status_code=303)
