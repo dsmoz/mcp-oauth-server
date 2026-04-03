@@ -265,6 +265,25 @@ async def edit_client(
     return RedirectResponse(url=f"/admin/clients/{client_id}", status_code=303)
 
 
+# ── Set portal credentials ───────────────────────────────────────────────────
+
+@router.post("/clients/{client_id}/set-portal-credentials", response_class=HTMLResponse)
+async def set_portal_credentials(
+    client_id: str,
+    portal_username: str = Form(...),
+    portal_password: str = Form(""),
+    _: str = Depends(_require_admin),
+):
+    db = get_db()
+    if _get_client_row(db, client_id) is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+    update: dict = {"portal_username": portal_username or None}
+    if portal_password:
+        update["portal_password_hash"] = hash_secret(portal_password)
+    db.table("oauth_clients").update(update).eq("client_id", client_id).execute()
+    return RedirectResponse(url=f"/admin/clients/{client_id}", status_code=303)
+
+
 # ── Re-key client ─────────────────────────────────────────────────────────────
 
 @router.post("/clients/{client_id}/rekey", response_class=HTMLResponse)
