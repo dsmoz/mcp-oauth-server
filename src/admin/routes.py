@@ -493,9 +493,57 @@ def _get_catalogue_row(db, slug: str) -> dict | None:
 @router.get("/catalogue", response_class=HTMLResponse)
 async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
     db = get_db()
-    entries = db.table("mcp_catalogue").select("*").order("name").execute().data or []
+    settings = get_settings()
+
+    # Load existing catalogue rows keyed by slug
+    db_rows: dict[str, dict] = {
+        row["slug"]: row
+        for row in (db.table("mcp_catalogue").select("*").execute().data or [])
+    }
+
+    # Fetch Railway services if configured
+    railway_services: list[dict] = []
+    railway_error: str | None = None
+    if settings.RAILWAY_API_TOKEN and settings.RAILWAY_PROJECT_ID:
+        try:
+            from src.admin.railway import fetch_railway_services
+            railway_services = await fetch_railway_services(
+                settings.RAILWAY_API_TOKEN, settings.RAILWAY_PROJECT_ID
+            )
+        except Exception as exc:
+            railway_error = str(exc)
+
+    # Build merged list: each Railway service + any DB-only entries not in Railway
+    railway_slugs = {svc["slug"] for svc in railway_services}
+
+    entries = []
+    for svc in railway_services:
+        slug = svc["slug"]
+        db_row = db_rows.get(slug)
+        entries.append({
+            "slug": slug,
+            "name": svc["name"],
+            "description": db_row["description"] if db_row else "",
+            "category": db_row["category"] if db_row else "",
+            "upstream_url": svc["upstream_url"] or (db_row["upstream_url"] if db_row else ""),
+            "upstream_api_key": db_row["upstream_api_key"] if db_row else "",
+            "is_published": db_row["is_published"] if db_row else False,
+            "from_railway": True,
+            "railway_id": svc["id"],
+            "domain": svc["domain"],
+        })
+
+    # Include DB-only entries (manually added, not on Railway)
+    for slug, row in db_rows.items():
+        if slug not in railway_slugs:
+            entries.append({**row, "from_railway": False, "railway_id": None, "domain": None})
+
+    entries.sort(key=lambda e: e["name"].lower())
+
     return templates.TemplateResponse(
-        request=request, name="catalogue_list.html", context={"entries": entries}
+        request=request, name="catalogue_list.html",
+        context={"entries": entries, "railway_error": railway_error,
+                 "railway_configured": bool(settings.RAILWAY_API_TOKEN and settings.RAILWAY_PROJECT_ID)}
     )
 
 
@@ -567,9 +615,30 @@ async def save_catalogue(
 async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_admin)):
     db = get_db()
     entry = _get_catalogue_row(db, slug)
+
     if entry is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    db.table("mcp_catalogue").update({"is_published": not entry["is_published"]}).eq("slug", slug).execute()
+        # Railway service not yet in DB — fetch its details and upsert
+        settings = get_settings()
+        if settings.RAILWAY_API_TOKEN and settings.RAILWAY_PROJECT_ID:
+            from src.admin.railway import fetch_railway_services
+            services = await fetch_railway_services(settings.RAILWAY_API_TOKEN, settings.RAILWAY_PROJECT_ID)
+            svc = next((s for s in services if s["slug"] == slug), None)
+            if svc is None:
+                raise HTTPException(status_code=404, detail="Not found")
+            db.table("mcp_catalogue").insert({
+                "slug": slug,
+                "name": svc["name"],
+                "description": "",
+                "category": "MCP Server",
+                "upstream_url": svc["upstream_url"] or "",
+                "upstream_api_key": "",
+                "is_published": True,
+            }).execute()
+        else:
+            raise HTTPException(status_code=404, detail="Not found")
+    else:
+        db.table("mcp_catalogue").update({"is_published": not entry["is_published"]}).eq("slug", slug).execute()
+
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
 

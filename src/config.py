@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     BREVO_SENDER_EMAIL: str = ""
     BREVO_SENDER_NAME: str = "DS-MOZ Intelligence"
     SECRET_KEY: str = "change-me-portal-secret"
+    RAILWAY_API_TOKEN: str = ""
+    RAILWAY_PROJECT_ID: str = ""
 
 
 @lru_cache()
