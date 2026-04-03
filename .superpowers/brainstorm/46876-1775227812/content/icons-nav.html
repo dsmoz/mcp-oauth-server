@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Icon & Nav preview</title>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Avenir Next', 'Avenir', 'Segoe UI', sans-serif; background: #111; color: #ccc; padding: 1.5rem; }
+  h2 { color: #F0F7F8; font-size: 1.1rem; font-weight: 700; margin-bottom: 0.4rem; }
+  .subtitle { color: #91BCC1; font-size: 0.85rem; margin-bottom: 1.5rem; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .mockup { border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden; }
+  .mockup-header { background: #1a1a1a; padding: 0.5rem 1rem; font-size: 0.75rem; color: #888; border-bottom: 1px solid #2a2a2a; }
+  .mockup-body { padding: 0; }
+
+  /* ---- Option A: icons in sidebar nav ---- */
+  .sidebar-a {
+    display: flex;
+    height: 280px;
+    background: #060E10;
+  }
+  .sidebar-a .side {
+    width: 180px;
+    background: #0A1C20;
+    border-right: 1px solid #16464F;
+    padding: 1rem 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-a .brand {
+    padding: 0 1rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #FF5E00;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid #16464F;
+    margin-bottom: 0.5rem;
+  }
+  .sidebar-a .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    color: #91BCC1;
+    cursor: pointer;
+  }
+  .sidebar-a .nav-item.active {
+    color: #F0F7F8;
+    background: #0D2A30;
+    border-left: 2px solid #FF5E00;
+  }
+  .sidebar-a .nav-item i { font-size: 18px; }
+  .sidebar-a .main {
+    flex: 1;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .sidebar-a .page-title { font-size: 1rem; font-weight: 700; color: #F0F7F8; }
+  .btn-row { display: flex; gap: 0.5rem; }
+  .btn-orange {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: #E8500A; color: #fff; border: none; border-radius: 6px;
+    padding: 0.45rem 0.9rem; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+  }
+  .btn-ghost {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: transparent; color: #91BCC1;
+    border: 1px solid #16464F; border-radius: 6px;
+    padding: 0.45rem 0.9rem; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+  }
+  .table-mock { background: #0A1C20; border: 1px solid #16464F; border-radius: 6px; overflow: hidden; font-size: 0.75rem; }
+  .table-mock .th { display: flex; gap: 1rem; padding: 0.5rem 0.75rem; background: #0D2A30; color: #5A8A90; font-weight: 700; text-transform: uppercase; font-size: 0.65rem; letter-spacing: 0.05em; }
+  .table-mock .tr { display: flex; gap: 1rem; padding: 0.5rem 0.75rem; border-top: 1px solid #16464F; color: #D4E8EA; align-items: center; }
+  .badge-active { background: #073D20; color: #3DD68C; padding: 0.15em 0.5em; border-radius: 999px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; }
+  .action-icon { color: #5A8A90; font-size: 16px; margin-left: auto; display: flex; gap: 0.5rem; }
+
+  /* ---- Option B: no icons in nav, only in buttons ---- */
+  .sidebar-b {
+    display: flex;
+    height: 280px;
+    background: #060E10;
+  }
+  .sidebar-b .side {
+    width: 180px;
+    background: #0A1C20;
+    border-right: 1px solid #16464F;
+    padding: 1rem 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-b .brand {
+    padding: 0 1rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #FF5E00;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid #16464F;
+    margin-bottom: 0.5rem;
+  }
+  .sidebar-b .nav-item {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    color: #91BCC1;
+    cursor: pointer;
+  }
+  .sidebar-b .nav-item.active {
+    color: #F0F7F8;
+    background: #0D2A30;
+    border-left: 2px solid #FF5E00;
+    font-weight: 600;
+  }
+  .sidebar-b .main {
+    flex: 1;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .sidebar-b .page-title { font-size: 1rem; font-weight: 700; color: #F0F7F8; }
+
+  .select-bar { margin-top: 1.5rem; padding: 1rem; background: #1a1a2e; border-radius: 8px; text-align: center; font-size: 0.85rem; color: #aaa; }
+  .select-btn { display: inline-block; margin: 0.25rem 0.5rem; padding: 0.4rem 1rem; border-radius: 6px; border: 1px solid #444; cursor: pointer; font-size: 0.8rem; color: #ccc; background: #222; transition: all 0.15s; }
+  .select-btn:hover { border-color: #FF5E00; color: #FF5E00; }
+  .select-btn.selected { border-color: #FF5E00; background: #E8500A; color: #fff; }
+</style>
+</head>
+<body>
+
+<h2>Icons in navigation and actions</h2>
+<p class="subtitle">Phosphor Light icons are in the identity guide. How prominently should they appear?</p>
+
+<div class="split">
+
+  <div class="mockup">
+    <div class="mockup-header">A — Icons in sidebar nav + action buttons</div>
+    <div class="mockup-body">
+      <div class="sidebar-a">
+        <div class="side">
+          <div class="brand">DS-MOZ</div>
+          <div class="nav-item active"><i class="ph-light ph-squares-four"></i> Dashboard</div>
+          <div class="nav-item"><i class="ph-light ph-identification-card"></i> Clients</div>
+          <div class="nav-item"><i class="ph-light ph-clipboard-text"></i> Registrations</div>
+          <div class="nav-item"><i class="ph-light ph-globe"></i> Discovery</div>
+        </div>
+        <div class="main">
+          <div class="page-title">Clients</div>
+          <div class="btn-row">
+            <button class="btn-orange"><i class="ph-light ph-plus"></i> New client</button>
+          </div>
+          <div class="table-mock">
+            <div class="th"><span style="flex:1">Name</span><span>Status</span><span style="flex:0 0 60px"></span></div>
+            <div class="tr">
+              <span style="flex:1;color:#F0F7F8">Claude Desktop</span>
+              <span><span class="badge-active">Active</span></span>
+              <span class="action-icon">
+                <i class="ph-light ph-pencil-simple"></i>
+                <i class="ph-light ph-key"></i>
+                <i class="ph-light ph-trash"></i>
+              </span>
+            </div>
+            <div class="tr">
+              <span style="flex:1;color:#F0F7F8">Test Client</span>
+              <span><span class="badge-active">Active</span></span>
+              <span class="action-icon">
+                <i class="ph-light ph-pencil-simple"></i>
+                <i class="ph-light ph-key"></i>
+                <i class="ph-light ph-trash"></i>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">B — Text-only nav, icons only in action buttons</div>
+    <div class="mockup-body">
+      <div class="sidebar-b">
+        <div class="side">
+          <div class="brand">DS-MOZ</div>
+          <div class="nav-item active">Dashboard</div>
+          <div class="nav-item">Clients</div>
+          <div class="nav-item">Registrations</div>
+          <div class="nav-item">Discovery</div>
+        </div>
+        <div class="main">
+          <div class="page-title">Clients</div>
+          <div class="btn-row">
+            <button class="btn-orange"><i class="ph-light ph-plus"></i> New client</button>
+          </div>
+          <div class="table-mock">
+            <div class="th"><span style="flex:1">Name</span><span>Status</span><span style="flex:0 0 60px"></span></div>
+            <div class="tr">
+              <span style="flex:1;color:#F0F7F8">Claude Desktop</span>
+              <span><span class="badge-active">Active</span></span>
+              <span class="action-icon">
+                <i class="ph-light ph-pencil-simple"></i>
+                <i class="ph-light ph-key"></i>
+                <i class="ph-light ph-trash"></i>
+              </span>
+            </div>
+            <div class="tr">
+              <span style="flex:1;color:#F0F7F8">Test Client</span>
+              <span><span class="badge-active">Active</span></span>
+              <span class="action-icon">
+                <i class="ph-light ph-pencil-simple"></i>
+                <i class="ph-light ph-key"></i>
+                <i class="ph-light ph-trash"></i>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="select-bar">
+  <div style="margin-bottom:0.5rem;">Click to select your preference:</div>
+  <span class="select-btn" onclick="this.classList.toggle('selected');document.querySelectorAll('.select-btn').forEach(b=>b!==this&&b.classList.remove('selected'));window.__sp&&__sp.recordChoice('icons-nav','a','Icons in nav + buttons')">A — Icons everywhere</span>
+  <span class="select-btn" onclick="this.classList.toggle('selected');document.querySelectorAll('.select-btn').forEach(b=>b!==this&&b.classList.remove('selected'));window.__sp&&__sp.recordChoice('icons-nav','b','Icons in buttons only')">B — Buttons only</span>
+</div>
+
+</body>
+</html>
