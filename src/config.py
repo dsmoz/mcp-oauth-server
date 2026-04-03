@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     BREVO_API_KEY: str = ""
     BREVO_SENDER_EMAIL: str = ""
     BREVO_SENDER_NAME: str = "DS-MOZ Intelligence"
+    SECRET_KEY: str = "change-me-portal-secret"
 
 
 @lru_cache()
