@@ -71,6 +71,16 @@ def _log_tool_call(client_id: str, mcp_slug: str, tool_name: str) -> None:
         pass
 
 
+def _get_all_published_mcps() -> list[dict]:
+    return get_db().table("mcp_catalogue").select("*").eq("is_published", True).execute().data or []
+
+
+def _update_client_mcps(client_id: str, slugs: list[str]) -> None:
+    get_db().table("oauth_clients").update(
+        {"allowed_mcp_resources": slugs}
+    ).eq("client_id", client_id).execute()
+
+
 def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
     mcp_by_slug = {m["slug"]: m for m in enabled_mcps}
     _tool_cache: dict[str, list[dict]] = {}
@@ -82,12 +92,35 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
         return [
             types.Tool(
                 name="list_mcps",
-                description="List all MCP servers the client has enabled.",
+                description="List all MCP servers you currently have enabled.",
                 inputSchema={"type": "object", "properties": {}},
             ),
             types.Tool(
+                name="browse_mcps",
+                description="Browse all available MCP servers you can add to your toolbox.",
+                inputSchema={"type": "object", "properties": {}},
+            ),
+            types.Tool(
+                name="add_mcp",
+                description="Add an MCP server to your toolbox by slug. Use browse_mcps to discover available MCPs.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {"mcp_slug": {"type": "string"}},
+                    "required": ["mcp_slug"],
+                },
+            ),
+            types.Tool(
+                name="remove_mcp",
+                description="Remove an MCP server from your toolbox by slug.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {"mcp_slug": {"type": "string"}},
+                    "required": ["mcp_slug"],
+                },
+            ),
+            types.Tool(
                 name="search_tools",
-                description="Search for tools by keyword across all enabled MCPs.",
+                description="Search for tools by keyword across all your enabled MCPs.",
                 inputSchema={
                     "type": "object",
                     "properties": {"query": {"type": "string"}},
@@ -131,6 +164,46 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                 {"slug": m["slug"], "name": m["name"], "description": m["description"], "category": m["category"]}
                 for m in enabled_mcps
             ])
+
+        elif name == "browse_mcps":
+            all_mcps = _get_all_published_mcps()
+            enabled_slugs = set(mcp_by_slug.keys())
+            text = json.dumps([
+                {
+                    "slug": m["slug"],
+                    "name": m["name"],
+                    "description": m["description"],
+                    "category": m["category"],
+                    "enabled": m["slug"] in enabled_slugs,
+                }
+                for m in all_mcps
+            ])
+
+        elif name == "add_mcp":
+            slug = arguments.get("mcp_slug", "")
+            all_mcps = {m["slug"]: m for m in _get_all_published_mcps()}
+            if slug not in all_mcps:
+                text = json.dumps({"error": f"MCP '{slug}' not found or not published"})
+            elif slug in mcp_by_slug:
+                text = json.dumps({"status": "already_enabled", "mcp": slug})
+            else:
+                new_slugs = list(mcp_by_slug.keys()) + [slug]
+                _update_client_mcps(client_id, new_slugs)
+                mcp_by_slug[slug] = all_mcps[slug]
+                enabled_mcps.append(all_mcps[slug])
+                text = json.dumps({"status": "added", "mcp": slug, "name": all_mcps[slug]["name"]})
+
+        elif name == "remove_mcp":
+            slug = arguments.get("mcp_slug", "")
+            if slug not in mcp_by_slug:
+                text = json.dumps({"error": f"MCP '{slug}' is not in your toolbox"})
+            else:
+                new_slugs = [s for s in mcp_by_slug.keys() if s != slug]
+                _update_client_mcps(client_id, new_slugs)
+                del mcp_by_slug[slug]
+                enabled_mcps[:] = [m for m in enabled_mcps if m["slug"] != slug]
+                text = json.dumps({"status": "removed", "mcp": slug})
+
         elif name == "search_tools":
             q = (arguments.get("query") or "").lower()
             results = []
@@ -140,10 +213,12 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                         results.append({"mcp": mcp["slug"], "mcp_name": mcp["name"],
                                         "tool": t["name"], "description": t.get("description", "")})
             text = json.dumps(results)
+
         elif name == "list_tools":
             slug = arguments.get("mcp_slug", "")
             text = json.dumps(await _get_tools(slug) if slug in mcp_by_slug
                               else {"error": f"MCP '{slug}' not found"})
+
         elif name == "call_tool":
             slug = arguments.get("mcp_slug", "")
             tool_name = arguments.get("tool_name", "")
@@ -158,6 +233,7 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                 except Exception as exc:
                     text = json.dumps({"error": str(exc)})
                 _log_tool_call(client_id, slug, tool_name)
+
         else:
             text = json.dumps({"error": f"Unknown tool: {name}"})
 
