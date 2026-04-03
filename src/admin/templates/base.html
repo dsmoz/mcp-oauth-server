@@ -33,6 +33,7 @@
       --info-fg:      #7BCFD8;
       --secret-bg:    #1A0C00;
       --secret-border:#7A3000;
+      --danger-border:#5A1010;
     }
 
     body {
@@ -197,7 +198,7 @@
 
     .btn-primary   { background: var(--accent);    color: #fff; }
     .btn-secondary { background: transparent; color: var(--text-ui); border: 1px solid var(--border); }
-    .btn-danger    { background: var(--danger-bg); color: var(--danger-fg); border: 1px solid #5A1010; }
+    .btn-danger    { background: var(--danger-bg); color: var(--danger-fg); border: 1px solid var(--danger-border); }
 
     /* ---- Forms ---- */
     .form-group { margin-bottom: 1.25rem; }
@@ -285,7 +286,7 @@
     /* ---- Error box ---- */
     .error-box {
       background: var(--danger-bg);
-      border: 1px solid #5A1010;
+      border: 1px solid var(--danger-border);
       border-radius: 6px;
       padding: 0.75rem 1rem;
       color: var(--danger-fg);
@@ -363,26 +364,30 @@
       font-weight: 600;
     }
 
+    .brand-short { display: none; }
+
     /* ---- Mobile: icon rail ---- */
     @media (max-width: 767px) {
       .sidebar {
         width: 40px;
-        overflow: visible;
+        overflow-y: visible;
       }
 
       .sidebar-brand {
-        padding: 0.75rem 0;
+        padding: 0.5rem 0;
         text-align: center;
-        font-size: 0.55rem;
-        letter-spacing: 0.05em;
-        writing-mode: vertical-rl;
-        border-bottom: none;
-        border-bottom: 1px solid var(--border);
-        height: 52px;
+        font-size: 0.6rem;
+        letter-spacing: 0.04em;
+        height: auto;
+        min-height: 48px;
         display: flex;
         align-items: center;
         justify-content: center;
+        border-bottom: 1px solid var(--border);
       }
+
+      .brand-full { display: none; }
+      .brand-short { display: block; font-size: 0.65rem; font-weight: 800; color: var(--accent-vivid); writing-mode: horizontal-tb; }
 
       .sidebar-section-label { display: none; }
 
@@ -410,7 +415,7 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="sidebar-brand">DS-MOZ INTELLIGENCE</div>
+      <div class="sidebar-brand"><span class="brand-full">DS-MOZ INTELLIGENCE</span><span class="brand-short">DM</span></div>
       <nav class="sidebar-section">
         <div class="sidebar-section-label">Management</div>
         <a href="/admin/" class="nav-item {% if request.url.path == '/admin/' %}active{% endif %}"
