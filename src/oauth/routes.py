@@ -240,7 +240,8 @@ async def consent_status(session: str):
         location = f"{redirect_uri}{sep}code={code}"
         if state:
             location += f"&state={state}"
-        return JSONResponse({"status": "approved", "redirect": location})
+        # Return a server-redirect URL so the browser follows a 302 instead of JS location change
+        return JSONResponse({"status": "approved", "redirect": f"/consent/complete?session={session}"})
 
     # Check if session still pending
     pending = provider.get_pending_session(session)
@@ -249,6 +250,29 @@ async def consent_status(session: str):
         return JSONResponse({"status": "denied"})
 
     return JSONResponse({"status": "pending"})
+
+
+@router.get("/consent/complete")
+async def consent_complete(session: str):
+    """Server-side redirect after approval — ensures the browser follows the OAuth callback."""
+    provider = _provider()
+    approved = provider.get_completed_code_for_session(session)
+    if not approved:
+        return HTMLResponse("<h1>Session not found or expired.</h1>", status_code=400)
+
+    redirect_uri = approved.get("redirect_uri")
+    code = approved["code"]
+    state = approved.get("state")
+
+    if not redirect_uri:
+        return HTMLResponse("<h1>No redirect URI configured for this client.</h1>", status_code=400)
+
+    sep = "&" if "?" in redirect_uri else "?"
+    location = f"{redirect_uri}{sep}code={code}"
+    if state:
+        location += f"&state={state}"
+
+    return RedirectResponse(url=location, status_code=302)
 
 
 @router.post("/telegram/webhook")
