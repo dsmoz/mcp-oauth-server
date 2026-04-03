@@ -95,6 +95,15 @@ async def dashboard(request: Request, _: str = Depends(_require_admin)):
         .execute()
     )
 
+    today_start = datetime.datetime.utcnow().strftime("%Y-%m-%dT00:00:00Z")
+    month_start = datetime.datetime.utcnow().strftime("%Y-%m-01T00:00:00Z")
+    calls_today = (
+        db.table("oauth_usage_logs").select("*", count="exact").gte("called_at", today_start).execute().count or 0
+    )
+    calls_month = (
+        db.table("oauth_usage_logs").select("*", count="exact").gte("called_at", month_start).execute().count or 0
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -105,6 +114,8 @@ async def dashboard(request: Request, _: str = Depends(_require_admin)):
             "active_tokens": active_tokens,
             "pending_requests": pending_requests,
             "recent_clients": recent_result.data or [],
+            "calls_today": calls_today,
+            "calls_month": calls_month,
         },
     )
 
@@ -116,6 +127,14 @@ async def list_clients(request: Request, _: str = Depends(_require_admin)):
     db = get_db()
     result = db.table("oauth_clients").select("*").order("created_at", desc=True).execute()
     clients = result.data or []
+
+    # Attach total call count to each client
+    for c in clients:
+        c["usage_total"] = (
+            db.table("oauth_usage_logs").select("*", count="exact")
+            .eq("client_id", c["client_id"]).execute().count or 0
+        )
+
     return templates.TemplateResponse(
         request=request,
         name="clients_list.html",
@@ -181,10 +200,32 @@ async def client_detail(
     client = _get_client_row(db, client_id)
     if client is None:
         raise HTTPException(status_code=404, detail="Client not found")
+
+    today_start = datetime.datetime.utcnow().strftime("%Y-%m-%dT00:00:00Z")
+    month_start = datetime.datetime.utcnow().strftime("%Y-%m-01T00:00:00Z")
+    usage_today = (
+        db.table("oauth_usage_logs").select("*", count="exact")
+        .eq("client_id", client_id).gte("called_at", today_start).execute().count or 0
+    )
+    usage_month = (
+        db.table("oauth_usage_logs").select("*", count="exact")
+        .eq("client_id", client_id).gte("called_at", month_start).execute().count or 0
+    )
+    usage_total = (
+        db.table("oauth_usage_logs").select("*", count="exact")
+        .eq("client_id", client_id).execute().count or 0
+    )
+
     return templates.TemplateResponse(
         request=request,
         name="client_detail.html",
-        context={"client": client, "secret": secret},
+        context={
+            "client": client,
+            "secret": secret,
+            "usage_today": usage_today,
+            "usage_month": usage_month,
+            "usage_total": usage_total,
+        },
     )
 
 

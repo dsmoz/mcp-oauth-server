@@ -469,6 +469,12 @@ async def introspect(
     if at.expires_at and at.expires_at < now_unix():
         return JSONResponse({"active": False})
 
+    # Log usage — fire and forget, never block the response
+    try:
+        get_db().table("oauth_usage_logs").insert({"client_id": at.client_id}).execute()
+    except Exception:
+        pass
+
     return JSONResponse(
         {
             "active": True,

@@ -97,6 +97,24 @@
   </form>
 </div>
 
+<div class="card">
+  <h2>Usage</h2>
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 0.75rem;">
+    <div style="text-align: center;">
+      <div style="font-size: 2rem; font-weight: 800; color: var(--accent-vivid); line-height: 1;">{{ usage_today }}</div>
+      <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 0.25rem;">Today</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="font-size: 2rem; font-weight: 800; color: var(--accent-vivid); line-height: 1;">{{ usage_month }}</div>
+      <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 0.25rem;">This Month</div>
+    </div>
+    <div style="text-align: center;">
+      <div style="font-size: 2rem; font-weight: 800; color: var(--text-ui); line-height: 1;">{{ usage_total }}</div>
+      <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 0.25rem;">All Time</div>
+    </div>
+  </div>
+</div>
+
 {% if client.is_active %}
 <div class="card" style="border-color: var(--danger-border); background: var(--danger-bg);">
   <h2 style="color: var(--danger-fg);">Danger Zone</h2>

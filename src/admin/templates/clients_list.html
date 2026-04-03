@@ -21,6 +21,7 @@
       <th>Name</th>
       <th>Client ID</th>
       <th>Status</th>
+      <th>Calls</th>
       <th>Created</th>
       <th>Actions</th>
     </tr>
@@ -36,6 +37,9 @@
         {% else %}
           <span class="badge badge-inactive">Revoked</span>
         {% endif %}
+      </td>
+      <td style="color: var(--text-ui); font-size: 0.85rem; font-variant-numeric: tabular-nums;">
+        {{ client.usage_total }}
       </td>
       <td style="color: var(--text-muted); font-size: 0.8rem;">
         {{ client.created_at[:10] if client.created_at else "—" }}
