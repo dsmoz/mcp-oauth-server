@@ -627,10 +627,7 @@ async def dynamic_client_registration(request: Request):
         "redirect_uris": redirect_uris,
         "grant_types": ["authorization_code", "refresh_token"],
         "scope": "mcp",
-        "allowed_mcp_resources": [
-            row["slug"] for row in
-            (get_db().table("mcp_catalogue").select("slug").eq("is_published", True).execute().data or [])
-        ],
+        "allowed_mcp_resources": [],
         "is_active": True,
         "created_by": "dynamic_registration",
     }).execute()
