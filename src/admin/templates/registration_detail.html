@@ -4,7 +4,9 @@
 {% block content %}
 <div class="page-header">
   <h1>{{ reg.company_name }}</h1>
-  <a href="/admin/registrations" class="btn btn-secondary">← Registrations</a>
+  <a href="/admin/registrations" class="btn btn-secondary">
+    <i class="ph-light ph-arrow-left"></i> Registrations
+  </a>
 </div>
 
 <div class="card">
@@ -25,12 +27,12 @@
 
   <div class="detail-row">
     <span class="detail-label">Company</span>
-    <span class="detail-value" style="font-family: inherit; color: #e2e8f0;">{{ reg.company_name }}</span>
+    <span class="detail-value" style="font-family: inherit; color: var(--text-h);">{{ reg.company_name }}</span>
   </div>
 
   <div class="detail-row">
     <span class="detail-label">Contact Name</span>
-    <span class="detail-value" style="font-family: inherit; color: #e2e8f0;">{{ reg.contact_name }}</span>
+    <span class="detail-value" style="font-family: inherit; color: var(--text-h);">{{ reg.contact_name }}</span>
   </div>
 
   <div class="detail-row">
@@ -40,7 +42,7 @@
 
   <div class="detail-row">
     <span class="detail-label">Use Case</span>
-    <span class="detail-value" style="font-family: inherit; color: #e2e8f0; white-space: pre-wrap;">{{ reg.use_case }}</span>
+    <span class="detail-value" style="font-family: inherit; color: var(--text-h); white-space: pre-wrap;">{{ reg.use_case }}</span>
   </div>
 
   <div class="detail-row">
@@ -49,7 +51,7 @@
       {% if reg.redirect_uris_raw %}
         {{ reg.redirect_uris_raw }}
       {% else %}
-        <span style="color: #64748b; font-family: inherit; font-style: italic;">Not specified</span>
+        <span style="color: var(--text-muted); font-family: inherit; font-style: italic;">Not specified</span>
       {% endif %}
     </span>
   </div>
@@ -68,18 +70,22 @@
 </div>
 
 {% if reg.status == "pending" %}
-<div class="card" style="border-color: #1e3a5f;">
-  <h2 style="color: #7dd3fc; margin-bottom: 1rem;">Actions</h2>
+<div class="card" style="border-color: var(--focus);">
+  <h2 style="color: var(--info-fg); margin-bottom: 1rem;">Actions</h2>
   <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
     <form method="post" action="/admin/registrations/{{ reg.id }}/approve">
-      <button type="submit" class="btn btn-primary">✅ Approve — Create Client</button>
+      <button type="submit" class="btn btn-primary">
+        <i class="ph-light ph-check"></i> Approve — Create Client
+      </button>
     </form>
     <form method="post" action="/admin/registrations/{{ reg.id }}/reject"
           onsubmit="return confirm('Reject this registration request from {{ reg.company_name }}?')">
-      <button type="submit" class="btn btn-danger">❌ Reject</button>
+      <button type="submit" class="btn btn-danger">
+        <i class="ph-light ph-x"></i> Reject
+      </button>
     </form>
   </div>
-  <p style="color: #475569; font-size: 0.8rem; margin-top: 1rem; line-height: 1.5;">
+  <p style="color: var(--text-dim); font-size: 0.8rem; margin-top: 1rem; line-height: 1.5;">
     Approving will immediately generate a client ID and secret and redirect you to the client detail page where you can copy the credentials.
   </p>
 </div>

@@ -23,8 +23,8 @@
     <tr>
       <td>{{ reg.company_name }}</td>
       <td>{{ reg.contact_name }}</td>
-      <td style="font-size: 0.8rem; color: #94a3b8;">{{ reg.contact_email }}</td>
-      <td style="color: #64748b; font-size: 0.8rem;">
+      <td style="font-size: 0.8rem; color: var(--text-ui);">{{ reg.contact_email }}</td>
+      <td style="color: var(--text-muted); font-size: 0.8rem;">
         {{ reg.created_at[:10] if reg.created_at else "—" }}
       </td>
       <td>
@@ -37,14 +37,16 @@
         {% endif %}
       </td>
       <td>
-        <a href="/admin/registrations/{{ reg.id }}" class="btn btn-secondary">Review</a>
+        <a href="/admin/registrations/{{ reg.id }}" class="btn btn-secondary">
+          <i class="ph-light ph-eye"></i> Review
+        </a>
       </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 {% else %}
-<div class="card" style="text-align: center; color: #64748b; padding: 3rem;">
+<div class="card" style="text-align: center; color: var(--text-muted); padding: 3rem;">
   <p>No registration requests yet.</p>
 </div>
 {% endif %}
