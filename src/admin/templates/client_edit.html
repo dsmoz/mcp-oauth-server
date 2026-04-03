@@ -4,7 +4,9 @@
 {% block content %}
 <div class="page-header">
   <h1>Edit Client</h1>
-  <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">← Cancel</a>
+  <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">
+    <i class="ph-light ph-arrow-left"></i> Cancel
+  </a>
 </div>
 
 <div class="card">
@@ -19,13 +21,13 @@
       <label for="redirect_uris_raw">Redirect URIs</label>
       <textarea id="redirect_uris_raw" name="redirect_uris_raw"
                 placeholder="One URI per line">{{ (client.redirect_uris or []) | join('\n') }}</textarea>
-      <small style="color: #64748b; font-size: 0.75rem; margin-top: 0.25rem; display: block;">
-        Leave empty to allow any redirect URI.
-      </small>
+      <small>Leave empty to allow any redirect URI.</small>
     </div>
 
     <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
-      <button type="submit" class="btn btn-primary">Save Changes</button>
+      <button type="submit" class="btn btn-primary">
+        <i class="ph-light ph-floppy-disk"></i> Save Changes
+      </button>
       <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">Cancel</a>
     </div>
   </form>
