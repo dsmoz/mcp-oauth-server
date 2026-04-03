@@ -43,20 +43,13 @@ def _validate_token(token: str) -> str:
 
 
 def _load_enabled_mcps(client_id: str) -> list[dict]:
-    db = get_db()
-    client_row = db.table("oauth_clients").select("allowed_mcp_resources").eq("client_id", client_id).limit(1).execute()
-    if not client_row.data:
-        return []
-    slugs = client_row.data[0].get("allowed_mcp_resources") or []
-    if not slugs:
-        return []
+    """Return all currently published MCPs — available to every active client."""
     return (
-        db.table("mcp_catalogue")
-          .select("*")
-          .in_("slug", slugs)
-          .eq("is_published", True)
-          .execute()
-          .data or []
+        get_db().table("mcp_catalogue")
+                .select("*")
+                .eq("is_published", True)
+                .execute()
+                .data or []
     )
 
 
