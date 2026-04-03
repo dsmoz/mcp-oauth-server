@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Full design preview</title>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Avenir Next', 'Avenir', 'Segoe UI', sans-serif; background: #0d0d0d; color: #ccc; padding: 1.5rem; }
+  h2 { color: #F0F7F8; font-size: 1.1rem; font-weight: 700; margin-bottom: 0.3rem; }
+  .subtitle { color: #91BCC1; font-size: 0.82rem; margin-bottom: 1.5rem; }
+  section { margin-bottom: 2rem; }
+  section > h3 { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #5A8A90; margin-bottom: 0.75rem; border-bottom: 1px solid #16464F; padding-bottom: 0.4rem; }
+  .row { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+  .mockup { border: 1px solid #1e1e1e; border-radius: 8px; overflow: hidden; flex: 1; min-width: 280px; }
+  .mockup-header { background: #181818; padding: 0.4rem 0.75rem; font-size: 0.7rem; color: #666; border-bottom: 1px solid #222; }
+
+  :root {
+    --bg: #060E10; --surface: #0A1C20; --elevated: #0D2A30;
+    --border: #16464F; --focus: #115E67;
+    --accent: #E8500A; --accent-vivid: #FF5E00; --accent-dim: #C4420A;
+    --amber: #FFAE62;
+    --text-h: #F0F7F8; --text-b: #D4E8EA; --text-ui: #91BCC1;
+    --text-muted: #5A8A90; --text-dim: #2E5A60;
+    --success-bg: #073D20; --success-fg: #3DD68C;
+    --danger-bg: #3D0A0A; --danger-fg: #FF6B6B;
+    --warn-bg: #3D2200; --warn-fg: #FFAE62;
+    --secret-bg: #1A0C00; --secret-border: #7A3000;
+  }
+
+  /* ---- ADMIN SHELL ---- */
+  .admin-shell { display: flex; height: 360px; background: var(--bg); font-size: 0.75rem; }
+  .sidebar {
+    width: 220px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  .sidebar-brand {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; color: var(--accent-vivid);
+  }
+  .sidebar-section { padding: 0.5rem 0; flex: 1; }
+  .sidebar-label {
+    padding: 0.5rem 1rem 0.25rem;
+    font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-dim);
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 0.625rem;
+    padding: 0.5rem 1.25rem;
+    color: var(--text-ui); cursor: pointer; transition: all 0.1s;
+    font-size: 0.78rem;
+  }
+  .nav-item.active {
+    color: var(--text-h); background: var(--elevated);
+    border-left: 2px solid var(--accent-vivid);
+    padding-left: calc(1.25rem - 2px);
+  }
+  .main { flex: 1; overflow: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.875rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; }
+  .page-title { font-size: 1rem; font-weight: 700; color: var(--text-h); }
+  .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 0.625rem; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1rem; }
+  .stat.alert { border-color: var(--secret-border); background: var(--secret-bg); }
+  .stat-num { font-size: 1.5rem; font-weight: 800; color: var(--text-h); line-height: 1; }
+  .stat-num.amber { color: var(--amber); }
+  .stat-lbl { font-size: 0.65rem; color: var(--text-muted); font-weight: 600; margin-top: 0.2rem; }
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .t-head { display: grid; grid-template-columns: 1fr 80px 80px 90px; background: var(--elevated); padding: 0.4rem 0.75rem; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+  .t-row { display: grid; grid-template-columns: 1fr 80px 80px 90px; padding: 0.45rem 0.75rem; border-top: 1px solid var(--border); align-items: center; }
+  .t-row:hover { background: var(--elevated); }
+  .badge { display: inline-block; padding: 0.1em 0.5em; border-radius: 999px; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+  .badge-active { background: var(--success-bg); color: var(--success-fg); }
+  .badge-pending { background: var(--warn-bg); color: var(--warn-fg); }
+  .actions-cell { display: flex; gap: 0.4rem; color: var(--text-muted); font-size: 14px; }
+  .btn { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.72rem; font-weight: 700; border: none; cursor: pointer; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: transparent; color: var(--text-ui); border: 1px solid var(--border); }
+  .btn-danger { background: var(--danger-bg); color: var(--danger-fg); border: 1px solid #5A1010; }
+
+  /* ---- ICON RAIL (mobile) ---- */
+  .mobile-shell { display: flex; height: 320px; background: var(--bg); font-size: 0.75rem; width: 240px; }
+  .icon-rail { width: 40px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 0.75rem 0; gap: 0.75rem; }
+  .rail-brand { font-size: 0.5rem; font-weight: 800; color: var(--accent-vivid); letter-spacing: 0.06em; writing-mode: vertical-rl; margin-bottom: 0.25rem; }
+  .rail-icon { color: var(--text-muted); font-size: 18px; padding: 0.2rem; }
+  .rail-icon.active { color: var(--accent-vivid); }
+  .mobile-main { flex: 1; padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; overflow: hidden; }
+
+  /* ---- PUBLIC CARD ---- */
+  .public-bg { background: var(--bg); padding: 2rem; display: flex; align-items: center; justify-content: center; min-height: 280px; }
+  .white-card { background: #fff; border-radius: 12px; padding: 1.75rem; width: 100%; max-width: 340px; box-shadow: 0 12px 48px rgba(0,0,0,0.6); }
+  .card-brand { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent-vivid); margin-bottom: 0.5rem; }
+  .card-title { font-size: 1rem; font-weight: 700; color: #0A1C20; margin-bottom: 0.3rem; }
+  .card-sub { font-size: 0.75rem; color: #5A8A90; margin-bottom: 1.25rem; }
+  .field-label { font-size: 0.7rem; font-weight: 600; color: #5A8A90; margin-bottom: 0.25rem; }
+  .field-input { background: #F0F7F8; border: 1px solid #D4E8EA; border-radius: 5px; padding: 0.45rem 0.7rem; font-size: 0.75rem; color: #2E5A60; margin-bottom: 0.75rem; }
+  .submit-btn { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 0.6rem; width: 100%; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.4rem; }
+
+  /* ---- SECRET BOX ---- */
+  .secret-box { background: var(--secret-bg); border: 1px solid var(--secret-border); border-radius: 8px; padding: 1rem 1.25rem; }
+  .secret-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-vivid); margin-bottom: 0.4rem; }
+  .secret-val { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.82rem; color: var(--amber); word-break: break-all; }
+  .secret-warn { font-size: 0.7rem; color: var(--amber); opacity: 0.7; margin-top: 0.4rem; }
+
+  /* ---- COLOUR TOKENS ---- */
+  .tokens { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .token { width: 80px; }
+  .swatch { height: 40px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.07); margin-bottom: 0.3rem; }
+  .token-name { font-size: 0.6rem; color: #888; }
+  .token-val { font-size: 0.6rem; color: #aaa; font-family: monospace; }
+</style>
+</head>
+<body>
+
+<h2>Full design preview — DSMOZ Intelligence visual identity</h2>
+<p class="subtitle">All decisions applied: sidebar + icon rail, teal/orange palette, Phosphor Light icons, light card for public pages.</p>
+
+<!-- SECTION 1: Admin shell desktop -->
+<section>
+  <h3>Admin panel — desktop (sidebar layout)</h3>
+  <div class="mockup">
+    <div class="mockup-header">Dashboard — 1280px viewport</div>
+    <div class="admin-shell">
+      <div class="sidebar">
+        <div class="sidebar-brand">DS-MOZ INTELLIGENCE</div>
+        <div class="sidebar-section">
+          <div class="sidebar-label">Management</div>
+          <div class="nav-item active"><i class="ph-light ph-squares-four"></i> Dashboard</div>
+          <div class="nav-item"><i class="ph-light ph-identification-card"></i> Clients</div>
+          <div class="nav-item"><i class="ph-light ph-clipboard-text"></i> Registrations</div>
+          <div class="sidebar-label" style="margin-top:0.5rem;">System</div>
+          <div class="nav-item"><i class="ph-light ph-globe"></i> Discovery</div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="page-header">
+          <div class="page-title">Dashboard</div>
+          <button class="btn btn-primary"><i class="ph-light ph-plus"></i> New Client</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="stat-num">12</div><div class="stat-lbl">Total Clients</div></div>
+          <div class="stat"><div class="stat-num">9</div><div class="stat-lbl">Active</div></div>
+          <div class="stat"><div class="stat-num">47</div><div class="stat-lbl">Active Tokens</div></div>
+          <div class="stat alert"><div class="stat-num amber">3</div><div class="stat-lbl">Pending Review</div></div>
+        </div>
+        <div class="table-wrap">
+          <div class="t-head"><span>Client Name</span><span>Status</span><span>Tokens</span><span>Actions</span></div>
+          <div class="t-row">
+            <span style="color:var(--text-h);font-weight:600">Claude Desktop</span>
+            <span><span class="badge badge-active">Active</span></span>
+            <span style="color:var(--text-ui)">12</span>
+            <span class="actions-cell"><i class="ph-light ph-eye"></i><i class="ph-light ph-pencil-simple"></i><i class="ph-light ph-key"></i><i class="ph-light ph-trash"></i></span>
+          </div>
+          <div class="t-row">
+            <span style="color:var(--text-h);font-weight:600">Acme Integration</span>
+            <span><span class="badge badge-active">Active</span></span>
+            <span style="color:var(--text-ui)">5</span>
+            <span class="actions-cell"><i class="ph-light ph-eye"></i><i class="ph-light ph-pencil-simple"></i><i class="ph-light ph-key"></i><i class="ph-light ph-trash"></i></span>
+          </div>
+          <div class="t-row">
+            <span style="color:var(--text-h);font-weight:600">Test Client</span>
+            <span><span class="badge" style="background:#16464F;color:#91BCC1;">Inactive</span></span>
+            <span style="color:var(--text-ui)">0</span>
+            <span class="actions-cell"><i class="ph-light ph-eye"></i><i class="ph-light ph-pencil-simple"></i><i class="ph-light ph-key"></i><i class="ph-light ph-trash"></i></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 2: Mobile icon rail -->
+<section>
+  <h3>Admin panel — mobile (icon rail, &lt;768px)</h3>
+  <div class="row">
+    <div class="mockup" style="max-width:280px;">
+      <div class="mockup-header">Dashboard — 375px viewport</div>
+      <div class="mobile-shell">
+        <div class="icon-rail">
+          <div class="rail-brand">DS</div>
+          <i class="ph-light ph-squares-four rail-icon active"></i>
+          <i class="ph-light ph-identification-card rail-icon"></i>
+          <i class="ph-light ph-clipboard-text rail-icon"></i>
+          <i class="ph-light ph-globe rail-icon"></i>
+        </div>
+        <div class="mobile-main">
+          <div style="font-size:0.82rem;font-weight:700;color:var(--text-h)">Dashboard</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;">
+            <div class="stat"><div class="stat-num" style="font-size:1.1rem">12</div><div class="stat-lbl">Clients</div></div>
+            <div class="stat alert"><div class="stat-num amber" style="font-size:1.1rem">3</div><div class="stat-lbl">Pending</div></div>
+          </div>
+          <div class="table-wrap">
+            <div style="padding:0.4rem 0.6rem;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);background:var(--elevated)">Recent clients</div>
+            <div style="padding:0.4rem 0.6rem;border-top:1px solid var(--border);font-size:0.7rem;color:var(--text-h);display:flex;justify-content:space-between;align-items:center">Claude Desktop<span class="badge badge-active">Active</span></div>
+            <div style="padding:0.4rem 0.6rem;border-top:1px solid var(--border);font-size:0.7rem;color:var(--text-h);display:flex;justify-content:space-between;align-items:center">Acme Integration<span class="badge badge-active">Active</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:200px;padding:0.5rem 0;">
+      <div style="font-size:0.78rem;color:var(--text-ui);line-height:1.7;">
+        <div style="color:var(--text-h);font-weight:600;margin-bottom:0.5rem;">Icon rail behaviour</div>
+        <div>• Desktop (≥768px): full 220px sidebar with labels</div>
+        <div>• Mobile (&lt;768px): collapses to 40px icon-only rail</div>
+        <div>• Active page: icon highlighted in <span style="color:#FF5E00">orange</span></div>
+        <div>• Tooltips on hover (title attribute)</div>
+        <div>• CSS media query only — no JavaScript needed</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 3: Public pages -->
+<section>
+  <h3>Public pages — light card on dark background</h3>
+  <div class="row">
+    <div class="mockup" style="max-width:300px;">
+      <div class="mockup-header">Registration form</div>
+      <div class="public-bg">
+        <div class="white-card">
+          <div class="card-brand">DS-MOZ Intelligence</div>
+          <div class="card-title">Request API Access</div>
+          <div class="card-sub">We'll review your request and follow up within 2 business days.</div>
+          <div class="field-label">Company name</div>
+          <div class="field-input">Acme Corp</div>
+          <div class="field-label">Use case</div>
+          <div class="field-input" style="min-height:48px">Integrating Claude Desktop with our…</div>
+          <button class="submit-btn"><i class="ph-light ph-paper-plane-tilt"></i> Submit Request</button>
+        </div>
+      </div>
+    </div>
+    <div class="mockup" style="max-width:300px;">
+      <div class="mockup-header">Consent waiting</div>
+      <div class="public-bg">
+        <div class="white-card" style="text-align:center;">
+          <div class="card-brand">DS-MOZ Intelligence</div>
+          <div class="card-title">Waiting for approval</div>
+          <div class="card-sub">Check your Telegram — approve or deny the request from the bot.</div>
+          <div style="width:36px;height:36px;border:3px solid #D4E8EA;border-top-color:#115E67;border-radius:50%;margin:1rem auto;"></div>
+          <div style="font-size:0.7rem;color:#91BCC1;">Polling every 2s…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 4: Secret box -->
+<section>
+  <h3>Secret / credential display</h3>
+  <div style="max-width:500px;">
+    <div class="secret-box">
+      <div class="secret-label"><i class="ph-light ph-key" style="font-size:12px;vertical-align:middle;margin-right:0.3rem;"></i>Client Secret — shown once</div>
+      <div class="secret-val">sk_mcp_aB3xK9mNpQ2rT5vW8yZ1cE4fG7hJ0kL</div>
+      <div class="secret-warn">Copy this now. It will not be shown again.</div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 5: Info / danger zones -->
+<section>
+  <h3>Contextual zones (client detail page)</h3>
+  <div class="row">
+    <div style="flex:1;min-width:220px;background:var(--surface);border:1px solid var(--focus);border-radius:8px;padding:1rem;">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#7BCFD8;margin-bottom:0.5rem;display:flex;align-items:center;gap:0.35rem;"><i class="ph-light ph-key"></i> Rotate Secret</div>
+      <div style="font-size:0.75rem;color:var(--text-ui);margin-bottom:0.75rem;">Generates a new secret. Existing tokens remain valid.</div>
+      <button class="btn btn-secondary" style="font-size:0.72rem;"><i class="ph-light ph-arrows-clockwise"></i> Rotate Secret</button>
+    </div>
+    <div style="flex:1;min-width:220px;background:var(--danger-bg);border:1px solid #5A1010;border-radius:8px;padding:1rem;">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--danger-fg);margin-bottom:0.5rem;display:flex;align-items:center;gap:0.35rem;"><i class="ph-light ph-warning"></i> Danger Zone</div>
+      <div style="font-size:0.75rem;color:var(--text-ui);margin-bottom:0.75rem;">Permanently deletes the client and all tokens. Cannot be undone.</div>
+      <button class="btn btn-danger" style="font-size:0.72rem;"><i class="ph-light ph-trash"></i> Delete Client</button>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 6: Colour tokens -->
+<section>
+  <h3>CSS custom properties (all defined in base.html)</h3>
+  <div class="tokens">
+    <div class="token"><div class="swatch" style="background:#060E10"></div><div class="token-name">--bg</div><div class="token-val">#060E10</div></div>
+    <div class="token"><div class="swatch" style="background:#0A1C20"></div><div class="token-name">--surface</div><div class="token-val">#0A1C20</div></div>
+    <div class="token"><div class="swatch" style="background:#0D2A30"></div><div class="token-name">--elevated</div><div class="token-val">#0D2A30</div></div>
+    <div class="token"><div class="swatch" style="background:#16464F"></div><div class="token-name">--border</div><div class="token-val">#16464F</div></div>
+    <div class="token"><div class="swatch" style="background:#115E67"></div><div class="token-name">--focus</div><div class="token-val">#115E67</div></div>
+    <div class="token"><div class="swatch" style="background:#E8500A"></div><div class="token-name">--accent</div><div class="token-val">#E8500A</div></div>
+    <div class="token"><div class="swatch" style="background:#FF5E00"></div><div class="token-name">--accent-vivid</div><div class="token-val">#FF5E00</div></div>
+    <div class="token"><div class="swatch" style="background:#FFAE62"></div><div class="token-name">--amber</div><div class="token-val">#FFAE62</div></div>
+    <div class="token"><div class="swatch" style="background:#F0F7F8"></div><div class="token-name">--text-h</div><div class="token-val">#F0F7F8</div></div>
+    <div class="token"><div class="swatch" style="background:#91BCC1"></div><div class="token-name">--text-ui</div><div class="token-val">#91BCC1</div></div>
+    <div class="token"><div class="swatch" style="background:#073D20"></div><div class="token-name">--success-bg</div><div class="token-val">#073D20</div></div>
+    <div class="token"><div class="swatch" style="background:#3DD68C;border:none"></div><div class="token-name">--success-fg</div><div class="token-val">#3DD68C</div></div>
+    <div class="token"><div class="swatch" style="background:#3D0A0A"></div><div class="token-name">--danger-bg</div><div class="token-val">#3D0A0A</div></div>
+    <div class="token"><div class="swatch" style="background:#FF6B6B;border:none"></div><div class="token-name">--danger-fg</div><div class="token-val">#FF6B6B</div></div>
+    <div class="token"><div class="swatch" style="background:#1A0C00"></div><div class="token-name">--secret-bg</div><div class="token-val">#1A0C00</div></div>
+    <div class="token"><div class="swatch" style="background:#7A3000"></div><div class="token-name">--secret-border</div><div class="token-val">#7A3000</div></div>
+  </div>
+</section>
+
+</body>
+</html>
