@@ -1,7 +1,8 @@
 """
 Gateway SSE endpoint — one MCP endpoint per client.
 
-GET /gateway/{client_id}  — SSE stream
+GET  /gateway/{client_id}          — SSE stream
+POST /gateway/{client_id}/messages — MCP message channel
 
 Validates Bearer token, loads the client's enabled MCPs from mcp_catalogue,
 exposes 4 meta-tools via FastMCP:
@@ -16,8 +17,10 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import StreamingResponse
-from mcp.server.fastmcp import FastMCP
+from fastapi.responses import Response
+from mcp.server import Server
+from mcp.server.sse import SseServerTransport
+from mcp import types
 
 from src.db import get_db
 from src.gateway.upstream import call_upstream_tool, fetch_tool_list
@@ -26,8 +29,8 @@ from src.oauth.provider import SupabaseOAuthProvider
 router = APIRouter()
 
 
-def _validate_token(token: str, client_id: str) -> str:
-    """Validate token. Returns the actual client_id from the token (may differ from URL)."""
+def _validate_token(token: str) -> str:
+    """Validate Bearer token. Returns actual client_id from DB."""
     provider = SupabaseOAuthProvider()
     at = provider.load_access_token(token)
     if at is None:
@@ -63,15 +66,56 @@ def _log_tool_call(client_id: str, mcp_slug: str, tool_name: str) -> None:
             "endpoint": f"gateway/{mcp_slug}/{tool_name}",
         }).execute()
     except Exception:
-        pass  # usage logging is best-effort
+        pass
 
 
-def _build_gateway_app(client_id: str, enabled_mcps: list[dict]) -> FastMCP:
-    """Build a FastMCP instance with 4 meta-tools for this client's enabled MCPs."""
+def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
+    """Build a low-level MCP Server with 4 meta-tools."""
     mcp_by_slug = {m["slug"]: m for m in enabled_mcps}
-
-    # Cache tool lists per slug within this session
     _tool_cache: dict[str, list[dict]] = {}
+
+    server = Server("DS-MOZ Intelligence Gateway")
+
+    @server.list_tools()
+    async def list_tools_handler() -> list[types.Tool]:
+        return [
+            types.Tool(
+                name="list_mcps",
+                description="List all MCP servers the client has enabled.",
+                inputSchema={"type": "object", "properties": {}},
+            ),
+            types.Tool(
+                name="search_tools",
+                description="Search for tools by keyword across all enabled MCPs.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {"query": {"type": "string", "description": "Search keyword"}},
+                    "required": ["query"],
+                },
+            ),
+            types.Tool(
+                name="list_tools",
+                description="List all tools for a specific MCP (by slug).",
+                inputSchema={
+                    "type": "object",
+                    "properties": {"mcp_slug": {"type": "string"}},
+                    "required": ["mcp_slug"],
+                },
+            ),
+            types.Tool(
+                name="call_tool",
+                description="Call a tool on an upstream MCP server.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "mcp_slug": {"type": "string"},
+                        "tool_name": {"type": "string"},
+                        "arguments": {"type": "object"},
+                    },
+                    "required": ["mcp_slug", "tool_name", "arguments"],
+                },
+            ),
+        ]
 
     async def _get_tools(slug: str) -> list[dict]:
         if slug not in _tool_cache:
@@ -81,89 +125,87 @@ def _build_gateway_app(client_id: str, enabled_mcps: list[dict]) -> FastMCP:
             _tool_cache[slug] = await fetch_tool_list(mcp["upstream_url"], mcp.get("upstream_api_key", ""))
         return _tool_cache[slug]
 
-    server = FastMCP(
-        name="DS-MOZ Intelligence Gateway",
-        instructions=(
-            "You have access to the DS-MOZ Intelligence tools. "
-            "Use search_tools() to discover available tools, list_mcps() to see enabled MCPs, "
-            "list_tools(mcp_slug) to see tools for a specific MCP, "
-            "and call_tool(mcp_slug, tool_name, arguments) to execute a tool."
-        ),
-    )
+    @server.call_tool()
+    async def call_tool_handler(name: str, arguments: dict) -> list[types.TextContent]:
+        if name == "list_mcps":
+            result = json.dumps([
+                {"slug": m["slug"], "name": m["name"], "description": m["description"], "category": m["category"]}
+                for m in enabled_mcps
+            ])
 
-    @server.tool()
-    async def list_mcps() -> str:
-        """List all MCP servers the client has enabled."""
-        return json.dumps([
-            {"slug": m["slug"], "name": m["name"], "description": m["description"], "category": m["category"]}
-            for m in enabled_mcps
-        ])
+        elif name == "search_tools":
+            query = (arguments.get("query") or "").lower()
+            results = []
+            for mcp in enabled_mcps:
+                tools = await _get_tools(mcp["slug"])
+                for t in tools:
+                    if query in t["name"].lower() or query in t.get("description", "").lower():
+                        results.append({
+                            "mcp": mcp["slug"],
+                            "mcp_name": mcp["name"],
+                            "tool": t["name"],
+                            "description": t.get("description", ""),
+                        })
+            result = json.dumps(results)
 
-    @server.tool()
-    async def search_tools(query: str) -> str:
-        """Search for tools by keyword across all enabled MCPs. Returns matching tools with their MCP slug."""
-        query_lower = query.lower()
-        results = []
-        for mcp in enabled_mcps:
-            tools = await _get_tools(mcp["slug"])
-            for t in tools:
-                if query_lower in t["name"].lower() or query_lower in t.get("description", "").lower():
-                    results.append({
-                        "mcp": mcp["slug"],
-                        "mcp_name": mcp["name"],
-                        "tool": t["name"],
-                        "description": t.get("description", ""),
-                    })
-        return json.dumps(results)
+        elif name == "list_tools":
+            slug = arguments.get("mcp_slug", "")
+            if slug not in mcp_by_slug:
+                result = json.dumps({"error": f"MCP '{slug}' not found or not enabled"})
+            else:
+                result = json.dumps(await _get_tools(slug))
 
-    @server.tool()
-    async def list_tools(mcp_slug: str) -> str:
-        """List all tools available for a specific MCP (identified by its slug)."""
-        if mcp_slug not in mcp_by_slug:
-            return json.dumps({"error": f"MCP '{mcp_slug}' not found or not enabled"})
-        tools = await _get_tools(mcp_slug)
-        return json.dumps(tools)
+        elif name == "call_tool":
+            slug = arguments.get("mcp_slug", "")
+            tool_name = arguments.get("tool_name", "")
+            tool_args = arguments.get("arguments", {})
+            if slug not in mcp_by_slug:
+                result = json.dumps({"error": f"MCP '{slug}' not found or not enabled"})
+            else:
+                mcp = mcp_by_slug[slug]
+                try:
+                    result = await call_upstream_tool(
+                        mcp["upstream_url"], tool_name, tool_args, mcp.get("upstream_api_key", "")
+                    )
+                except Exception as exc:
+                    result = json.dumps({"error": str(exc)})
+                _log_tool_call(client_id, slug, tool_name)
+        else:
+            result = json.dumps({"error": f"Unknown tool: {name}"})
 
-    @server.tool()
-    async def call_tool(mcp_slug: str, tool_name: str, arguments: dict[str, Any]) -> str:
-        """Call a tool on an upstream MCP server. Returns the tool result as a string."""
-        if mcp_slug not in mcp_by_slug:
-            return json.dumps({"error": f"MCP '{mcp_slug}' not found or not enabled"})
-        mcp = mcp_by_slug[mcp_slug]
-        try:
-            result = await call_upstream_tool(
-                mcp["upstream_url"], tool_name, arguments, mcp.get("upstream_api_key", "")
-            )
-        except Exception as exc:
-            return json.dumps({"error": str(exc)})
-        _log_tool_call(client_id, mcp_slug, tool_name)
-        return result
+        return [types.TextContent(type="text", text=result)]
 
     return server
 
 
-async def _handle_gateway(request: Request):
-    """Shared handler for GET and POST to the gateway."""
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
+def _get_bearer(request: Request) -> str:
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Bearer token")
-    token = auth_header[7:]
-
-    actual_client_id = _validate_token(token, "")
-    enabled_mcps = _load_enabled_mcps(actual_client_id)
-    gateway = _build_gateway_app(actual_client_id, enabled_mcps)
-
-    sse_app = gateway.sse_app()
-    return await sse_app(request.scope, request.receive, request._send)
+    return auth[7:]
 
 
 @router.get("/gateway/{client_id}")
-async def gateway_sse_get(client_id: str, request: Request):
-    """SSE gateway — GET (SSE stream)."""
-    return await _handle_gateway(request)
+async def gateway_sse(client_id: str, request: Request):
+    """SSE stream — Claude Desktop connects here."""
+    token = _get_bearer(request)
+    actual_client_id = _validate_token(token)
+    enabled_mcps = _load_enabled_mcps(actual_client_id)
+    mcp_server = _build_mcp_server(actual_client_id, enabled_mcps)
+
+    messages_path = f"/gateway/{client_id}/messages"
+    transport = SseServerTransport(messages_path)
+
+    async with transport.connect_sse(request.scope, request.receive, request._send) as streams:
+        await mcp_server.run(streams[0], streams[1], mcp_server.create_initialization_options())
 
 
-@router.post("/gateway/{client_id}")
-async def gateway_sse_post(client_id: str, request: Request):
-    """SSE gateway — POST (MCP message)."""
-    return await _handle_gateway(request)
+@router.post("/gateway/{client_id}/messages")
+async def gateway_messages(client_id: str, request: Request):
+    """MCP POST message channel."""
+    token = _get_bearer(request)
+    _validate_token(token)
+
+    messages_path = f"/gateway/{client_id}/messages"
+    transport = SseServerTransport(messages_path)
+    return await transport.handle_post_message(request.scope, request.receive, request._send)
