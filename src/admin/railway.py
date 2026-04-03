@@ -19,12 +19,18 @@ query ProjectServices($projectId: String!) {
         node {
           id
           name
-          domains {
-            serviceDomains {
-              domain
-            }
-            customDomains {
-              domain
+          serviceInstances {
+            edges {
+              node {
+                domains {
+                  serviceDomains {
+                    domain
+                  }
+                  customDomains {
+                    domain
+                  }
+                }
+              }
             }
           }
         }
@@ -49,6 +55,9 @@ async def fetch_railway_services(token: str, project_id: str) -> list[dict]:
         resp.raise_for_status()
         data = resp.json()
 
+    if data.get("errors"):
+        raise ValueError(data["errors"][0].get("message", "GraphQL error"))
+
     edges = (
         data.get("data", {})
             .get("project", {})
@@ -63,11 +72,16 @@ async def fetch_railway_services(token: str, project_id: str) -> list[dict]:
         name = node.get("name", "")
         slug = name.lower().replace(" ", "-").replace("_", "-")
 
-        domains_obj = node.get("domains") or {}
-        # Prefer custom domain over generated railway domain
-        custom = [d["domain"] for d in (domains_obj.get("customDomains") or []) if d.get("domain")]
-        service = [d["domain"] for d in (domains_obj.get("serviceDomains") or []) if d.get("domain")]
-        domain = (custom + service + [None])[0]
+        # Collect domains from all service instances
+        domain = None
+        for inst_edge in (node.get("serviceInstances") or {}).get("edges", []):
+            inst = inst_edge.get("node", {})
+            domains_obj = inst.get("domains") or {}
+            custom = [d["domain"] for d in (domains_obj.get("customDomains") or []) if d.get("domain")]
+            service_d = [d["domain"] for d in (domains_obj.get("serviceDomains") or []) if d.get("domain")]
+            domain = (custom + service_d + [None])[0]
+            if domain:
+                break
 
         upstream_url = f"https://{domain}/sse" if domain else None
 
