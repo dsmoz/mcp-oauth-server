@@ -10,8 +10,9 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from src.config import get_settings
-from src.crypto import verify_secret
+from src.crypto import now_unix, verify_secret
 from src.oauth.provider import SupabaseOAuthProvider
+from src import telegram as tg
 
 router = APIRouter()
 
@@ -98,6 +99,7 @@ async def authorize(
 
 @router.get("/authorize/consent", response_class=HTMLResponse)
 async def consent_get(request: Request, session: str):
+    settings = get_settings()
     provider = _provider()
     pending = provider.get_pending_session(session)
     if pending is None:
@@ -107,14 +109,44 @@ async def consent_get(request: Request, session: str):
     client_name = client.client_name if client else pending["client_id"]
     scopes = pending.get("scopes") or ["mcp"]
 
+    # Fallback: if Telegram is not configured, use the password form
+    if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_OWNER_CHAT_ID:
+        return templates.TemplateResponse(
+            request=request,
+            name="consent.html",
+            context={
+                "client_name": client_name,
+                "scopes": scopes,
+                "session_id": session,
+                "error": None,
+            },
+        )
+
+    # Check if we already sent a Telegram message for this session (duplicate guard)
+    import json as _json
+    try:
+        session_data = _json.loads(pending.get("resource") or "{}")
+    except (ValueError, TypeError):
+        session_data = {}
+
+    if not session_data.get("telegram_message_id"):
+        try:
+            message_id = await tg.send_approval_request(
+                session_id=session,
+                client_name=client_name,
+                scopes=scopes,
+            )
+            provider.update_session_telegram_id(session, message_id)
+        except Exception as exc:
+            import sys
+            print(f"WARNING: Telegram send failed: {exc}", file=sys.stderr)
+
     return templates.TemplateResponse(
         request=request,
-        name="consent.html",
+        name="consent_waiting.html",
         context={
             "client_name": client_name,
-            "scopes": scopes,
             "session_id": session,
-            "error": None,
         },
     )
 
@@ -125,6 +157,7 @@ async def consent_post(
     session_id: str = Form(...),
     password: str = Form(...),
 ):
+    """Fallback password-based consent (used when Telegram is not configured)."""
     settings = get_settings()
     provider = _provider()
 
@@ -158,9 +191,7 @@ async def consent_post(
 
     state = pending.get("_state")
 
-    # Build redirect URL
     if not redirect_uri:
-        # No redirect URI — show code directly (edge case)
         return HTMLResponse(
             f"<h1>Authorization Code</h1><p>{code}</p>"
             + (f"<p>State: {state}</p>" if state else ""),
@@ -173,6 +204,98 @@ async def consent_post(
         location += f"&state={state}"
 
     return RedirectResponse(url=location, status_code=302)
+
+
+@router.get("/consent/status")
+async def consent_status(session: str):
+    """Polled by the waiting page every 2 seconds to check approval state."""
+    provider = _provider()
+
+    # Check if already approved (in-process store)
+    approved = provider.get_completed_code_for_session(session)
+    if approved:
+        redirect_uri = approved.get("redirect_uri")
+        code = approved["code"]
+        state = approved.get("state")
+
+        if not redirect_uri:
+            return JSONResponse({"status": "approved", "redirect": None})
+
+        sep = "&" if "?" in redirect_uri else "?"
+        location = f"{redirect_uri}{sep}code={code}"
+        if state:
+            location += f"&state={state}"
+        return JSONResponse({"status": "approved", "redirect": location})
+
+    # Check if session still pending
+    pending = provider.get_pending_session(session)
+    if pending is None:
+        # Row is gone and not in approved store = denied or expired
+        return JSONResponse({"status": "denied"})
+
+    return JSONResponse({"status": "pending"})
+
+
+@router.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+    """Receive Telegram inline button callbacks."""
+    body = await request.json()
+    callback = body.get("callback_query", {})
+    data = callback.get("data", "")
+    callback_id = callback.get("id")
+
+    if not data or not callback_id:
+        return JSONResponse({"ok": True})
+
+    try:
+        action, session_id = data.split(":", 1)
+    except ValueError:
+        return JSONResponse({"ok": True})
+
+    provider = _provider()
+
+    # Get message_id from session for editing
+    import json as _json
+    message_id: Optional[int] = None
+    row = provider._single("oauth_authorization_codes", code=session_id)
+    if row:
+        try:
+            session_data = _json.loads(row.get("resource") or "{}")
+            message_id = session_data.get("telegram_message_id")
+        except (ValueError, TypeError):
+            pass
+
+    if action == "approve":
+        try:
+            # Get state from pending session before completing (complete_authorization wipes session data)
+            pending = provider.get_pending_session(session_id)
+            state = pending.get("_state") if pending else None
+
+            code, redirect_uri = provider.mark_session_approved(session_id)
+
+            # Store for the waiting page to pick up
+            provider.store_approved_redirect(
+                session_id=session_id,
+                code=code,
+                redirect_uri=redirect_uri,
+                state=state,
+            )
+
+            await tg.answer_callback(callback_id, "✅ Access granted")
+            if message_id:
+                await tg.edit_message_result(message_id, "✅ *Access granted*")
+        except Exception as exc:
+            import sys
+            print(f"WARNING: Telegram approval failed: {exc}", file=sys.stderr)
+            await tg.answer_callback(callback_id, "⚠️ Session expired or already processed")
+
+    elif action == "deny":
+        provider.mark_session_denied(session_id)
+        await tg.answer_callback(callback_id, "❌ Access denied")
+        if message_id:
+            await tg.edit_message_result(message_id, "❌ *Access denied*")
+
+    return JSONResponse({"ok": True})
 
 
 # ── Token ─────────────────────────────────────────────────────────────────────

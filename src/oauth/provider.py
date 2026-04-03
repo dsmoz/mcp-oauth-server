@@ -326,6 +326,85 @@ class SupabaseOAuthProvider:
         except Exception as exc:
             raise ValueError("Token revocation failed") from exc
 
+    # ── Telegram Approval Gate ────────────────────────────────────────────────
+
+    def update_session_telegram_id(self, session_id: str, message_id: int) -> None:
+        """Store the Telegram message_id in the pending session so the webhook can edit it."""
+        try:
+            row = self._single("oauth_authorization_codes", code=session_id)
+            if row is None:
+                return
+            try:
+                session_data = json.loads(row.get("resource") or "{}")
+            except (json.JSONDecodeError, TypeError):
+                session_data = {}
+            session_data["telegram_message_id"] = message_id
+            self.db.table("oauth_authorization_codes").update(
+                {"resource": json.dumps(session_data)}
+            ).eq("code", session_id).execute()
+        except Exception:
+            pass  # Non-fatal — approval still works without editing the message
+
+    def mark_session_approved(self, session_id: str) -> tuple[str, Optional[str]]:
+        """
+        Called by Telegram webhook on Approve tap.
+        Reads client_id from the session row and calls complete_authorization.
+        Returns (code, redirect_uri).
+        """
+        row = self._single("oauth_authorization_codes", code=session_id)
+        if row is None:
+            raise ValueError("Session not found or expired")
+        client_id = row["client_id"]
+        return self.complete_authorization(session_id=session_id, client_id=client_id)
+
+    def mark_session_denied(self, session_id: str) -> None:
+        """Called by Telegram webhook on Deny tap. Deletes the pending session."""
+        try:
+            self.db.table("oauth_authorization_codes").delete().eq("code", session_id).execute()
+        except Exception:
+            pass
+
+    def get_completed_code_for_session(self, session_id: str) -> Optional[dict]:
+        """
+        After mark_session_approved, the session row's code column is updated to the real code.
+        This is called by /consent/status to detect that approval happened.
+        The session_id itself is gone — but we flag approved state via a separate lookup
+        table approach. Instead, we use a simpler signal: if the row is missing AND
+        a recent access token was issued within the session TTL, return the code.
+
+        Simpler approach: on approval, we store the real code in a short-lived
+        approved_sessions key in the resource column before the token exchange wipes it.
+        For the polling approach we just need to know "was it approved?".
+
+        We return the redirect params stored during complete_authorization by checking
+        for a row whose code is NOT a session (i.e. longer than a session_id — real codes
+        are 32-char hex vs 24-char session ids). This relies on internal token lengths.
+
+        Cleanest approach: store approved redirect in a transient dict in provider memory
+        (acceptable since we have a single process on Railway).
+        """
+        return self._approved_redirects.get(session_id)
+
+    # In-process store for approved redirect info (single-process Railway deployment)
+    @property
+    def _approved_redirects(self) -> dict:
+        # Class-level dict shared across instances within the same process
+        if not hasattr(SupabaseOAuthProvider, "_approvals"):
+            SupabaseOAuthProvider._approvals = {}
+        return SupabaseOAuthProvider._approvals
+
+    def store_approved_redirect(
+        self, session_id: str, code: str, redirect_uri: Optional[str], state: Optional[str]
+    ) -> None:
+        """Store the approved code+redirect so the waiting page can pick it up."""
+        import time
+        self._approved_redirects[session_id] = {
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            "approved_at": int(time.time()),
+        }
+
     def revoke_client_tokens(self, client_id: str) -> None:
         """Revoke ALL tokens for a client."""
         try:

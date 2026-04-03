@@ -22,6 +22,15 @@ async def startup_checks():
     if settings.INTROSPECT_SECRET in ("change-me", ""):
         print("WARNING: INTROSPECT_SECRET is set to default — change before production use!", file=sys.stderr)
 
+    # Register Telegram webhook if configured
+    if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_OWNER_CHAT_ID:
+        from src import telegram as tg
+        webhook_url = f"{settings.OAUTH_ISSUER_URL}/telegram/webhook"
+        await tg.register_webhook(webhook_url)
+        print(f"INFO: Telegram webhook registered at {webhook_url}", file=sys.stderr)
+    else:
+        print("INFO: Telegram not configured — consent will use password form fallback.", file=sys.stderr)
+
 app.include_router(oauth_router)
 app.include_router(admin_router)
 

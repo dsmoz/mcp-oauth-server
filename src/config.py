@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_TTL: int = 3600
     REFRESH_TOKEN_TTL: int = 2592000
     PORT: int = 8000
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_OWNER_CHAT_ID: str = ""
 
 
 @lru_cache()
