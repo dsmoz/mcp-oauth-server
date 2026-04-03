@@ -433,9 +433,5 @@ async def reject_registration(
     reg = _get_registration_row(db, request_id)
     if reg is None:
         raise HTTPException(status_code=404, detail="Registration request not found")
-    db.table("oauth_registration_requests").update({
-        "status": "rejected",
-        "reviewed_at": "now()",
-        "reviewed_by": admin,
-    }).eq("id", request_id).execute()
+    db.table("oauth_registration_requests").delete().eq("id", request_id).execute()
     return RedirectResponse(url="/admin/registrations", status_code=303)

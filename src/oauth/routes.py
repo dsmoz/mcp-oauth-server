@@ -353,11 +353,7 @@ async def telegram_webhook(request: Request):
         if reg is None or reg["status"] != "pending":
             await tg.answer_callback(callback_id, "⚠️ Not found or already processed")
         else:
-            db.table("oauth_registration_requests").update({
-                "status": "rejected",
-                "reviewed_at": "now()",
-                "reviewed_by": "telegram",
-            }).eq("id", request_id).execute()
+            db.table("oauth_registration_requests").delete().eq("id", request_id).execute()
             await tg.answer_callback(callback_id, "❌ Registration rejected")
             await tg.edit_message_result(message_id, "❌ *Registration rejected*")
 
