@@ -370,7 +370,7 @@ async def telegram_webhook(request: Request):
 async def token(
     grant_type: str = Form(...),
     client_id: str = Form(...),
-    client_secret: str = Form(...),
+    client_secret: Optional[str] = Form(None),
     code: Optional[str] = Form(None),
     redirect_uri: Optional[str] = Form(None),
     code_verifier: Optional[str] = Form(None),
@@ -382,7 +382,8 @@ async def token(
     client = provider.get_client(client_id)
     if client is None or not client.is_active:
         raise HTTPException(status_code=401, detail="invalid_client")
-    if not verify_secret(client_secret, client.client_secret_hash):
+    # PKCE flows (public clients) don't send a client_secret — code_verifier is the proof
+    if not code_verifier and not verify_secret(client_secret or "", client.client_secret_hash):
         raise HTTPException(status_code=401, detail="invalid_client")
 
     if grant_type == "authorization_code":
