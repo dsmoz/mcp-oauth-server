@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from src.config import get_settings
 from src.crypto import generate_client_id, generate_token, hash_secret, now_unix, verify_secret
 from src.db import get_db
+from src import email as em
 from src.oauth.provider import SupabaseOAuthProvider
 from src import telegram as tg
 
@@ -326,6 +327,18 @@ async def telegram_webhook(request: Request):
                 "reviewed_at": "now()",
                 "reviewed_by": "telegram",
             }).eq("id", request_id).execute()
+            try:
+                await em.send_approval_email(
+                    contact_name=reg.get("contact_name", reg["contact_email"]),
+                    contact_email=reg["contact_email"],
+                    company_name=reg["company_name"],
+                    client_id=client_id,
+                    raw_secret=raw_secret,
+                    issuer_url=get_settings().OAUTH_ISSUER_URL,
+                )
+            except Exception as exc:
+                import sys
+                print(f"WARNING: approval email failed: {exc}", file=sys.stderr)
             await tg.answer_callback(callback_id, "✅ Registration approved")
             await tg.edit_message_result(
                 message_id,

@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from src.config import get_settings
 from src.crypto import generate_client_id, generate_token, hash_secret, now_unix
 from src.db import get_db
+from src import email as em
 from src.oauth.provider import SupabaseOAuthProvider
 
 
@@ -402,6 +403,20 @@ async def approve_registration(
         "reviewed_at": "now()",
         "reviewed_by": admin,
     }).eq("id", request_id).execute()
+
+    import asyncio
+    try:
+        asyncio.create_task(em.send_approval_email(
+            contact_name=reg.get("contact_name", reg["contact_email"]),
+            contact_email=reg["contact_email"],
+            company_name=reg["company_name"],
+            client_id=client_id,
+            raw_secret=raw_secret,
+            issuer_url=get_settings().OAUTH_ISSUER_URL,
+        ))
+    except Exception as exc:
+        import sys
+        print(f"WARNING: approval email failed: {exc}", file=sys.stderr)
 
     return RedirectResponse(
         url=f"/admin/clients/{client_id}?secret={raw_secret}",

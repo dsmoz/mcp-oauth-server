@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     PORT: int = 8000
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_OWNER_CHAT_ID: str = ""
+    BREVO_API_KEY: str = ""
+    BREVO_SENDER_EMAIL: str = ""
+    BREVO_SENDER_NAME: str = "DS-MOZ Intelligence"
 
 
 @lru_cache()
