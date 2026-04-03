@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}MCP Catalogue — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>MCP Catalogue</h1>
+  <a href="/admin/catalogue/new" class="btn btn-primary">
+    <i class="ph-light ph-plus"></i> Add MCP
+  </a>
+</div>
+
+{% if entries %}
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Category</th>
+      <th>Upstream URL</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in entries %}
+    <tr>
+      <td>
+        <div style="font-weight:700;color:var(--text-h)">{{ e.name }}</div>
+        <div style="font-size:0.75rem;color:var(--text-muted)">{{ e.description[:60] }}…</div>
+      </td>
+      <td><span class="badge badge-active">{{ e.category }}</span></td>
+      <td style="font-family:monospace;font-size:0.75rem;color:var(--text-muted)">{{ e.upstream_url }}</td>
+      <td>
+        {% if e.is_published %}
+          <span class="badge badge-active">Published</span>
+        {% else %}
+          <span class="badge badge-inactive">Draft</span>
+        {% endif %}
+      </td>
+      <td class="actions">
+        <a href="/admin/catalogue/{{ e.slug }}/edit" class="btn btn-secondary">
+          <i class="ph-light ph-pencil-simple"></i> Edit
+        </a>
+        <form method="post" action="/admin/catalogue/{{ e.slug }}/publish" style="display:inline">
+          <button type="submit" class="btn btn-secondary">
+            <i class="ph-light ph-{% if e.is_published %}eye-slash{% else %}eye{% endif %}"></i>
+            {% if e.is_published %}Unpublish{% else %}Publish{% endif %}
+          </button>
+        </form>
+        <form method="post" action="/admin/catalogue/{{ e.slug }}/delete" style="display:inline"
+              onsubmit="return confirm('Delete {{ e.name }}?')">
+          <button type="submit" class="btn btn-danger">
+            <i class="ph-light ph-trash"></i>
+          </button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card" style="text-align:center;color:var(--text-muted);padding:3rem">
+  <p>No MCP entries yet. <a href="/admin/catalogue/new" style="color:var(--accent-vivid)">Add your first MCP</a>.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -476,3 +476,100 @@ async def reject_registration(
         raise HTTPException(status_code=404, detail="Registration request not found")
     db.table("oauth_registration_requests").delete().eq("id", request_id).execute()
     return RedirectResponse(url="/admin/registrations", status_code=303)
+
+
+# ── MCP Catalogue ─────────────────────────────────────────────────────────────
+
+def _get_catalogue_row(db, slug: str) -> dict | None:
+    result = db.table("mcp_catalogue").select("*").eq("slug", slug).limit(1).execute()
+    return result.data[0] if result.data else None
+
+
+@router.get("/catalogue", response_class=HTMLResponse)
+async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
+    entries = db.table("mcp_catalogue").select("*").order("name").execute().data or []
+    return templates.TemplateResponse(
+        request=request, name="catalogue_list.html", context={"entries": entries}
+    )
+
+
+@router.get("/catalogue/new", response_class=HTMLResponse)
+async def new_catalogue_form(request: Request, _: str = Depends(_require_admin)):
+    return templates.TemplateResponse(
+        request=request, name="catalogue_form.html", context={"entry": None, "error": None}
+    )
+
+
+@router.post("/catalogue", response_class=HTMLResponse)
+async def create_catalogue(
+    request: Request,
+    slug: str = Form(...),
+    name: str = Form(...),
+    description: str = Form(...),
+    category: str = Form(...),
+    upstream_url: str = Form(...),
+    upstream_api_key: str = Form(""),
+    _: str = Depends(_require_admin),
+):
+    db = get_db()
+    if _get_catalogue_row(db, slug):
+        return templates.TemplateResponse(
+            request=request, name="catalogue_form.html",
+            context={"entry": None, "error": f"Slug '{slug}' already exists"}
+        )
+    db.table("mcp_catalogue").insert({
+        "slug": slug, "name": name, "description": description,
+        "category": category, "upstream_url": upstream_url,
+        "upstream_api_key": upstream_api_key, "is_published": False,
+    }).execute()
+    return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+@router.get("/catalogue/{slug}/edit", response_class=HTMLResponse)
+async def edit_catalogue_form(request: Request, slug: str, _: str = Depends(_require_admin)):
+    db = get_db()
+    entry = _get_catalogue_row(db, slug)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return templates.TemplateResponse(
+        request=request, name="catalogue_form.html", context={"entry": entry, "error": None}
+    )
+
+
+@router.post("/catalogue/{slug}/edit", response_class=HTMLResponse)
+async def save_catalogue(
+    request: Request,
+    slug: str,
+    name: str = Form(...),
+    description: str = Form(...),
+    category: str = Form(...),
+    upstream_url: str = Form(...),
+    upstream_api_key: str = Form(""),
+    _: str = Depends(_require_admin),
+):
+    db = get_db()
+    if _get_catalogue_row(db, slug) is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    db.table("mcp_catalogue").update({
+        "name": name, "description": description, "category": category,
+        "upstream_url": upstream_url, "upstream_api_key": upstream_api_key,
+    }).eq("slug", slug).execute()
+    return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+@router.post("/catalogue/{slug}/publish", response_class=HTMLResponse)
+async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_admin)):
+    db = get_db()
+    entry = _get_catalogue_row(db, slug)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    db.table("mcp_catalogue").update({"is_published": not entry["is_published"]}).eq("slug", slug).execute()
+    return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+@router.post("/catalogue/{slug}/delete", response_class=HTMLResponse)
+async def delete_catalogue(request: Request, slug: str, _: str = Depends(_require_admin)):
+    db = get_db()
+    db.table("mcp_catalogue").delete().eq("slug", slug).execute()
+    return RedirectResponse(url="/admin/catalogue", status_code=303)

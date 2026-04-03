@@ -433,6 +433,11 @@
           <i class="ph-light ph-clipboard-text"></i>
           <span class="nav-label">Registrations</span>
         </a>
+        <a href="/admin/catalogue" class="nav-item {% if '/admin/catalogue' in request.url.path %}active{% endif %}"
+           title="Catalogue">
+          <i class="ph-light ph-plugs"></i>
+          <span class="nav-label">Catalogue</span>
+        </a>
         <div class="sidebar-section-label" style="margin-top: 0.5rem;">System</div>
         <a href="/.well-known/openid-configuration" class="nav-item" title="Discovery">
           <i class="ph-light ph-globe"></i>
