@@ -43,7 +43,7 @@ def _discovery_doc() -> dict:
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
-        "token_endpoint_auth_methods_supported": ["client_secret_post"],
+        "token_endpoint_auth_methods_supported": ["client_secret_post", "none"],
     }
 
 
@@ -565,8 +565,44 @@ async def register_success(request: Request):
 
 
 @router.post("/register")
-async def register():
-    raise HTTPException(
-        status_code=405,
-        detail="Dynamic client registration is disabled. Use /register to submit a registration request.",
+async def dynamic_client_registration(request: Request):
+    """RFC 7591 dynamic client registration — used by Claude Desktop and other MCP clients."""
+    content_type = request.headers.get("content-type", "")
+    if "application/json" not in content_type:
+        raise HTTPException(status_code=400, detail="Content-Type must be application/json")
+
+    body = await request.json()
+    client_name = body.get("client_name", "MCP Client")
+    redirect_uris = body.get("redirect_uris", [])
+
+    if not redirect_uris:
+        raise HTTPException(status_code=400, detail="redirect_uris required")
+
+    db = get_db()
+    client_id = generate_client_id()
+    raw_secret = generate_token(32)
+    secret_hash = hash_secret(raw_secret)
+
+    db.table("oauth_clients").insert({
+        "client_id": client_id,
+        "client_secret_hash": secret_hash,
+        "client_name": client_name,
+        "redirect_uris": redirect_uris,
+        "grant_types": ["authorization_code", "refresh_token"],
+        "scope": "mcp",
+        "allowed_mcp_resources": ["linguist"],
+        "is_active": True,
+        "created_by": "dynamic_registration",
+    }).execute()
+
+    return JSONResponse(
+        {
+            "client_id": client_id,
+            "client_secret": raw_secret,
+            "client_name": client_name,
+            "redirect_uris": redirect_uris,
+            "grant_types": ["authorization_code", "refresh_token"],
+            "token_endpoint_auth_method": "none",
+        },
+        status_code=201,
     )
