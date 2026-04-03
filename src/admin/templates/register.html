@@ -141,7 +141,13 @@
     <div class="error-box">{{ error }}</div>
     {% endif %}
 
-    <form method="post" action="/register/submit">
+    <form method="post" action="/register/submit" id="reg-form">
+      <!-- Anti-bot: honeypot — must stay empty -->
+      <div style="display:none" aria-hidden="true">
+        <input type="text" name="website" tabindex="-1" autocomplete="off">
+      </div>
+      <input type="hidden" name="form_loaded_at" id="form_loaded_at">
+
       <div class="form-group">
         <label for="company_name">Organisation / Company Name *</label>
         <input type="text" id="company_name" name="company_name" required
@@ -182,5 +188,8 @@
       Requests are reviewed manually. You will be notified by email once a decision is made.
     </p>
   </div>
+  <script>
+    document.getElementById('form_loaded_at').value = Date.now();
+  </script>
 </body>
 </html>

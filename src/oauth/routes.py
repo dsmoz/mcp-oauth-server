@@ -504,7 +504,22 @@ async def register_submit(
     contact_email: str = Form(...),
     use_case: str = Form(...),
     redirect_uris_raw: str = Form(""),
+    website: str = Form(""),
+    form_loaded_at: str = Form(""),
 ):
+    # Anti-bot: honeypot field must be empty
+    if website:
+        return RedirectResponse(url="/register/success", status_code=303)
+
+    # Anti-bot: form must have been visible for at least 3 seconds
+    import time as _time
+    try:
+        elapsed_ms = _time.time() * 1000 - float(form_loaded_at)
+        if elapsed_ms < 3000:
+            return RedirectResponse(url="/register/success", status_code=303)
+    except (ValueError, TypeError):
+        pass
+
     from src.db import get_db
     db = get_db()
     result = db.table("oauth_registration_requests").insert({
