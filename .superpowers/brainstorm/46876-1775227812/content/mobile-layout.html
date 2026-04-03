@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mobile layout options</title>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Avenir Next', 'Avenir', 'Segoe UI', sans-serif; background: #111; color: #ccc; padding: 1.5rem; }
+  h2 { color: #F0F7F8; font-size: 1.1rem; font-weight: 700; margin-bottom: 0.4rem; }
+  .subtitle { color: #91BCC1; font-size: 0.85rem; margin-bottom: 1.5rem; }
+
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.25rem; margin-bottom: 1.5rem; }
+  .mockup { border: 1px solid #2a2a2a; border-radius: 8px; overflow: hidden; }
+  .mockup-header { background: #1a1a1a; padding: 0.5rem 1rem; font-size: 0.75rem; color: #888; border-bottom: 1px solid #2a2a2a; }
+
+  /* shared colours */
+  :root {
+    --bg: #060E10; --surface: #0A1C20; --elevated: #0D2A30;
+    --border: #16464F; --accent: #FF5E00; --text: #F0F7F8;
+    --muted: #91BCC1; --dim: #5A8A90;
+  }
+
+  /* ---- Phone frame ---- */
+  .phone {
+    width: 200px; margin: 0 auto;
+    background: var(--bg);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  /* Option A: hamburger overlay */
+  .phone-a-header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+  }
+  .brand-a { font-size: 0.7rem; font-weight: 800; color: var(--accent); letter-spacing: 0.06em; }
+  .ham-icon { color: var(--muted); font-size: 18px; }
+  .phone-body { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; }
+  .page-title-sm { font-size: 0.8rem; font-weight: 700; color: var(--text); }
+  .stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+  .stat-sm { background: var(--surface); border: 1px solid var(--border); border-radius: 5px; padding: 0.4rem 0.5rem; }
+  .stat-num { font-size: 1rem; font-weight: 800; color: var(--text); line-height: 1; }
+  .stat-lbl { font-size: 0.6rem; color: var(--dim); }
+  .table-sm { background: var(--surface); border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+  .table-row { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.65rem; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
+  .table-row:last-child { border-bottom: none; }
+  .badge-sm { background: #073D20; color: #3DD68C; padding: 0.1em 0.4em; border-radius: 999px; font-size: 0.6rem; font-weight: 700; }
+
+  /* drawer overlay mockup */
+  .drawer-overlay {
+    position: relative; overflow: hidden;
+  }
+  .drawer {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    width: 140px; background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 0.75rem 0;
+    z-index: 10;
+  }
+  .drawer-brand { padding: 0 0.75rem 0.5rem; font-size: 0.7rem; font-weight: 800; color: var(--accent); letter-spacing: 0.06em; border-bottom: 1px solid var(--border); margin-bottom: 0.35rem; }
+  .drawer-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; font-size: 0.7rem; color: var(--muted); }
+  .drawer-item.active { color: var(--text); background: var(--elevated); border-left: 2px solid var(--accent); }
+  .drawer-scrim { position: absolute; top:0; right:0; bottom:0; left:140px; background: rgba(0,0,0,0.5); }
+
+  /* Option B: bottom tab bar */
+  .phone-b-body { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 200px; }
+  .bottom-tab { display: flex; justify-content: space-around; align-items: center; background: var(--surface); border-top: 1px solid var(--border); padding: 0.4rem 0; }
+  .tab-item { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; font-size: 0.55rem; color: var(--muted); }
+  .tab-item.active { color: var(--accent); }
+
+  /* Option C: collapsing sidebar (thin icon rail) */
+  .phone-c-inner { display: flex; min-height: 220px; }
+  .icon-rail { width: 36px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 0.5rem 0; gap: 0.6rem; }
+  .rail-icon { font-size: 16px; color: var(--muted); }
+  .rail-icon.active { color: var(--accent); }
+  .phone-c-main { flex: 1; padding: 0.6rem; display: flex; flex-direction: column; gap: 0.4rem; }
+
+  .select-bar { margin-top: 1.5rem; padding: 1rem; background: #1a1a2e; border-radius: 8px; text-align: center; font-size: 0.85rem; color: #aaa; }
+  .select-btn { display: inline-block; margin: 0.25rem 0.4rem; padding: 0.4rem 0.9rem; border-radius: 6px; border: 1px solid #444; cursor: pointer; font-size: 0.8rem; color: #ccc; background: #222; transition: all 0.15s; }
+  .select-btn:hover, .select-btn.selected { border-color: #FF5E00; background: #E8500A; color: #fff; }
+</style>
+</head>
+<body>
+
+<h2>Mobile navigation pattern</h2>
+<p class="subtitle">On narrow screens (&lt;768px) the 220px sidebar won't fit. How should it collapse?</p>
+
+<div class="three-col">
+
+  <!-- Option A -->
+  <div class="mockup">
+    <div class="mockup-header">A — Hamburger + slide-over drawer</div>
+    <div class="mockup-body" style="padding:0.75rem;background:#060E10;">
+      <div class="phone">
+        <!-- closed state -->
+        <div class="phone-a-header">
+          <span class="brand-a">DS-MOZ</span>
+          <i class="ph-light ph-list ham-icon"></i>
+        </div>
+        <div class="phone-body">
+          <div class="page-title-sm">Dashboard</div>
+          <div class="stat-row">
+            <div class="stat-sm"><div class="stat-num">12</div><div class="stat-lbl">Clients</div></div>
+            <div class="stat-sm"><div class="stat-num" style="color:#FFAE62">3</div><div class="stat-lbl">Pending</div></div>
+          </div>
+          <div class="table-sm">
+            <div class="table-row"><span>Claude Desktop</span><span class="badge-sm">Active</span></div>
+            <div class="table-row"><span>Test Client</span><span class="badge-sm">Active</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:0.5rem;font-size:0.65rem;color:#5A8A90;text-align:center;">Tap ☰ → drawer slides in over content</div>
+      <!-- open state -->
+      <div class="phone" style="margin-top:0.5rem;">
+        <div class="phone-a-header">
+          <span class="brand-a">DS-MOZ</span>
+          <i class="ph-light ph-x ham-icon"></i>
+        </div>
+        <div class="phone-body drawer-overlay" style="padding:0;min-height:160px;">
+          <div class="drawer">
+            <div class="drawer-brand">DS-MOZ</div>
+            <div class="drawer-item active"><i class="ph-light ph-squares-four"></i> Dashboard</div>
+            <div class="drawer-item"><i class="ph-light ph-identification-card"></i> Clients</div>
+            <div class="drawer-item"><i class="ph-light ph-clipboard-text"></i> Registrations</div>
+            <div class="drawer-item"><i class="ph-light ph-globe"></i> Discovery</div>
+          </div>
+          <div class="drawer-scrim"></div>
+        </div>
+      </div>
+      <div style="margin-top:0.5rem;font-size:0.65rem;color:#5A8A90;text-align:center;">Drawer open state (scrim behind)</div>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="mockup">
+    <div class="mockup-header">B — Bottom tab bar</div>
+    <div class="mockup-body" style="padding:0.75rem;background:#060E10;">
+      <div class="phone">
+        <div class="phone-a-header">
+          <span class="brand-a">DS-MOZ</span>
+          <span style="font-size:0.65rem;color:#5A8A90;">Dashboard</span>
+        </div>
+        <div class="phone-b-body">
+          <div class="stat-row">
+            <div class="stat-sm"><div class="stat-num">12</div><div class="stat-lbl">Clients</div></div>
+            <div class="stat-sm"><div class="stat-num" style="color:#FFAE62">3</div><div class="stat-lbl">Pending</div></div>
+          </div>
+          <div class="table-sm">
+            <div class="table-row"><span>Claude Desktop</span><span class="badge-sm">Active</span></div>
+            <div class="table-row"><span>Test Client</span><span class="badge-sm">Active</span></div>
+          </div>
+        </div>
+        <div class="bottom-tab">
+          <div class="tab-item active"><i class="ph-light ph-squares-four" style="font-size:18px"></i>Dash</div>
+          <div class="tab-item"><i class="ph-light ph-identification-card" style="font-size:18px"></i>Clients</div>
+          <div class="tab-item"><i class="ph-light ph-clipboard-text" style="font-size:18px"></i>Requests</div>
+          <div class="tab-item"><i class="ph-light ph-globe" style="font-size:18px"></i>Discovery</div>
+        </div>
+      </div>
+      <div style="margin-top:0.5rem;font-size:0.65rem;color:#5A8A90;text-align:center;">Persistent tab bar at bottom — no hamburger needed</div>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="mockup">
+    <div class="mockup-header">C — Icon rail (collapsed sidebar)</div>
+    <div class="mockup-body" style="padding:0.75rem;background:#060E10;">
+      <div class="phone">
+        <div class="phone-c-inner">
+          <div class="icon-rail">
+            <div style="font-size:0.55rem;font-weight:800;color:#FF5E00;letter-spacing:0.05em;writing-mode:vertical-rl;margin-bottom:0.5rem;">DS</div>
+            <i class="ph-light ph-squares-four rail-icon active"></i>
+            <i class="ph-light ph-identification-card rail-icon"></i>
+            <i class="ph-light ph-clipboard-text rail-icon"></i>
+            <i class="ph-light ph-globe rail-icon"></i>
+          </div>
+          <div class="phone-c-main">
+            <div class="page-title-sm">Dashboard</div>
+            <div class="stat-row">
+              <div class="stat-sm"><div class="stat-num">12</div><div class="stat-lbl">Clients</div></div>
+              <div class="stat-sm"><div class="stat-num" style="color:#FFAE62">3</div><div class="stat-lbl">Pending</div></div>
+            </div>
+            <div class="table-sm">
+              <div class="table-row"><span>Claude Desktop</span><span class="badge-sm">Active</span></div>
+              <div class="table-row"><span>Test Client</span><span class="badge-sm">Active</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:0.5rem;font-size:0.65rem;color:#5A8A90;text-align:center;">Sidebar collapses to 36px icon rail — always visible</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="select-bar">
+  <div style="margin-bottom:0.5rem;">Select your preferred mobile pattern:</div>
+  <span class="select-btn" onclick="sel(this,'a','Hamburger drawer')">A — Hamburger drawer</span>
+  <span class="select-btn" onclick="sel(this,'b','Bottom tab bar')">B — Bottom tabs</span>
+  <span class="select-btn" onclick="sel(this,'c','Icon rail')">C — Icon rail</span>
+</div>
+
+<script>
+function sel(el, choice, label) {
+  document.querySelectorAll('.select-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  if (window.__sp) __sp.recordChoice('mobile-nav', choice, label);
+}
+</script>
+
+</body>
+</html>
