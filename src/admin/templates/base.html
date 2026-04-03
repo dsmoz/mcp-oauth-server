@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}DS-MOZ MCP OAuth{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    nav {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      gap: 2rem;
+    }
+
+    nav .brand {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #a78bfa;
+      text-decoration: none;
+      letter-spacing: 0.02em;
+    }
+
+    nav a {
+      color: #94a3b8;
+      text-decoration: none;
+      font-size: 0.875rem;
+      transition: color 0.15s;
+    }
+
+    nav a:hover { color: #e2e8f0; }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 1.5rem;
+    }
+
+    h2 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      background: #1e2235;
+      color: #94a3b8;
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #2d3148;
+    }
+
+    td {
+      padding: 0.875rem 1rem;
+      border-bottom: 1px solid #1e2235;
+      color: #cbd5e1;
+      vertical-align: middle;
+    }
+
+    tr:hover td { background: #1a1d27; }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2em 0.6em;
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .badge-active { background: #14532d; color: #4ade80; }
+    .badge-inactive { background: #450a0a; color: #f87171; }
+
+    .btn {
+      display: inline-block;
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+      transition: opacity 0.15s;
+    }
+
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #6d28d9; color: #fff; }
+    .btn-secondary { background: #1e2235; color: #94a3b8; border: 1px solid #2d3148; }
+    .btn-danger { background: #7f1d1d; color: #fca5a5; }
+
+    .form-group { margin-bottom: 1.25rem; }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+
+    input[type="text"], input[type="password"], textarea {
+      width: 100%;
+      padding: 0.6rem 0.875rem;
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus, input[type="password"]:focus, textarea:focus {
+      border-color: #6d28d9;
+    }
+
+    textarea { resize: vertical; min-height: 80px; font-family: monospace; }
+
+    .card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .secret-box {
+      background: #1c1f0f;
+      border: 1px solid #365314;
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .secret-box p.label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #84cc16;
+      margin-bottom: 0.5rem;
+    }
+
+    .secret-box .warning {
+      font-size: 0.8rem;
+      color: #a3e635;
+      margin-top: 0.5rem;
+    }
+
+    .secret-value {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.9rem;
+      color: #d9f99d;
+      word-break: break-all;
+      padding: 0.5rem 0;
+    }
+
+    .error-box {
+      background: #450a0a;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      color: #fca5a5;
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+    }
+
+    .detail-row {
+      display: flex;
+      gap: 1rem;
+      padding: 0.625rem 0;
+      border-bottom: 1px solid #1e2235;
+      font-size: 0.875rem;
+    }
+
+    .detail-row:last-child { border-bottom: none; }
+
+    .detail-label {
+      flex: 0 0 160px;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .detail-value {
+      color: #cbd5e1;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.8125rem;
+      word-break: break-all;
+    }
+
+    .actions { display: flex; gap: 0.5rem; align-items: center; }
+
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/admin/" class="brand">DS-MOZ MCP OAuth</a>
+    <a href="/admin/">Clients</a>
+    <a href="/.well-known/openid-configuration">Discovery</a>
+  </nav>
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>

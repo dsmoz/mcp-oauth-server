@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grant Access — DS-MOZ MCP OAuth</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .consent-card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 14px;
+      padding: 2.5rem;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    .logo {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      margin-bottom: 2rem;
+    }
+
+    .logo span { color: #a78bfa; }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 0.5rem;
+    }
+
+    .client-name {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #a78bfa;
+      margin-bottom: 0.75rem;
+    }
+
+    .description {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+
+    .scopes {
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .scopes-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      margin-bottom: 0.5rem;
+    }
+
+    .scope-item {
+      font-size: 0.875rem;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .scope-item::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #4ade80;
+      flex-shrink: 0;
+    }
+
+    .form-group { margin-bottom: 1.25rem; }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+
+    input[type="password"] {
+      width: 100%;
+      padding: 0.65rem 0.875rem;
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="password"]:focus { border-color: #6d28d9; }
+
+    .error-box {
+      background: #450a0a;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+      padding: 0.65rem 1rem;
+      color: #fca5a5;
+      font-size: 0.8125rem;
+      margin-bottom: 1rem;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 0.65rem 1rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      text-align: center;
+      transition: opacity 0.15s;
+    }
+
+    .btn:hover { opacity: 0.85; }
+    .btn-grant { background: #6d28d9; color: #fff; }
+    .btn-deny { background: #1e2235; color: #94a3b8; border: 1px solid #2d3148; }
+
+    .footer-note {
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: #475569;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="consent-card">
+    <div class="logo">DS-MOZ <span>MCP OAuth</span></div>
+
+    <h1>Grant Access</h1>
+    <div class="client-name">{{ client_name }}</div>
+    <p class="description">
+      This application is requesting access to MCP tools on your behalf.
+      Enter your admin password to authorize.
+    </p>
+
+    <div class="scopes">
+      <div class="scopes-label">Requested Permissions</div>
+      {% for scope in scopes %}
+      <div class="scope-item">{{ scope }}</div>
+      {% endfor %}
+    </div>
+
+    {% if error %}
+    <div class="error-box">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/authorize/consent">
+      <input type="hidden" name="session_id" value="{{ session_id }}">
+
+      <div class="form-group">
+        <label for="password">Admin Password</label>
+        <input type="password" id="password" name="password" autofocus
+               placeholder="Enter admin password" required>
+      </div>
+
+      <div class="btn-group">
+        <button type="submit" class="btn btn-grant">Grant Access</button>
+        <button type="button" class="btn btn-deny"
+                onclick="window.history.back()">Deny</button>
+      </div>
+    </form>
+
+    <p class="footer-note">
+      Only authorize applications you trust.<br>
+      You can revoke access at any time via the admin panel.
+    </p>
+  </div>
+</body>
+</html>

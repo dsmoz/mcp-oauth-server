@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Clients — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>OAuth Clients</h1>
+  <a href="/admin/clients/new" class="btn btn-primary">+ New Client</a>
+</div>
+
+{% if clients %}
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Client ID</th>
+      <th>Status</th>
+      <th>Created</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for client in clients %}
+    <tr>
+      <td>{{ client.client_name }}</td>
+      <td style="font-family: monospace; font-size: 0.8rem;">{{ client.client_id }}</td>
+      <td>
+        {% if client.is_active %}
+          <span class="badge badge-active">Active</span>
+        {% else %}
+          <span class="badge badge-inactive">Revoked</span>
+        {% endif %}
+      </td>
+      <td style="color: #64748b; font-size: 0.8rem;">
+        {{ client.created_at[:10] if client.created_at else "—" }}
+      </td>
+      <td class="actions">
+        <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">View</a>
+        {% if client.is_active %}
+        <form method="post" action="/admin/clients/{{ client.client_id }}/revoke"
+              onsubmit="return confirm('Revoke all tokens for {{ client.client_name }}?')">
+          <button type="submit" class="btn btn-danger">Revoke</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card" style="text-align: center; color: #64748b; padding: 3rem;">
+  <p>No clients yet. <a href="/admin/clients/new" style="color: #a78bfa;">Create your first client</a>.</p>
+</div>
+{% endif %}
+{% endblock %}

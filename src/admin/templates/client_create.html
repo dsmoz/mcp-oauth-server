@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}New Client — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>New OAuth Client</h1>
+  <a href="/admin/" class="btn btn-secondary">← Back</a>
+</div>
+
+{% if error %}
+<div class="error-box">{{ error }}</div>
+{% endif %}
+
+<div class="card">
+  <form method="post" action="/admin/clients">
+    <div class="form-group">
+      <label for="client_name">Client Name *</label>
+      <input type="text" id="client_name" name="client_name" required
+             placeholder="e.g. My MCP Server">
+    </div>
+
+    <div class="form-group">
+      <label for="redirect_uris_raw">Redirect URIs</label>
+      <textarea id="redirect_uris_raw" name="redirect_uris_raw"
+                placeholder="One URI per line&#10;Leave empty to allow any redirect URI (development only)"></textarea>
+      <small style="color: #64748b; font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+        Leave empty to allow any redirect URI. In production, specify exact URIs.
+      </small>
+    </div>
+
+    <div class="form-group">
+      <label for="created_by">Created By</label>
+      <input type="text" id="created_by" name="created_by" placeholder="optional — your name or system">
+    </div>
+
+    <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+      <button type="submit" class="btn btn-primary">Create Client</button>
+      <a href="/admin/" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<div class="card" style="border-color: #1e3a5f;">
+  <h2 style="color: #7dd3fc; font-size: 0.875rem; margin-bottom: 0.75rem;">After Creation</h2>
+  <p style="color: #64748b; font-size: 0.8125rem; line-height: 1.6;">
+    The client secret will be shown <strong style="color: #94a3b8;">once</strong> immediately after creation.
+    Copy it immediately — it cannot be recovered.
+  </p>
+</div>
+{% endblock %}

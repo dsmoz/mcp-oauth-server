@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ client.client_name }} — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ client.client_name }}</h1>
+  <a href="/admin/" class="btn btn-secondary">← Clients</a>
+</div>
+
+{% if secret %}
+<div class="secret-box">
+  <p class="label">Client Secret — Save This Now</p>
+  <div class="secret-value">{{ secret }}</div>
+  <p class="warning">
+    This secret will never be shown again. Copy it now and store it securely.
+  </p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Client Details</h2>
+
+  <div class="detail-row">
+    <span class="detail-label">Client ID</span>
+    <span class="detail-value">{{ client.client_id }}</span>
+  </div>
+
+  <div class="detail-row">
+    <span class="detail-label">Name</span>
+    <span class="detail-value" style="font-family: inherit; color: #e2e8f0;">{{ client.client_name }}</span>
+  </div>
+
+  <div class="detail-row">
+    <span class="detail-label">Status</span>
+    <span class="detail-value">
+      {% if client.is_active %}
+        <span class="badge badge-active">Active</span>
+      {% else %}
+        <span class="badge badge-inactive">Revoked</span>
+      {% endif %}
+    </span>
+  </div>
+
+  <div class="detail-row">
+    <span class="detail-label">Scope</span>
+    <span class="detail-value">{{ client.scope or "mcp" }}</span>
+  </div>
+
+  <div class="detail-row">
+    <span class="detail-label">Grant Types</span>
+    <span class="detail-value">{{ (client.grant_types or ["authorization_code"]) | join(", ") }}</span>
+  </div>
+
+  <div class="detail-row">
+    <span class="detail-label">Redirect URIs</span>
+    <span class="detail-value">
+      {% if client.redirect_uris %}
+        {% for uri in client.redirect_uris %}
+          <div>{{ uri }}</div>
+        {% endfor %}
+      {% else %}
+        <span style="color: #64748b; font-family: inherit; font-style: italic;">Any (unrestricted)</span>
+      {% endif %}
+    </span>
+  </div>
+
+  <div class="detail-row">
+    <span class="detail-label">Created By</span>
+    <span class="detail-value" style="font-family: inherit;">{{ client.created_by or "—" }}</span>
+  </div>
+
+  <div class="detail-row">
+    <span class="detail-label">Created At</span>
+    <span class="detail-value" style="font-family: inherit;">{{ client.created_at or "—" }}</span>
+  </div>
+</div>
+
+{% if client.is_active %}
+<div class="card" style="border-color: #450a0a;">
+  <h2 style="color: #f87171;">Danger Zone</h2>
+  <p style="color: #64748b; font-size: 0.8125rem; margin-bottom: 1rem; line-height: 1.6;">
+    Revoking this client will deactivate it and invalidate all existing access and refresh tokens.
+    The client cannot be reactivated — you will need to create a new one.
+  </p>
+  <form method="post" action="/admin/clients/{{ client.client_id }}/revoke"
+        onsubmit="return confirm('Revoke {{ client.client_name }} and all its tokens? This cannot be undone.')">
+    <button type="submit" class="btn btn-danger">Revoke Client & All Tokens</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
