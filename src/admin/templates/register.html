@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Request API Access — DS-MOZ MCP OAuth</title>
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #0f1117;
-      color: #e2e8f0;
+      font-family: 'Avenir Next', 'Avenir', 'Segoe UI', Helvetica Neue, Arial, sans-serif;
+      background: #060E10;
       min-height: 100vh;
       display: flex;
       align-items: flex-start;
@@ -19,36 +19,33 @@
     }
 
     .card {
-      background: #1a1d27;
-      border: 1px solid #2d3148;
+      background: #ffffff;
       border-radius: 14px;
       padding: 2.5rem;
       max-width: 520px;
       width: 100%;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      box-shadow: 0 16px 56px rgba(0,0,0,0.6);
     }
 
     .brand {
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.1em;
-      color: #64748b;
+      color: #FF5E00;
       margin-bottom: 2rem;
     }
-
-    .brand span { color: #a78bfa; }
 
     h1 {
       font-size: 1.4rem;
       font-weight: 700;
-      color: #f1f5f9;
+      color: #0A1C20;
       margin-bottom: 0.4rem;
     }
 
     .subtitle {
       font-size: 0.875rem;
-      color: #64748b;
+      color: #5A8A90;
       line-height: 1.6;
       margin-bottom: 2rem;
     }
@@ -60,7 +57,7 @@
       margin-bottom: 0.4rem;
       font-size: 0.8125rem;
       font-weight: 600;
-      color: #94a3b8;
+      color: #5A8A90;
     }
 
     input[type="text"],
@@ -68,57 +65,63 @@
     textarea {
       width: 100%;
       padding: 0.65rem 0.875rem;
-      background: #0f1117;
-      border: 1px solid #2d3148;
+      background: #F0F7F8;
+      border: 1px solid #D4E8EA;
       border-radius: 6px;
-      color: #e2e8f0;
+      color: #0A1C20;
       font-size: 0.875rem;
+      font-family: inherit;
       outline: none;
       transition: border-color 0.15s;
-      font-family: inherit;
     }
 
-    input:focus, textarea:focus { border-color: #6d28d9; }
+    input:focus, textarea:focus { border-color: #115E67; }
 
     textarea { resize: vertical; min-height: 80px; }
 
     .hint {
       font-size: 0.75rem;
-      color: #475569;
+      color: #91BCC1;
       margin-top: 0.3rem;
       display: block;
     }
 
     .error-box {
-      background: #450a0a;
-      border: 1px solid #7f1d1d;
+      background: #FFF0F0;
+      border: 1px solid #FFBDBD;
       border-radius: 6px;
       padding: 0.75rem 1rem;
-      color: #fca5a5;
+      color: #C0392B;
       font-size: 0.875rem;
       margin-bottom: 1.25rem;
     }
 
     .btn-submit {
       width: 100%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
       padding: 0.75rem 1rem;
-      background: #6d28d9;
+      background: #E8500A;
       color: #fff;
       border: none;
       border-radius: 6px;
       font-size: 0.9375rem;
       font-weight: 600;
+      font-family: inherit;
       cursor: pointer;
       margin-top: 0.5rem;
       transition: opacity 0.15s;
     }
 
     .btn-submit:hover { opacity: 0.85; }
+    .btn-submit i { font-size: 17px; }
 
     .footer-note {
       margin-top: 1.5rem;
       font-size: 0.75rem;
-      color: #475569;
+      color: #91BCC1;
       text-align: center;
       line-height: 1.5;
     }
@@ -126,7 +129,7 @@
 </head>
 <body>
   <div class="card">
-    <div class="brand">DS-MOZ <span>MCP OAuth</span></div>
+    <div class="brand">DS-MOZ Intelligence</div>
 
     <h1>Request API Access</h1>
     <p class="subtitle">
@@ -170,7 +173,9 @@
         <span class="hint">Leave empty if you don't know yet — you can update this later.</span>
       </div>
 
-      <button type="submit" class="btn-submit">Submit Request</button>
+      <button type="submit" class="btn-submit">
+        <i class="ph-light ph-paper-plane-tilt"></i> Submit Request
+      </button>
     </form>
 
     <p class="footer-note">
