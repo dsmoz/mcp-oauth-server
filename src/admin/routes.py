@@ -437,6 +437,7 @@ async def approve_registration(
         "allowed_mcp_resources": [],
         "created_by": reg["contact_email"],
         "is_active": True,
+        "portal_username": reg["contact_email"],
     }).execute()
 
     db.table("oauth_registration_requests").update({
@@ -444,6 +445,9 @@ async def approve_registration(
         "reviewed_at": "now()",
         "reviewed_by": admin,
     }).eq("id", request_id).execute()
+
+    from src.portal.routes import create_setup_token
+    setup_token = create_setup_token(client_id)
 
     import asyncio
     try:
@@ -454,6 +458,7 @@ async def approve_registration(
             client_id=client_id,
             raw_secret=raw_secret,
             issuer_url=get_settings().OAUTH_ISSUER_URL,
+            setup_token=setup_token,
         ))
     except Exception as exc:
         import sys

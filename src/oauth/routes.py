@@ -321,12 +321,15 @@ async def telegram_webhook(request: Request):
                 "allowed_mcp_resources": [],
                 "created_by": reg["contact_email"],
                 "is_active": True,
+                "portal_username": reg["contact_email"],
             }).execute()
             db.table("oauth_registration_requests").update({
                 "status": "approved",
                 "reviewed_at": "now()",
                 "reviewed_by": "telegram",
             }).eq("id", request_id).execute()
+            from src.portal.routes import create_setup_token
+            setup_token = create_setup_token(client_id)
             try:
                 await em.send_approval_email(
                     contact_name=reg.get("contact_name", reg["contact_email"]),
@@ -335,6 +338,7 @@ async def telegram_webhook(request: Request):
                     client_id=client_id,
                     raw_secret=raw_secret,
                     issuer_url=get_settings().OAUTH_ISSUER_URL,
+                    setup_token=setup_token,
                 )
             except Exception as exc:
                 import sys

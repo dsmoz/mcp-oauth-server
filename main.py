@@ -4,6 +4,7 @@ load_dotenv()  # Must be first — before any src imports that consume env vars
 from fastapi import FastAPI
 from src.oauth.routes import router as oauth_router
 from src.admin.routes import router as admin_router
+from src.portal.routes import router as portal_router
 from src.config import get_settings
 
 app = FastAPI(
@@ -33,6 +34,7 @@ async def startup_checks():
 
 app.include_router(oauth_router)
 app.include_router(admin_router)
+app.include_router(portal_router)
 
 
 @app.get("/health")

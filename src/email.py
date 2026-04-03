@@ -68,6 +68,13 @@ _APPROVAL_HTML = """\
     <div class="code-block">{chatgpt_config}</div>
   </div>
 
+  <div class="section">
+    <h2>Set Up Your Client Portal</h2>
+    <p>Use the link below to create your portal login (valid for 24 hours, one-time use):</p>
+    <p style="margin:0.75rem 0"><a href="{setup_url}" style="color:#FF5E00;font-weight:600;word-break:break-all">{setup_url}</a></p>
+    <p>In the portal you can toggle which MCP tools you want access to and download your gateway configuration.</p>
+  </div>
+
   <div class="footer">
     Questions? Reply to this email or contact your DS-MOZ Intelligence administrator.<br>
     &copy; DS-MOZ Intelligence
@@ -108,6 +115,7 @@ async def send_approval_email(
     client_id: str,
     raw_secret: str,
     issuer_url: str,
+    setup_token: str = "",
 ) -> None:
     """Send credentials + setup instructions to the newly approved client."""
     settings = get_settings()
@@ -117,6 +125,7 @@ async def send_approval_email(
         return
 
     server_name = company_name.lower().replace(" ", "-")
+    setup_url = f"{issuer_url}/portal/setup-password?token={setup_token}" if setup_token else f"{issuer_url}/portal/login"
 
     claude_config = _CLAUDE_CONFIG_TEMPLATE.format(
         server_name=server_name,
@@ -137,6 +146,7 @@ async def send_approval_email(
         client_secret=raw_secret,
         claude_config=claude_config,
         chatgpt_config=chatgpt_config,
+        setup_url=setup_url,
     )
 
     payload = {

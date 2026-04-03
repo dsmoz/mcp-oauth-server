@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Client Portal — DS-MOZ Intelligence{% endblock %}</title>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #060E10; --surface: #0A1C20; --elevated: #0D2A30;
+  --border: #16464F; --focus: #115E67;
+  --accent: #E8500A; --vivid: #FF5E00; --amber: #FFAE62;
+  --text-h: #F0F7F8; --text-b: #D4E8EA; --text-ui: #91BCC1; --text-muted: #5A8A90;
+  --success: #3DD68C; --success-bg: #073D20;
+  --danger-fg: #FF6B6B; --danger-border: #7A1E1E; --danger-bg: #1A0505;
+  --sidebar-w: 200px;
+}
+
+html, body { height: 100%; }
+
+body {
+  font-family: 'Avenir Next','Avenir','Segoe UI',Helvetica Neue,Arial,sans-serif;
+  background: var(--bg);
+  color: var(--text-b);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ── Top bar ── */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 1.25rem;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.topbar-brand { font-size: 0.65rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--vivid); }
+.topbar-user { font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; }
+
+/* ── Shell ── */
+.shell { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: color 0.12s, background 0.12s;
+}
+.nav-item i { font-size: 16px; flex-shrink: 0; }
+.nav-item:hover { color: var(--text-h); background: var(--elevated); }
+.nav-item.active { color: var(--text-h); background: var(--elevated); border-left-color: var(--vivid); }
+
+.sidebar-spacer { flex: 1; }
+.sidebar-bottom { padding: 0.5rem 0; border-top: 1px solid var(--border); }
+
+/* ── Main content ── */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.75rem 2rem;
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.card h2 { font-size: 1rem; font-weight: 700; color: var(--text-h); margin-bottom: 1rem; }
+
+/* ── Page header ── */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+.page-header h1 { font-size: 1.3rem; font-weight: 800; color: var(--text-h); }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.45rem 0.875rem;
+  border-radius: 6px; border: 1px solid var(--border);
+  font-size: 0.8125rem; font-weight: 600; font-family: inherit;
+  cursor: pointer; text-decoration: none; transition: opacity 0.15s;
+  background: var(--elevated); color: var(--text-b);
+}
+.btn:hover { opacity: 0.8; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ── Stat grid ── */
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.stat-box { text-align: center; }
+.stat-num { font-size: 2rem; font-weight: 800; color: var(--vivid); line-height: 1; }
+.stat-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 0.25rem; }
+
+/* ── Code pill ── */
+.code-pill {
+  background: #1A0C00; border: 1px solid #7A3000; border-radius: 6px;
+  padding: 0.6rem 0.875rem; font-family: monospace; font-size: 0.8125rem;
+  color: var(--amber); display: flex; align-items: center;
+  justify-content: space-between; gap: 0.5rem; margin-top: 0.5rem;
+  word-break: break-all;
+}
+.copy-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); font-size: 14px; flex-shrink: 0;
+  padding: 0.2rem; border-radius: 4px; transition: color 0.12s;
+}
+.copy-btn:hover { color: var(--vivid); }
+.copy-btn.copied { color: var(--success); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-brand">DS-MOZ Intelligence</span>
+  <div class="topbar-user">
+    <i class="ph-light ph-user-circle" style="font-size:16px"></i>
+    <span>{{ client.client_name }}</span>
+  </div>
+</div>
+
+<div class="shell">
+  <aside class="sidebar">
+    <a href="/portal/" class="nav-item {% if active_nav == 'overview' %}active{% endif %}">
+      <i class="ph-light ph-squares-four"></i> Overview
+    </a>
+    <a href="/portal/mcps" class="nav-item {% if active_nav == 'mcps' %}active{% endif %}">
+      <i class="ph-light ph-plugs"></i> My MCPs
+    </a>
+    <a href="/portal/setup" class="nav-item {% if active_nav == 'setup' %}active{% endif %}">
+      <i class="ph-light ph-book-open"></i> Setup Guide
+    </a>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-bottom">
+      <form method="post" action="/portal/logout" style="margin:0">
+        <button type="submit" class="nav-item" style="width:100%;background:none;border:none;cursor:pointer;text-align:left">
+          <i class="ph-light ph-sign-out"></i> Sign Out
+        </button>
+      </form>
+    </div>
+  </aside>
+
+  <main class="main">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<script>
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(function() {
+    btn.classList.add('copied');
+    setTimeout(function() { btn.classList.remove('copied'); }, 1500);
+  });
+}
+</script>
+</body>
+</html>
