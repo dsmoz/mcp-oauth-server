@@ -534,7 +534,8 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
         )
         return (
             f"Provides tools for: {tool_lines}. "
-            f"Use when the task requires any of these capabilities."
+            f"Use when the task requires any of these capabilities. "
+            f"Call search_tools with a keyword or list_tools with this MCP's slug to discover the full tool list before calling any tool."
         )
     except Exception:
         return None
