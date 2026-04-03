@@ -518,6 +518,28 @@ async def reject_registration(
 
 # ── MCP Catalogue ─────────────────────────────────────────────────────────────
 
+async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str | None:
+    """
+    Fetch tool list from upstream MCP and generate an LLM-discovery description.
+    Returns None if upstream is unreachable or returns no tools.
+    """
+    try:
+        from src.gateway.upstream import fetch_tool_list
+        tools = await fetch_tool_list(upstream_url, api_key)
+        if not tools:
+            return None
+        tool_lines = "; ".join(
+            f"{t['name']} ({t['description'][:80]})" if t.get("description") else t["name"]
+            for t in tools[:10]
+        )
+        return (
+            f"Provides tools for: {tool_lines}. "
+            f"Use when the task requires any of these capabilities."
+        )
+    except Exception:
+        return None
+
+
 def _get_catalogue_row(db, slug: str) -> dict | None:
     result = db.table("mcp_catalogue").select("*").eq("slug", slug).limit(1).execute()
     return result.data[0] if result.data else None
@@ -658,19 +680,30 @@ async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_
             svc = next((s for s in services if s["slug"] == slug), None)
             if svc is None:
                 raise HTTPException(status_code=404, detail="Not found")
+            upstream_url = svc["upstream_url"] or ""
+            description = await _auto_describe_mcp(upstream_url, "", svc["name"]) or ""
             db.table("mcp_catalogue").insert({
                 "slug": slug,
                 "name": svc["name"],
-                "description": "",
+                "description": description,
                 "category": "MCP Server",
-                "upstream_url": svc["upstream_url"] or "",
+                "upstream_url": upstream_url,
                 "upstream_api_key": "",
                 "is_published": True,
             }).execute()
         else:
             raise HTTPException(status_code=404, detail="Not found")
     else:
-        db.table("mcp_catalogue").update({"is_published": not entry["is_published"]}).eq("slug", slug).execute()
+        new_published = not entry["is_published"]
+        update: dict = {"is_published": new_published}
+        # Auto-refresh description when publishing (not unpublishing) and description is empty
+        if new_published and not entry.get("description"):
+            description = await _auto_describe_mcp(
+                entry["upstream_url"], entry.get("upstream_api_key", ""), entry["name"]
+            )
+            if description:
+                update["description"] = description
+        db.table("mcp_catalogue").update(update).eq("slug", slug).execute()
 
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
