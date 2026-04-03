@@ -1,0 +1,78 @@
+<h2>Admin panel layout</h2>
+<p class="subtitle">The visual identity guide describes a sidebar, but the current app uses a top nav. Which layout do you want for the redesign?</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="sidebar" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:1rem;background:#060E10;border-radius:6px;font-size:0.75rem;min-height:180px;display:flex;gap:0;overflow:hidden;border:1px solid #16464F;">
+      <!-- Sidebar layout mockup -->
+      <div style="width:140px;flex-shrink:0;background:#0A1C20;border-right:1px solid #16464F;padding:0.75rem;display:flex;flex-direction:column;gap:0.5rem;">
+        <div style="font-weight:800;font-size:0.75rem;color:#FF5E00;margin-bottom:0.5rem;letter-spacing:0.05em;">DS-MOZ</div>
+        <div style="padding:0.35rem 0.5rem;background:#0D2A30;border-radius:4px;color:#F0F7F8;font-size:0.7rem;">Dashboard</div>
+        <div style="padding:0.35rem 0.5rem;color:#91BCC1;font-size:0.7rem;">Clients</div>
+        <div style="padding:0.35rem 0.5rem;color:#91BCC1;font-size:0.7rem;">Registrations</div>
+        <div style="padding:0.35rem 0.5rem;color:#91BCC1;font-size:0.7rem;">Discovery</div>
+      </div>
+      <div style="flex:1;padding:0.75rem;display:flex;flex-direction:column;gap:0.5rem;">
+        <div style="font-size:0.8rem;font-weight:700;color:#F0F7F8;">Dashboard</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;">
+          <div style="background:#0A1C20;border:1px solid #16464F;border-radius:4px;padding:0.4rem;font-size:0.65rem;color:#D4E8EA;">
+            <div style="font-size:1.1rem;font-weight:800;color:#F0F7F8;">12</div>
+            <div style="color:#5A8A90;">Clients</div>
+          </div>
+          <div style="background:#0A1C20;border:1px solid #16464F;border-radius:4px;padding:0.4rem;font-size:0.65rem;color:#D4E8EA;">
+            <div style="font-size:1.1rem;font-weight:800;color:#F0F7F8;">3</div>
+            <div style="color:#5A8A90;">Pending</div>
+          </div>
+        </div>
+        <div style="background:#0A1C20;border:1px solid #16464F;border-radius:4px;padding:0.5rem;font-size:0.65rem;color:#91BCC1;flex:1;">Recent clients table...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Sidebar layout</h3>
+      <p>Persistent left nav (220px) + main content area. Matches the visual identity guide spec. More room for nav labels, good for expansion. Standard SaaS admin pattern.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="topnav" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:1rem;background:#060E10;border-radius:6px;font-size:0.75rem;min-height:180px;display:flex;flex-direction:column;gap:0;overflow:hidden;border:1px solid #16464F;">
+      <!-- Top nav layout mockup -->
+      <div style="background:#0A1C20;border-bottom:1px solid #16464F;padding:0.5rem 0.75rem;display:flex;align-items:center;gap:1rem;">
+        <div style="font-weight:800;font-size:0.75rem;color:#FF5E00;letter-spacing:0.05em;">DS-MOZ</div>
+        <div style="color:#F0F7F8;font-size:0.7rem;padding:0.25rem 0.5rem;background:#0D2A30;border-radius:3px;">Dashboard</div>
+        <div style="color:#91BCC1;font-size:0.7rem;">Clients</div>
+        <div style="color:#91BCC1;font-size:0.7rem;">Registrations</div>
+        <div style="color:#91BCC1;font-size:0.7rem;">Discovery</div>
+      </div>
+      <div style="padding:0.75rem;display:flex;flex-direction:column;gap:0.5rem;flex:1;">
+        <div style="font-size:0.8rem;font-weight:700;color:#F0F7F8;">Dashboard</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem;">
+          <div style="background:#0A1C20;border:1px solid #16464F;border-radius:4px;padding:0.4rem;font-size:0.65rem;">
+            <div style="font-size:1.1rem;font-weight:800;color:#F0F7F8;">12</div>
+            <div style="color:#5A8A90;">Clients</div>
+          </div>
+          <div style="background:#0A1C20;border:1px solid #16464F;border-radius:4px;padding:0.4rem;font-size:0.65rem;">
+            <div style="font-size:1.1rem;font-weight:800;color:#F0F7F8;">9</div>
+            <div style="color:#5A8A90;">Active</div>
+          </div>
+          <div style="background:#0A1C20;border:1px solid #16464F;border-radius:4px;padding:0.4rem;font-size:0.65rem;">
+            <div style="font-size:1.1rem;font-weight:800;color:#F0F7F8;">47</div>
+            <div style="color:#5A8A90;">Tokens</div>
+          </div>
+          <div style="background:#0A1C20;border:1px solid #16464F;border-radius:4px;padding:0.4rem;font-size:0.65rem;border-color:#7A3000;">
+            <div style="font-size:1.1rem;font-weight:800;color:#FFAE62;">3</div>
+            <div style="color:#5A8A90;">Pending</div>
+          </div>
+        </div>
+        <div style="background:#0A1C20;border:1px solid #16464F;border-radius:4px;padding:0.5rem;font-size:0.65rem;color:#91BCC1;flex:1;">Recent clients table...</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Top nav (keep current structure)</h3>
+      <p>Rebrand the existing horizontal nav with DSMOZ colours. Less structural change, full content width, simpler migration. Diverges from the identity guide spec but is faster.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:1rem;">Both use the same teal/orange colour system — the difference is purely structural.</p>
