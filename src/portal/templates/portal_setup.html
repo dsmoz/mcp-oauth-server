@@ -1,0 +1,81 @@
+{% extends "portal_base.html" %}
+{% block title %}Setup Guide — DS-MOZ Intelligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Setup Guide</h1>
+  <a href="/portal/setup/download" class="btn btn-primary">
+    <i class="ph-light ph-download-simple"></i> Download config
+  </a>
+</div>
+
+<div class="card">
+  <h2>Your Gateway URL</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.5rem">
+    This is your single MCP endpoint. Connect your LLM client to this URL.
+  </p>
+  <div class="code-pill">
+    <span>{{ gateway_url }}</span>
+    <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy">
+      <i class="ph-light ph-copy" style="font-size:14px"></i>
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Claude Desktop</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.5">
+    Add the following to your <code style="background:var(--elevated);padding:0.1em 0.3em;border-radius:3px;color:var(--amber)">claude_desktop_config.json</code>.
+    Replace <code style="background:var(--elevated);padding:0.1em 0.3em;border-radius:3px;color:var(--amber)">&lt;your-access-token&gt;</code> with a valid OAuth access token.
+  </p>
+  <div style="position:relative">
+    <pre id="claude-config" style="background:var(--elevated);border:1px solid var(--border);border-radius:6px;padding:1rem;font-family:monospace;font-size:0.8rem;color:var(--text-b);overflow-x:auto;white-space:pre-wrap;word-break:break-all">{{ claude_config }}</pre>
+    <button class="copy-btn" onclick="copyText(document.getElementById('claude-config').textContent, this)"
+            style="position:absolute;top:0.5rem;right:0.5rem" title="Copy">
+      <i class="ph-light ph-copy" style="font-size:14px"></i>
+    </button>
+  </div>
+  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem">
+    Config file location:<br>
+    <strong style="color:var(--text-ui)">macOS:</strong> <code style="color:var(--amber)">~/Library/Application Support/Claude/claude_desktop_config.json</code><br>
+    <strong style="color:var(--text-ui)">Windows:</strong> <code style="color:var(--amber)">%APPDATA%\Claude\claude_desktop_config.json</code>
+  </p>
+</div>
+
+<div class="card">
+  <h2>ChatGPT (Custom GPT / GPT Action)</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.5">
+    Use these values when setting up an OAuth connection in your Custom GPT or GPT Action.
+  </p>
+  <div style="position:relative">
+    <pre id="chatgpt-config" style="background:var(--elevated);border:1px solid var(--border);border-radius:6px;padding:1rem;font-family:monospace;font-size:0.8rem;color:var(--text-b);overflow-x:auto;white-space:pre-wrap">{{ chatgpt_config }}</pre>
+    <button class="copy-btn" onclick="copyText(document.getElementById('chatgpt-config').textContent, this)"
+            style="position:absolute;top:0.5rem;right:0.5rem" title="Copy">
+      <i class="ph-light ph-copy" style="font-size:14px"></i>
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>How the Gateway Works</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);line-height:1.6;margin-bottom:0.75rem">
+    Your LLM connects to the gateway once and gets access to all your enabled MCP tools via four meta-tools:
+  </p>
+  <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:0.5rem">
+    {% for tool, desc in [
+      ("search_tools(query)", "Find tools by keyword across all your enabled MCPs"),
+      ("list_mcps()", "See which MCPs you have enabled"),
+      ("list_tools(mcp_slug)", "List all tools for a specific MCP"),
+      ("call_tool(mcp_slug, tool_name, arguments)", "Execute a tool on the upstream MCP server")
+    ] %}
+    <li style="display:flex;align-items:flex-start;gap:0.75rem">
+      <code style="background:var(--elevated);border:1px solid var(--border);border-radius:4px;padding:0.2em 0.5em;font-size:0.75rem;color:var(--amber);flex-shrink:0">{{ tool }}</code>
+      <span style="font-size:0.8rem;color:var(--text-muted);padding-top:0.1rem">{{ desc }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.5">
+    Enable or disable MCPs at any time from <a href="/portal/mcps" style="color:var(--vivid)">My MCPs</a>. Changes take effect immediately.
+  </p>
+</div>
+{% endblock %}

@@ -289,3 +289,81 @@ async def portal_mcps_post(request: Request, client_id: str = Depends(_require_p
     }).eq("client_id", client_id).execute()
 
     return RedirectResponse(url="/portal/mcps", status_code=303)
+
+
+# ── Setup guide ───────────────────────────────────────────────────────────────
+
+@router.get("/setup", response_class=HTMLResponse)
+async def portal_setup(request: Request, client_id: str = Depends(_require_portal_client)):
+    client = _get_client(client_id)
+    if not client:
+        raise HTTPException(status_code=401, detail="Client not found")
+
+    from src.config import get_settings
+    settings = get_settings()
+    gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{client_id}"
+    server_name = (client.get("client_name") or "dsmoz-intelligence").lower().replace(" ", "-")
+
+    claude_config = (
+        '{{\n'
+        '  "mcpServers": {{\n'
+        f'    "{server_name}": {{\n'
+        '      "type": "sse",\n'
+        f'      "url": "{gateway_url}",\n'
+        '      "headers": {{\n'
+        '        "Authorization": "Bearer <your-access-token>"\n'
+        '      }}\n'
+        '    }}\n'
+        '  }}\n'
+        '}}'
+    )
+
+    chatgpt_config = (
+        f"Authorization URL : {settings.OAUTH_ISSUER_URL}/oauth/authorize\n"
+        f"Token URL         : {settings.OAUTH_ISSUER_URL}/oauth/token\n"
+        f"Client ID         : {client_id}\n"
+        f"Client Secret     : <your-client-secret>\n"
+        f"Scope             : mcp"
+    )
+
+    return templates.TemplateResponse(
+        request=request, name="portal_setup.html", context={
+            "client": client,
+            "active_nav": "setup",
+            "gateway_url": gateway_url,
+            "claude_config": claude_config,
+            "chatgpt_config": chatgpt_config,
+        }
+    )
+
+
+@router.get("/setup/download")
+async def portal_setup_download(client_id: str = Depends(_require_portal_client)):
+    import json
+    from fastapi.responses import Response
+    client = _get_client(client_id)
+    if not client:
+        raise HTTPException(status_code=401, detail="Client not found")
+
+    from src.config import get_settings
+    settings = get_settings()
+    gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{client_id}"
+    server_name = (client.get("client_name") or "dsmoz-intelligence").lower().replace(" ", "-")
+
+    config = {
+        "mcpServers": {
+            server_name: {
+                "type": "sse",
+                "url": gateway_url,
+                "headers": {
+                    "Authorization": "Bearer <your-access-token>"
+                }
+            }
+        }
+    }
+
+    return Response(
+        content=json.dumps(config, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=claude_desktop_config.json"},
+    )
