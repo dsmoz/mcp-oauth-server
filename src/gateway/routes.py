@@ -26,14 +26,13 @@ from src.oauth.provider import SupabaseOAuthProvider
 router = APIRouter()
 
 
-def _validate_token(token: str, client_id: str) -> None:
-    """Raise HTTPException if token is invalid or doesn't belong to client_id."""
+def _validate_token(token: str, client_id: str) -> str:
+    """Validate token. Returns the actual client_id from the token (may differ from URL)."""
     provider = SupabaseOAuthProvider()
     at = provider.load_access_token(token)
     if at is None:
         raise HTTPException(status_code=401, detail="Invalid or expired access token")
-    if at.client_id != client_id:
-        raise HTTPException(status_code=403, detail="Token does not belong to this client")
+    return at.client_id
 
 
 def _load_enabled_mcps(client_id: str) -> list[dict]:
@@ -143,18 +142,28 @@ def _build_gateway_app(client_id: str, enabled_mcps: list[dict]) -> FastMCP:
     return server
 
 
-@router.get("/gateway/{client_id}")
-async def gateway_sse(client_id: str, request: Request):
-    """SSE gateway endpoint — validates Bearer token then streams FastMCP SSE."""
+async def _handle_gateway(request: Request):
+    """Shared handler for GET and POST to the gateway."""
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing Bearer token")
     token = auth_header[7:]
 
-    _validate_token(token, client_id)
-    enabled_mcps = _load_enabled_mcps(client_id)
-    gateway = _build_gateway_app(client_id, enabled_mcps)
+    actual_client_id = _validate_token(token, "")
+    enabled_mcps = _load_enabled_mcps(actual_client_id)
+    gateway = _build_gateway_app(actual_client_id, enabled_mcps)
 
-    # Mount the FastMCP SSE app and forward the request
     sse_app = gateway.sse_app()
     return await sse_app(request.scope, request.receive, request._send)
+
+
+@router.get("/gateway/{client_id}")
+async def gateway_sse_get(client_id: str, request: Request):
+    """SSE gateway — GET (SSE stream)."""
+    return await _handle_gateway(request)
+
+
+@router.post("/gateway/{client_id}")
+async def gateway_sse_post(client_id: str, request: Request):
+    """SSE gateway — POST (MCP message)."""
+    return await _handle_gateway(request)

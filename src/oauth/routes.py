@@ -57,6 +57,19 @@ async def oauth_authorization_server():
     return JSONResponse(_discovery_doc())
 
 
+@router.get("/.well-known/oauth-protected-resource")
+@router.get("/.well-known/oauth-protected-resource/{path:path}")
+async def oauth_protected_resource(request: Request):
+    """RFC 9728 — advertise the authorization server for this resource."""
+    base = get_settings().OAUTH_ISSUER_URL
+    return JSONResponse({
+        "resource": base,
+        "authorization_servers": [base],
+        "bearer_methods_supported": ["header"],
+        "scopes_supported": ["mcp"],
+    })
+
+
 # ── Authorization ─────────────────────────────────────────────────────────────
 
 @router.get("/authorize")
