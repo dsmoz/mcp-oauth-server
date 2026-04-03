@@ -286,6 +286,20 @@ async def rekey_client(
     )
 
 
+# ── Bulk delete clients ───────────────────────────────────────────────────────
+
+@router.post("/clients/bulk-delete", response_class=HTMLResponse)
+async def bulk_delete_clients(
+    request: Request,
+    client_ids: list[str] = Form(default=[]),
+    _: str = Depends(_require_admin),
+):
+    provider = SupabaseOAuthProvider()
+    for client_id in client_ids:
+        provider.delete_client(client_id)
+    return RedirectResponse(url="/admin/clients/", status_code=303)
+
+
 # ── Hard delete client ────────────────────────────────────────────────────────
 
 @router.post("/clients/{client_id}/delete", response_class=HTMLResponse)

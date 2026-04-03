@@ -15,52 +15,97 @@
 </div>
 
 {% if clients %}
-<table>
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Client ID</th>
-      <th>Status</th>
-      <th>Calls</th>
-      <th>Created</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for client in clients %}
-    <tr>
-      <td>{{ client.client_name }}</td>
-      <td style="font-family: monospace; font-size: 0.8rem;">{{ client.client_id }}</td>
-      <td>
-        {% if client.is_active %}
-          <span class="badge badge-active">Active</span>
-        {% else %}
-          <span class="badge badge-inactive">Revoked</span>
-        {% endif %}
-      </td>
-      <td style="color: var(--text-ui); font-size: 0.85rem; font-variant-numeric: tabular-nums;">
-        {{ client.usage_total }}
-      </td>
-      <td style="color: var(--text-muted); font-size: 0.8rem;">
-        {{ client.created_at[:10] if client.created_at else "—" }}
-      </td>
-      <td class="actions">
-        <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">
-          <i class="ph-light ph-eye"></i> View
-        </a>
-        {% if client.is_active %}
-        <form method="post" action="/admin/clients/{{ client.client_id }}/revoke"
-              onsubmit="return confirm('Revoke all tokens for {{ client.client_name }}?')">
-          <button type="submit" class="btn btn-danger">
-            <i class="ph-light ph-prohibit"></i> Revoke
-          </button>
-        </form>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<form method="post" action="/admin/clients/bulk-delete" id="bulk-form"
+      onsubmit="return confirm('Delete ' + document.querySelectorAll('.row-check:checked').length + ' client(s)? This cannot be undone.')">
+  <div id="bulk-toolbar" style="display:none;margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem">
+    <span id="bulk-count" style="font-size:0.85rem;color:var(--text-muted)">0 selected</span>
+    <button type="submit" class="btn btn-danger">
+      <i class="ph-light ph-trash"></i> Delete selected
+    </button>
+    <button type="button" class="btn btn-secondary" onclick="clearSelection()">Clear</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:2rem">
+          <input type="checkbox" id="select-all" title="Select all"
+                 style="cursor:pointer;width:1rem;height:1rem">
+        </th>
+        <th>Name</th>
+        <th>Client ID</th>
+        <th>Status</th>
+        <th>Calls</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for client in clients %}
+      <tr>
+        <td>
+          <input type="checkbox" name="client_ids" value="{{ client.client_id }}"
+                 class="row-check" style="cursor:pointer;width:1rem;height:1rem"
+                 onchange="updateBulkBar()">
+        </td>
+        <td>{{ client.client_name }}</td>
+        <td style="font-family: monospace; font-size: 0.8rem;">{{ client.client_id }}</td>
+        <td>
+          {% if client.is_active %}
+            <span class="badge badge-active">Active</span>
+          {% else %}
+            <span class="badge badge-inactive">Revoked</span>
+          {% endif %}
+        </td>
+        <td style="color: var(--text-ui); font-size: 0.85rem; font-variant-numeric: tabular-nums;">
+          {{ client.usage_total }}
+        </td>
+        <td style="color: var(--text-muted); font-size: 0.8rem;">
+          {{ client.created_at[:10] if client.created_at else "—" }}
+        </td>
+        <td class="actions">
+          <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">
+            <i class="ph-light ph-eye"></i> View
+          </a>
+          {% if client.is_active %}
+          <form method="post" action="/admin/clients/{{ client.client_id }}/revoke"
+                onsubmit="return confirm('Revoke all tokens for {{ client.client_name }}?')">
+            <button type="submit" class="btn btn-danger">
+              <i class="ph-light ph-prohibit"></i> Revoke
+            </button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</form>
+
+<script>
+  const selectAll = document.getElementById('select-all');
+  const toolbar = document.getElementById('bulk-toolbar');
+  const countEl = document.getElementById('bulk-count');
+
+  selectAll.addEventListener('change', () => {
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = selectAll.checked);
+    updateBulkBar();
+  });
+
+  function updateBulkBar() {
+    const checked = document.querySelectorAll('.row-check:checked').length;
+    toolbar.style.display = checked > 0 ? 'flex' : 'none';
+    countEl.textContent = checked + ' selected';
+    selectAll.indeterminate = checked > 0 && checked < document.querySelectorAll('.row-check').length;
+    selectAll.checked = checked === document.querySelectorAll('.row-check').length;
+  }
+
+  function clearSelection() {
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = false);
+    selectAll.checked = false;
+    updateBulkBar();
+  }
+</script>
 {% else %}
 <div class="card" style="text-align: center; color: var(--text-muted); padding: 3rem;">
   <p>No clients yet. <a href="/admin/clients/new" style="color: var(--accent-vivid);">Create your first client</a>.</p>
