@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Request API Access — DS-MOZ MCP OAuth</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 3rem 1.5rem;
+    }
+
+    .card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 14px;
+      padding: 2.5rem;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    .brand {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      margin-bottom: 2rem;
+    }
+
+    .brand span { color: #a78bfa; }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 0.4rem;
+    }
+
+    .subtitle {
+      font-size: 0.875rem;
+      color: #64748b;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+
+    .form-group { margin-bottom: 1.25rem; }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    textarea {
+      width: 100%;
+      padding: 0.65rem 0.875rem;
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+
+    input:focus, textarea:focus { border-color: #6d28d9; }
+
+    textarea { resize: vertical; min-height: 80px; }
+
+    .hint {
+      font-size: 0.75rem;
+      color: #475569;
+      margin-top: 0.3rem;
+      display: block;
+    }
+
+    .error-box {
+      background: #450a0a;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      color: #fca5a5;
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: #6d28d9;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: opacity 0.15s;
+    }
+
+    .btn-submit:hover { opacity: 0.85; }
+
+    .footer-note {
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: #475569;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">DS-MOZ <span>MCP OAuth</span></div>
+
+    <h1>Request API Access</h1>
+    <p class="subtitle">
+      Fill in the form below to request access to our MCP services.
+      You will receive your credentials by email once the request is reviewed.
+    </p>
+
+    {% if error %}
+    <div class="error-box">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/register/submit">
+      <div class="form-group">
+        <label for="company_name">Organisation / Company Name *</label>
+        <input type="text" id="company_name" name="company_name" required
+               placeholder="e.g. LAMBDA Association">
+      </div>
+
+      <div class="form-group">
+        <label for="contact_name">Contact Name *</label>
+        <input type="text" id="contact_name" name="contact_name" required
+               placeholder="Your full name">
+      </div>
+
+      <div class="form-group">
+        <label for="contact_email">Contact Email *</label>
+        <input type="email" id="contact_email" name="contact_email" required
+               placeholder="you@organisation.org">
+      </div>
+
+      <div class="form-group">
+        <label for="use_case">Intended Use *</label>
+        <textarea id="use_case" name="use_case" required
+                  placeholder="Briefly describe how you plan to use the MCP API"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="redirect_uris_raw">Redirect URIs</label>
+        <textarea id="redirect_uris_raw" name="redirect_uris_raw"
+                  placeholder="One URI per line&#10;e.g. https://myapp.example.com/callback"></textarea>
+        <span class="hint">Leave empty if you don't know yet — you can update this later.</span>
+      </div>
+
+      <button type="submit" class="btn-submit">Submit Request</button>
+    </form>
+
+    <p class="footer-note">
+      Requests are reviewed manually. You will be notified by email once a decision is made.
+    </p>
+  </div>
+</body>
+</html>

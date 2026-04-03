@@ -82,6 +82,34 @@ async def answer_callback(callback_id: str, text: str) -> None:
         )
 
 
+async def send_registration_alert(
+    request_id: str,
+    company_name: str,
+    contact_name: str,
+    contact_email: str,
+) -> None:
+    """Notify the owner that a new registration request has been submitted."""
+    settings = get_settings()
+    admin_url = f"{settings.OAUTH_ISSUER_URL}/admin/registrations/{request_id}"
+    text = (
+        f"📋 *New Registration Request*\n\n"
+        f"Company: *{company_name}*\n"
+        f"Contact: {contact_name} — `{contact_email}`\n\n"
+        f"[Review in admin panel]({admin_url})"
+    )
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            _url("sendMessage"),
+            json={
+                "chat_id": settings.TELEGRAM_OWNER_CHAT_ID,
+                "text": text,
+                "parse_mode": "Markdown",
+                "disable_web_page_preview": True,
+            },
+            timeout=10.0,
+        )
+
+
 async def register_webhook(webhook_url: str) -> None:
     """Register the webhook URL with Telegram on startup."""
     async with httpx.AsyncClient() as client:

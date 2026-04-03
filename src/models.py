@@ -48,3 +48,16 @@ class RefreshToken(BaseModel):
     expires_at: Optional[int] = None
     is_revoked: bool = False
     created_at: Optional[str] = None
+
+
+class RegistrationRequest(BaseModel):
+    id: str
+    company_name: str
+    contact_name: str
+    contact_email: str
+    use_case: str
+    redirect_uris_raw: str = ""
+    status: str = "pending"
+    created_at: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    reviewed_by: Optional[str] = None

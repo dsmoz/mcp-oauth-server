@@ -226,12 +226,49 @@
       justify-content: space-between;
       margin-bottom: 1.5rem;
     }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+    }
+
+    .stat-card-alert {
+      border-color: #78350f;
+      background: #1c160a;
+    }
+
+    .stat-number {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #f1f5f9;
+      line-height: 1;
+      margin-bottom: 0.4rem;
+    }
+
+    .stat-label {
+      font-size: 0.8125rem;
+      color: #64748b;
+      font-weight: 600;
+    }
+
+    .badge-pending { background: #78350f; color: #fbbf24; }
   </style>
 </head>
 <body>
   <nav>
     <a href="/admin/" class="brand">DS-MOZ MCP OAuth</a>
-    <a href="/admin/">Clients</a>
+    <a href="/admin/">Dashboard</a>
+    <a href="/admin/clients/">Clients</a>
+    <a href="/admin/registrations">Registrations</a>
     <a href="/.well-known/openid-configuration">Discovery</a>
   </nav>
   <div class="container">

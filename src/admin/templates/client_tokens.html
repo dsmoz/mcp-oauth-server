@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ client.client_name }} — Tokens — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ client.client_name }} — Tokens</h1>
+  <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">← Client</a>
+</div>
+
+{% if tokens %}
+<table>
+  <thead>
+    <tr>
+      <th>Fingerprint</th>
+      <th>Scopes</th>
+      <th>Expires</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for token in tokens %}
+    <tr>
+      <td style="font-family: monospace; font-size: 0.8rem;">{{ token.fingerprint }}</td>
+      <td style="font-size: 0.8rem; color: #94a3b8;">{{ (token.scopes or []) | join(", ") }}</td>
+      <td style="font-size: 0.8rem; color: #64748b;">{{ token.expires_at | unix_to_date }}</td>
+      <td>
+        {% if token.state == "active" %}
+          <span class="badge badge-active">Active</span>
+        {% elif token.state == "expired" %}
+          <span class="badge" style="background: #1e2235; color: #64748b;">Expired</span>
+        {% else %}
+          <span class="badge badge-inactive">Revoked</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if token.state == "active" %}
+        <form method="post" action="/admin/clients/{{ client.client_id }}/tokens/revoke"
+              onsubmit="return confirm('Revoke this token?')">
+          <input type="hidden" name="token_hash" value="{{ token.token }}">
+          <button type="submit" class="btn btn-danger" style="font-size: 0.75rem; padding: 0.3rem 0.75rem;">Revoke</button>
+        </form>
+        {% else %}
+        <span style="color: #475569; font-size: 0.8rem;">—</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card" style="text-align: center; color: #64748b; padding: 3rem;">
+  <p>No tokens issued for this client yet.</p>
+</div>
+{% endif %}
+{% endblock %}

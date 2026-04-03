@@ -405,6 +405,17 @@ class SupabaseOAuthProvider:
             "approved_at": int(time.time()),
         }
 
+    def delete_client(self, client_id: str) -> None:
+        """Hard delete a client and all linked tokens (cascade handles DB side too)."""
+        try:
+            # Explicit deletes first in case FK cascade is not active
+            self.db.table("oauth_refresh_tokens").delete().eq("client_id", client_id).execute()
+            self.db.table("oauth_access_tokens").delete().eq("client_id", client_id).execute()
+            self.db.table("oauth_authorization_codes").delete().eq("client_id", client_id).execute()
+            self.db.table("oauth_clients").delete().eq("client_id", client_id).execute()
+        except Exception as exc:
+            raise ValueError("Client deletion failed") from exc
+
     def revoke_client_tokens(self, client_id: str) -> None:
         """Revoke ALL tokens for a client."""
         try:

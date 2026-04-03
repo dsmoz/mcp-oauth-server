@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Dashboard</h1>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-number">{{ total_clients }}</div>
+    <div class="stat-label">Total Clients</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number" style="color: #4ade80;">{{ active_clients }}</div>
+    <div class="stat-label">Active Clients</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number" style="color: #a78bfa;">{{ active_tokens }}</div>
+    <div class="stat-label">Active Tokens</div>
+  </div>
+  <div class="stat-card {% if pending_requests > 0 %}stat-card-alert{% endif %}">
+    <div class="stat-number" style="{% if pending_requests > 0 %}color: #fbbf24;{% endif %}">
+      {{ pending_requests }}
+    </div>
+    <div class="stat-label">
+      Pending Requests
+      {% if pending_requests > 0 %}
+        <a href="/admin/registrations" style="color: #fbbf24; margin-left: 0.5rem; font-size: 0.7rem;">Review →</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top: 1.5rem;">
+  <h2>Recent Clients</h2>
+  {% if recent_clients %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Client ID</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for client in recent_clients %}
+      <tr>
+        <td>{{ client.client_name }}</td>
+        <td style="font-family: monospace; font-size: 0.8rem;">{{ client.client_id }}</td>
+        <td>
+          {% if client.is_active %}
+            <span class="badge badge-active">Active</span>
+          {% else %}
+            <span class="badge badge-inactive">Revoked</span>
+          {% endif %}
+        </td>
+        <td style="color: #64748b; font-size: 0.8rem;">
+          {{ client.created_at[:10] if client.created_at else "—" }}
+        </td>
+        <td>
+          <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">View</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color: #64748b; font-size: 0.875rem;">No clients yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

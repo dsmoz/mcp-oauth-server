@@ -417,11 +417,68 @@ async def introspect(
     )
 
 
-# ── Register (disabled) ───────────────────────────────────────────────────────
+# ── Self-service registration ─────────────────────────────────────────────────
+
+@router.get("/register", response_class=HTMLResponse)
+async def register_get(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="register.html",
+        context={"error": None},
+    )
+
+
+@router.post("/register/submit", response_class=HTMLResponse)
+async def register_submit(
+    request: Request,
+    company_name: str = Form(...),
+    contact_name: str = Form(...),
+    contact_email: str = Form(...),
+    use_case: str = Form(...),
+    redirect_uris_raw: str = Form(""),
+):
+    from src.db import get_db
+    db = get_db()
+    result = db.table("oauth_registration_requests").insert({
+        "company_name": company_name,
+        "contact_name": contact_name,
+        "contact_email": contact_email,
+        "use_case": use_case,
+        "redirect_uris_raw": redirect_uris_raw.strip(),
+        "status": "pending",
+    }).execute()
+
+    request_id = result.data[0]["id"] if result.data else "unknown"
+
+    # Notify owner via Telegram (non-blocking — failure must not block the user)
+    settings = get_settings()
+    if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_OWNER_CHAT_ID:
+        try:
+            await tg.send_registration_alert(
+                request_id=request_id,
+                company_name=company_name,
+                contact_name=contact_name,
+                contact_email=contact_email,
+            )
+        except Exception as exc:
+            import sys
+            print(f"WARNING: Telegram registration alert failed: {exc}", file=sys.stderr)
+
+    return RedirectResponse(url="/register/success", status_code=303)
+
+
+@router.get("/register/success", response_class=HTMLResponse)
+async def register_success(request: Request):
+    return templates.TemplateResponse(
+        request=request,
+        name="register_success.html",
+        context={},
+    )
+
 
 @router.post("/register")
 async def register():
     raise HTTPException(
         status_code=405,
-        detail="Dynamic client registration is disabled. Use the admin panel at /admin/.",
+        detail="Dynamic client registration is disabled. Use /register to submit a registration request.",
     )

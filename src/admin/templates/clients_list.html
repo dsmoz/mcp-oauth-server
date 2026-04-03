@@ -1,10 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Clients — DS-MOZ MCP OAuth{% endblock %}
 
+
 {% block content %}
 <div class="page-header">
   <h1>OAuth Clients</h1>
-  <a href="/admin/clients/new" class="btn btn-primary">+ New Client</a>
+  <div class="actions">
+    <a href="/admin/registrations" class="btn btn-secondary">Registrations</a>
+    <a href="/admin/clients/new" class="btn btn-primary">+ New Client</a>
+  </div>
 </div>
 
 {% if clients %}

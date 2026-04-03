@@ -4,7 +4,11 @@
 {% block content %}
 <div class="page-header">
   <h1>{{ client.client_name }}</h1>
-  <a href="/admin/" class="btn btn-secondary">← Clients</a>
+  <div class="actions">
+    <a href="/admin/clients/{{ client.client_id }}/tokens" class="btn btn-secondary">Tokens</a>
+    <a href="/admin/clients/{{ client.client_id }}/edit" class="btn btn-secondary">Edit</a>
+    <a href="/admin/clients/" class="btn btn-secondary">← Clients</a>
+  </div>
 </div>
 
 {% if secret %}
@@ -75,16 +79,41 @@
   </div>
 </div>
 
+<div class="card" style="border-color: #1e3a5f; margin-top: 0.5rem;">
+  <h2 style="color: #7dd3fc; margin-bottom: 1rem;">Rotate Secret</h2>
+  <p style="color: #64748b; font-size: 0.8125rem; margin-bottom: 1rem; line-height: 1.6;">
+    Generates a new client secret. Existing access tokens remain valid. The old secret is
+    immediately invalidated for new token requests.
+  </p>
+  <form method="post" action="/admin/clients/{{ client.client_id }}/rekey"
+        onsubmit="return confirm('Rotate the secret for {{ client.client_name }}? The old secret will stop working immediately.')">
+    <button type="submit" class="btn btn-secondary">Rotate Secret</button>
+  </form>
+</div>
+
 {% if client.is_active %}
 <div class="card" style="border-color: #450a0a;">
   <h2 style="color: #f87171;">Danger Zone</h2>
-  <p style="color: #64748b; font-size: 0.8125rem; margin-bottom: 1rem; line-height: 1.6;">
-    Revoking this client will deactivate it and invalidate all existing access and refresh tokens.
-    The client cannot be reactivated — you will need to create a new one.
+
+  <p style="color: #64748b; font-size: 0.8125rem; margin-bottom: 0.75rem; line-height: 1.6;">
+    <strong style="color: #94a3b8;">Revoke</strong> — deactivates the client and invalidates all tokens.
+    The client row is kept for audit purposes. Cannot be reactivated.
   </p>
   <form method="post" action="/admin/clients/{{ client.client_id }}/revoke"
-        onsubmit="return confirm('Revoke {{ client.client_name }} and all its tokens? This cannot be undone.')">
+        onsubmit="return confirm('Revoke {{ client.client_name }} and all its tokens?')"
+        style="margin-bottom: 1.25rem;">
     <button type="submit" class="btn btn-danger">Revoke Client & All Tokens</button>
+  </form>
+
+  <p style="color: #64748b; font-size: 0.8125rem; margin-bottom: 0.75rem; line-height: 1.6;">
+    <strong style="color: #94a3b8;">Delete</strong> — permanently removes this client and all associated
+    tokens from the database. This is irreversible.
+  </p>
+  <form method="post" action="/admin/clients/{{ client.client_id }}/delete"
+        onsubmit="return confirm('PERMANENTLY DELETE {{ client.client_name }} and all its tokens? This cannot be undone.')">
+    <button type="submit" class="btn btn-danger" style="background: #450a0a; border: 1px solid #7f1d1d;">
+      Permanently Delete Client
+    </button>
   </form>
 </div>
 {% endif %}
