@@ -10,7 +10,8 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from src.config import get_settings
-from src.crypto import now_unix, verify_secret
+from src.crypto import generate_client_id, generate_token, hash_secret, now_unix, verify_secret
+from src.db import get_db
 from src.oauth.provider import SupabaseOAuthProvider
 from src import telegram as tg
 
@@ -254,14 +255,14 @@ async def telegram_webhook(request: Request):
 
     provider = _provider()
 
-    # Get message_id from session for editing
+    # Get message_id — prefer stored value in session, fall back to Telegram callback body
     import json as _json
-    message_id: Optional[int] = None
+    message_id: Optional[int] = callback.get("message", {}).get("message_id")
     row = provider._single("oauth_authorization_codes", code=session_id)
     if row:
         try:
             session_data = _json.loads(row.get("resource") or "{}")
-            message_id = session_data.get("telegram_message_id")
+            message_id = session_data.get("telegram_message_id") or message_id
         except (ValueError, TypeError):
             pass
 
@@ -294,6 +295,58 @@ async def telegram_webhook(request: Request):
         await tg.answer_callback(callback_id, "❌ Access denied")
         if message_id:
             await tg.edit_message_result(message_id, "❌ *Access denied*")
+
+    elif action == "reg_approve":
+        request_id = session_id
+        db = get_db()
+        result = db.table("oauth_registration_requests").select("*").eq("id", request_id).execute()
+        reg = result.data[0] if result.data else None
+        if reg is None or reg["status"] != "pending":
+            await tg.answer_callback(callback_id, "⚠️ Not found or already processed")
+        else:
+            client_id = generate_client_id()
+            raw_secret = generate_token(32)
+            secret_hash = hash_secret(raw_secret)
+            redirect_uris = [
+                u.strip() for u in (reg.get("redirect_uris_raw") or "").splitlines() if u.strip()
+            ]
+            db.table("oauth_clients").insert({
+                "client_id": client_id,
+                "client_secret_hash": secret_hash,
+                "client_name": reg["company_name"],
+                "redirect_uris": redirect_uris,
+                "grant_types": ["authorization_code"],
+                "scope": "mcp",
+                "allowed_mcp_resources": [],
+                "created_by": reg["contact_email"],
+                "is_active": True,
+            }).execute()
+            db.table("oauth_registration_requests").update({
+                "status": "approved",
+                "reviewed_at": "now()",
+                "reviewed_by": "telegram",
+            }).eq("id", request_id).execute()
+            await tg.answer_callback(callback_id, "✅ Registration approved")
+            await tg.edit_message_result(
+                message_id,
+                f"✅ *Approved*\nClient ID: `{client_id}`",
+            )
+
+    elif action == "reg_reject":
+        request_id = session_id
+        db = get_db()
+        result = db.table("oauth_registration_requests").select("status").eq("id", request_id).execute()
+        reg = result.data[0] if result.data else None
+        if reg is None or reg["status"] != "pending":
+            await tg.answer_callback(callback_id, "⚠️ Not found or already processed")
+        else:
+            db.table("oauth_registration_requests").update({
+                "status": "rejected",
+                "reviewed_at": "now()",
+                "reviewed_by": "telegram",
+            }).eq("id", request_id).execute()
+            await tg.answer_callback(callback_id, "❌ Registration rejected")
+            await tg.edit_message_result(message_id, "❌ *Registration rejected*")
 
     return JSONResponse({"ok": True})
 

@@ -90,12 +90,10 @@ async def send_registration_alert(
 ) -> None:
     """Notify the owner that a new registration request has been submitted."""
     settings = get_settings()
-    admin_url = f"{settings.OAUTH_ISSUER_URL}/admin/registrations/{request_id}"
     text = (
         f"📋 *New Registration Request*\n\n"
         f"Company: *{company_name}*\n"
-        f"Contact: {contact_name} — `{contact_email}`\n\n"
-        f"[Review in admin panel]({admin_url})"
+        f"Contact: {contact_name} — `{contact_email}`"
     )
     async with httpx.AsyncClient() as client:
         await client.post(
@@ -104,7 +102,12 @@ async def send_registration_alert(
                 "chat_id": settings.TELEGRAM_OWNER_CHAT_ID,
                 "text": text,
                 "parse_mode": "Markdown",
-                "disable_web_page_preview": True,
+                "reply_markup": {
+                    "inline_keyboard": [[
+                        {"text": "✅ Approve", "callback_data": f"reg_approve:{request_id}"},
+                        {"text": "❌ Reject",  "callback_data": f"reg_reject:{request_id}"},
+                    ]]
+                },
             },
             timeout=10.0,
         )
