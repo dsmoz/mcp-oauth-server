@@ -347,16 +347,21 @@ async def _run_streamable_http(client_id: str, request: Request):
     mcp_server = _build_mcp_server(actual_client_id, enabled_mcps)
     transport = StreamableHTTPServerTransport(mcp_session_id=None)
 
-    async with transport.connect() as (read_stream, write_stream):
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(
-                mcp_server.run,
+    async def run_stateless_server(*, task_status=anyio.TASK_STATUS_IGNORED):
+        async with transport.connect() as (read_stream, write_stream):
+            task_status.started()  # signals: ready, proceed with handle_request
+            await mcp_server.run(
                 read_stream,
                 write_stream,
                 mcp_server.create_initialization_options(),
+                stateless=True,
             )
-            await transport.handle_request(request.scope, request.receive, request._send)
-            tg.cancel_scope.cancel()
+
+    async with anyio.create_task_group() as tg:
+        await tg.start(run_stateless_server)  # waits until server is ready
+        await transport.handle_request(request.scope, request.receive, request._send)
+        await transport.terminate()
+        tg.cancel_scope.cancel()
 
 
 # Primary endpoint — handles both Streamable HTTP (POST/DELETE) and SSE legacy (GET)
