@@ -39,7 +39,6 @@ def _discovery_doc() -> dict:
         "authorization_endpoint": f"{base}/authorize",
         "token_endpoint": f"{base}/token",
         "revocation_endpoint": f"{base}/revoke",
-        "registration_endpoint": f"{base}/register",
         "scopes_supported": ["mcp"],
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
