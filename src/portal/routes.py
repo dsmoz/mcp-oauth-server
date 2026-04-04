@@ -5,8 +5,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
@@ -100,9 +100,14 @@ def _consume_setup_token(raw: str) -> None:
 # ── Login ─────────────────────────────────────────────────────────────────────
 
 @router.get("/login", response_class=HTMLResponse)
-async def portal_login_get(request: Request):
+async def portal_login_get(
+    request: Request,
+    next_session: Optional[str] = Query(None),
+):
     return templates.TemplateResponse(
-        request=request, name="portal_login.html", context={"error": None}
+        request=request,
+        name="portal_login.html",
+        context={"error": None, "next_session": next_session},
     )
 
 
@@ -111,33 +116,58 @@ async def portal_login_post(
     request: Request,
     username: str = Form(...),
     password: str = Form(...),
+    next_session: Optional[str] = Query(None),
 ):
     db = get_db()
     result = db.table("oauth_clients").select("*").eq("portal_username", username).eq("is_active", True).limit(1).execute()
     client = result.data[0] if result.data else None
 
-    if client is None:
+    def _login_error(msg: str):
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
-            context={"error": "Invalid username or password"}, status_code=401,
-        )
-    if not client.get("portal_password_hash"):
-        return templates.TemplateResponse(
-            request=request, name="portal_login.html",
-            context={"error": "Account not yet set up. Please use the setup link from your approval email."},
-            status_code=401,
-        )
-    if not verify_secret(password, client["portal_password_hash"]):
-        return templates.TemplateResponse(
-            request=request, name="portal_login.html",
-            context={"error": "Invalid username or password"}, status_code=401,
+            context={"error": msg, "next_session": next_session}, status_code=401,
         )
 
+    if client is None:
+        return _login_error("Invalid username or password")
+    if not client.get("portal_password_hash"):
+        return _login_error("Account not yet set up. Please use the setup link from your registration email.")
+    if not verify_secret(password, client["portal_password_hash"]):
+        return _login_error("Invalid username or password")
+
+    # Build the session cookie (used in all success paths)
+    cookie_value = _sign_session(client["client_id"])
+
+    # OAuth flow: complete the pending authorization session and redirect back to the client
+    if next_session:
+        from src.oauth.provider import SupabaseOAuthProvider
+        provider = SupabaseOAuthProvider()
+        pending = provider.get_pending_session(next_session)
+        if pending is None:
+            return _login_error("Authorization session expired. Please reconnect from Claude Code.")
+        import json as _json
+        try:
+            session_data = _json.loads(pending.get("resource") or "{}")
+        except (ValueError, TypeError):
+            session_data = {}
+        state = session_data.get("state")
+        try:
+            code, redirect_uri = provider.mark_session_approved(next_session)
+        except ValueError:
+            return _login_error("Authorization session expired. Please reconnect from Claude Code.")
+        if not redirect_uri:
+            response = HTMLResponse("<h1>Authorization complete. You may close this window.</h1>")
+        else:
+            sep = "&" if "?" in redirect_uri else "?"
+            location = f"{redirect_uri}{sep}code={code}"
+            if state:
+                location += f"&state={state}"
+            response = RedirectResponse(url=location, status_code=302)
+        response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
+        return response
+
     response = RedirectResponse(url="/portal/", status_code=303)
-    response.set_cookie(
-        _COOKIE_NAME, _sign_session(client["client_id"]),
-        httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE,
-    )
+    response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
     return response
 
 

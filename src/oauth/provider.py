@@ -53,7 +53,7 @@ class SupabaseOAuthProvider:
         """
         Phase 1: store a pending session in oauth_authorization_codes using
         a session_id as the `code` temporarily.  Expires in 5 minutes.
-        Returns the consent URL with ?session=<session_id>.
+        Returns the session_id so the caller can redirect to the appropriate login URL.
         """
         try:
             session_id = generate_token(24)
@@ -85,8 +85,7 @@ class SupabaseOAuthProvider:
 
             self.db.table("oauth_authorization_codes").insert(row).execute()
 
-            issuer = self.settings.OAUTH_ISSUER_URL
-            return f"{issuer}/authorize/consent?session={session_id}"
+            return session_id
         except Exception as exc:
             raise ValueError("Authorization session could not be created") from exc
 

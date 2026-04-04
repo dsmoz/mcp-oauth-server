@@ -95,7 +95,7 @@
   </div>
   {% endif %}
 
-  <form method="post" action="/portal/login">
+  <form method="post" action="/portal/login{% if next_session %}?next_session={{ next_session }}{% endif %}">
     <div class="form-group">
       <label for="username">Username</label>
       <input type="text" id="username" name="username" required autocomplete="username" autofocus>
