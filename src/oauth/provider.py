@@ -11,7 +11,7 @@ from src.db import get_db
 from src.models import OAuthClient, AuthorizationCode, AccessToken, RefreshToken
 
 # Named constants for expiry magic numbers
-SESSION_EXPIRY_SECONDS = 300   # 5 minutes for pending consent sessions
+SESSION_EXPIRY_SECONDS = 1800  # 30 minutes for pending login sessions
 CODE_EXPIRY_SECONDS = 600      # 10 minutes for issued authorization codes
 
 

@@ -148,7 +148,10 @@ async def portal_login_post(
         provider = SupabaseOAuthProvider()
         pending = provider.get_pending_session(next_session)
         if pending is None:
-            return _login_error("Authorization session expired. Please reconnect from Claude Code.")
+            # Session expired — user is logged in but needs to reconnect from Claude Code
+            response = RedirectResponse(url="/portal/?oauth_expired=1", status_code=303)
+            response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
+            return response
         import json as _json
         try:
             session_data = _json.loads(pending.get("resource") or "{}")
@@ -158,7 +161,9 @@ async def portal_login_post(
         try:
             code, redirect_uri = provider.mark_session_approved(next_session)
         except ValueError:
-            return _login_error("Authorization session expired. Please reconnect from Claude Code.")
+            response = RedirectResponse(url="/portal/?oauth_expired=1", status_code=303)
+            response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
+            return response
         if not redirect_uri:
             response = HTMLResponse("<h1>Authorization complete. You may close this window.</h1>")
         else:
@@ -364,7 +369,7 @@ async def reset_password_post(
 # ── Overview ──────────────────────────────────────────────────────────────────
 
 @router.get("/", response_class=HTMLResponse)
-async def portal_overview(request: Request, client_id: str = Depends(_require_portal_client)):
+async def portal_overview(request: Request, oauth_expired: Optional[str] = Query(None), client_id: str = Depends(_require_portal_client)):
     client = _get_client(client_id)
     if not client:
         raise HTTPException(status_code=401, detail="Client not found")
@@ -402,6 +407,7 @@ async def portal_overview(request: Request, client_id: str = Depends(_require_po
             "usage_total": usage_total,
             "gateway_url": gateway_url,
             "credit_balance": float(client.get("credit_balance") or 0),
+            "oauth_expired": bool(oauth_expired),
         }
     )
 
