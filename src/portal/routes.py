@@ -468,17 +468,14 @@ async def portal_setup(request: Request, client_id: str = Depends(_require_porta
     server_name = (client.get("client_name") or "dsmoz-intelligence").lower().replace(" ", "-")
 
     claude_config = (
-        '{{\n'
-        '  "mcpServers": {{\n'
+        '{\n'
+        '  "mcpServers": {\n'
         f'    "{server_name}": {{\n'
         '      "type": "sse",\n'
-        f'      "url": "{gateway_url}",\n'
-        '      "headers": {{\n'
-        '        "Authorization": "Bearer <your-access-token>"\n'
-        '      }}\n'
+        f'      "url": "{gateway_url}"\n'
         '    }}\n'
-        '  }}\n'
-        '}}'
+        '  }\n'
+        '}'
     )
 
     chatgpt_config = (

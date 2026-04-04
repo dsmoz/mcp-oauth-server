@@ -105,7 +105,8 @@ _CLAUDE_CONFIG_TEMPLATE = """\
       "url": "{gateway_url}"
     }}
   }}
-}}"""
+}}
+Claude Desktop will prompt you to sign in via browser when you first connect."""
 
 _CHATGPT_CONFIG_TEMPLATE = """\
 Authorization URL : {issuer_url}/oauth/authorize
