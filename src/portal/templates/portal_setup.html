@@ -51,9 +51,28 @@
         </button>
       </div>
     </div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">OAuth Client Secret <span style="font-weight:400;text-transform:none;letter-spacing:0">(under Advanced settings)</span></div>
+      {% if new_secret %}
+      <div class="code-pill" style="border-color:var(--vivid)">
+        <span>{{ new_secret }}</span>
+        <button class="copy-btn" onclick="copyText('{{ new_secret }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+      <p style="font-size:0.75rem;color:var(--vivid);margin-top:0.4rem">&#9888; Copy this now — it will not be shown again.</p>
+      {% else %}
+      <form method="post" action="/portal/setup/rotate-secret" style="margin:0">
+        <button type="submit" class="btn" style="font-size:0.8rem;padding:0.4rem 0.9rem"
+          onclick="return confirm('This will invalidate your current secret. Continue?')">
+          <i class="ph-light ph-arrows-clockwise"></i> Generate new secret
+        </button>
+      </form>
+      {% endif %}
+    </div>
   </div>
   <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.5">
-    Leave the OAuth Client Secret field empty. Click <strong>Add</strong> — Claude Desktop will open a browser to sign you in.
+    Click <strong>Add</strong> — Claude Desktop will open a browser to sign you in with your portal credentials.
   </p>
 </div>
 
@@ -81,9 +100,20 @@
         </button>
       </div>
     </div>
+    {% if new_secret %}
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">OAuth Client Secret <span style="font-weight:400;text-transform:none;letter-spacing:0">(click Advanced settings)</span></div>
+      <div class="code-pill" style="border-color:var(--vivid)">
+        <span>{{ new_secret }}</span>
+        <button class="copy-btn" onclick="copyText('{{ new_secret }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+    </div>
+    {% endif %}
   </div>
   <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.5">
-    Leave OAuth Client Secret empty. Claude.ai will sign you in automatically.
+    {% if not new_secret %}Generate your secret in the Claude Desktop section above, then use it here too.{% else %}Use the same Client Secret shown above.{% endif %}
   </p>
 </div>
 

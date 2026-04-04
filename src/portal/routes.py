@@ -464,6 +464,8 @@ async def portal_setup(request: Request, client_id: str = Depends(_require_porta
 
     from src.config import get_settings
     gateway_url = f"{get_settings().OAUTH_ISSUER_URL}/gateway/{client_id}"
+    # Show newly generated secret if just rotated (passed via query param, shown once)
+    new_secret = request.query_params.get("secret")
 
     return templates.TemplateResponse(
         request=request, name="portal_setup.html", context={
@@ -471,8 +473,20 @@ async def portal_setup(request: Request, client_id: str = Depends(_require_porta
             "active_nav": "setup",
             "gateway_url": gateway_url,
             "client_id": client_id,
+            "new_secret": new_secret,
         }
     )
+
+
+@router.post("/setup/rotate-secret")
+async def portal_rotate_secret(client_id: str = Depends(_require_portal_client)):
+    """Generate a new client secret, store the hash, redirect to setup page showing it once."""
+    from src.crypto import generate_token, hash_secret
+    raw = generate_token(32)
+    get_db().table("oauth_clients").update(
+        {"client_secret_hash": hash_secret(raw)}
+    ).eq("client_id", client_id).execute()
+    return RedirectResponse(url=f"/portal/setup?secret={raw}", status_code=303)
 
 
 @router.get("/setup/download")
