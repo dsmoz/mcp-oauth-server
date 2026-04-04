@@ -454,70 +454,6 @@ async def telegram_webhook(request: Request):
         if message_id:
             await tg.edit_message_result(message_id, "❌ *Access denied*")
 
-    elif action == "reg_approve":
-        request_id = session_id
-        db = get_db()
-        result = db.table("oauth_registration_requests").select("*").eq("id", request_id).execute()
-        reg = result.data[0] if result.data else None
-        if reg is None or reg["status"] != "pending":
-            await tg.answer_callback(callback_id, "⚠️ Not found or already processed")
-        else:
-            client_id = generate_client_id()
-            raw_secret = generate_token(32)
-            secret_hash = hash_secret(raw_secret)
-            redirect_uris = [
-                u.strip() for u in (reg.get("redirect_uris_raw") or "").splitlines() if u.strip()
-            ]
-            db.table("oauth_clients").insert({
-                "client_id": client_id,
-                "client_secret_hash": secret_hash,
-                "client_name": reg["company_name"],
-                "redirect_uris": redirect_uris,
-                "grant_types": ["authorization_code"],
-                "scope": "mcp",
-                "allowed_mcp_resources": [],
-                "created_by": reg["contact_email"],
-                "is_active": True,
-                "portal_username": reg["contact_email"],
-            }).execute()
-            db.table("oauth_registration_requests").update({
-                "status": "approved",
-                "reviewed_at": "now()",
-                "reviewed_by": "telegram",
-            }).eq("id", request_id).execute()
-            from src.portal.routes import create_setup_token
-            setup_token = create_setup_token(client_id)
-            try:
-                await em.send_approval_email(
-                    contact_name=reg.get("contact_name", reg["contact_email"]),
-                    contact_email=reg["contact_email"],
-                    company_name=reg["company_name"],
-                    client_id=client_id,
-                    raw_secret=raw_secret,
-                    issuer_url=get_settings().OAUTH_ISSUER_URL,
-                    setup_token=setup_token,
-                )
-            except Exception as exc:
-                import sys
-                print(f"WARNING: approval email failed: {exc}", file=sys.stderr)
-            await tg.answer_callback(callback_id, "✅ Registration approved")
-            await tg.edit_message_result(
-                message_id,
-                f"✅ *Approved*\nClient ID: `{client_id}`",
-            )
-
-    elif action == "reg_reject":
-        request_id = session_id
-        db = get_db()
-        result = db.table("oauth_registration_requests").select("status").eq("id", request_id).execute()
-        reg = result.data[0] if result.data else None
-        if reg is None or reg["status"] != "pending":
-            await tg.answer_callback(callback_id, "⚠️ Not found or already processed")
-        else:
-            db.table("oauth_registration_requests").delete().eq("id", request_id).execute()
-            await tg.answer_callback(callback_id, "❌ Registration rejected")
-            await tg.edit_message_result(message_id, "❌ *Registration rejected*")
-
     return JSONResponse({"ok": True})
 
 
@@ -788,11 +724,10 @@ async def register_submit(
     except Exception as exc:
         print(f"WARNING: credentials email failed: {exc}", file=sys.stderr)
 
-    # Notify owner via Telegram (non-blocking)
+    # Notify owner via Telegram (informational only — no approval needed)
     if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_OWNER_CHAT_ID:
         try:
             await tg.send_registration_alert(
-                request_id=request_id,
                 company_name=company_name,
                 contact_name=contact_name,
                 contact_email=contact_email,

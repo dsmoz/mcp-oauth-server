@@ -108,15 +108,14 @@ async def send_dynamic_registration_notice(
 
 
 async def send_registration_alert(
-    request_id: str,
     company_name: str,
     contact_name: str,
     contact_email: str,
 ) -> None:
-    """Notify the owner that a new registration request has been submitted."""
+    """Inform the owner that a new client has self-registered (informational only — no approval needed)."""
     settings = get_settings()
     text = (
-        f"📋 *New Registration Request*\n\n"
+        f"📋 *New Registration*\n\n"
         f"Company: *{company_name}*\n"
         f"Contact: {contact_name} — `{contact_email}`"
     )
@@ -127,12 +126,6 @@ async def send_registration_alert(
                 "chat_id": settings.TELEGRAM_OWNER_CHAT_ID,
                 "text": text,
                 "parse_mode": "Markdown",
-                "reply_markup": {
-                    "inline_keyboard": [[
-                        {"text": "✅ Approve", "callback_data": f"reg_approve:{request_id}"},
-                        {"text": "❌ Reject",  "callback_data": f"reg_reject:{request_id}"},
-                    ]]
-                },
             },
             timeout=10.0,
         )
