@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     RAILWAY_API_TOKEN: str = ""
     RAILWAY_PROJECT_ID: str = ""
     RAILWAY_PROJECT_IDS: str = ""  # Comma-separated; overrides RAILWAY_PROJECT_ID when set
+    ANTHROPIC_API_KEY: str = ""
     TELEGRAM_WEBHOOK_SECRET: str = ""
 
 

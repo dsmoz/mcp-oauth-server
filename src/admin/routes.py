@@ -539,14 +539,58 @@ async def reject_registration(
 
 async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str | None:
     """
-    Fetch tool list from upstream MCP and generate an LLM-discovery description.
-    Returns None if upstream is unreachable or returns no tools.
+    Fetch tool list from upstream MCP and use Claude to generate an AI-agent-friendly
+    catalogue description. Falls back to a structured plain-text summary if Claude
+    is unavailable or the upstream is unreachable.
     """
     try:
         from src.gateway.upstream import fetch_tool_list
         tools = await fetch_tool_list(upstream_url, api_key)
         if not tools:
             return None
+
+        # Build a compact tool manifest to send to Claude
+        tool_manifest = "\n".join(
+            f"- {t['name']}: {t.get('description', '(no description)')}"
+            for t in tools
+        )
+
+        settings = get_settings()
+        if settings.ANTHROPIC_API_KEY:
+            import httpx as _httpx
+            prompt = (
+                f"You are writing a catalogue entry for an MCP server called \"{name}\" "
+                f"that will be read by an AI agent deciding which MCP to call.\n\n"
+                f"Here are the tools it exposes:\n{tool_manifest}\n\n"
+                f"Write a concise catalogue description (3-5 sentences) that:\n"
+                f"1. States the server's primary purpose in one sentence\n"
+                f"2. Lists the key capabilities an agent would care about\n"
+                f"3. Gives clear guidance on WHEN to use this MCP vs others\n"
+                f"4. Mentions that the agent should call list_tools or search_tools "
+                f"with this MCP's slug to get the full tool list before calling any tool\n\n"
+                f"Be specific and practical. Do not use bullet points — write flowing prose."
+            )
+            async with _httpx.AsyncClient(timeout=20) as client:
+                resp = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": settings.ANTHROPIC_API_KEY,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": "claude-haiku-4-5-20251001",
+                        "max_tokens": 300,
+                        "messages": [{"role": "user", "content": prompt}],
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    description = data["content"][0]["text"].strip()
+                    if description:
+                        return description
+
+        # Fallback: structured plain-text summary
         tool_lines = "; ".join(
             f"{t['name']} ({t['description'][:80]})" if t.get("description") else t["name"]
             for t in tools[:10]
@@ -554,7 +598,8 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
         return (
             f"Provides tools for: {tool_lines}. "
             f"Use when the task requires any of these capabilities. "
-            f"Call search_tools with a keyword or list_tools with this MCP's slug to discover the full tool list before calling any tool."
+            f"Call search_tools with a keyword or list_tools with this MCP's slug "
+            f"to discover the full tool list before calling any tool."
         )
     except Exception:
         return None
