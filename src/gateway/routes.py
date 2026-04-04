@@ -17,7 +17,7 @@ from typing import Any
 import anyio
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from mcp.server import Server
 from mcp.server.streamable_http import StreamableHTTPServerTransport
 from mcp import types
@@ -300,7 +300,7 @@ def _unauth_response(request: Request) -> JSONResponse:
     )
 
 
-class _AlreadySent(JSONResponse):
+class _AlreadySent(Response):
     """Sentinel response — transport already sent ASGI messages; this is a no-op."""
     async def __call__(self, scope, receive, send) -> None:
         pass  # response was already sent by transport.handle_request()
