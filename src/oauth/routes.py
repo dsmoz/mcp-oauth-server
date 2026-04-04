@@ -354,7 +354,7 @@ async def register_submit(
         "scope": "mcp",
         "allowed_mcp_resources": allowed_mcps,
         "created_by": contact_email,
-        "is_active": True,
+        "is_active": False,  # activated when user completes setup-password
         "portal_username": contact_email,
         "credit_balance": 0,
     }).execute()

@@ -199,7 +199,7 @@ async def check_username(username: str = Query(...), exclude_client_id: Optional
     if not identifier or " " in identifier:
         return JSONResponse({"available": False})
     db = get_db()
-    result = db.table("oauth_clients").select("client_id").eq("portal_username", identifier).eq("is_active", True).limit(1).execute()
+    result = db.table("oauth_clients").select("client_id").eq("portal_username", identifier).limit(1).execute()
     if result.data:
         taken_by = result.data[0]["client_id"]
         # Allow if the only match is the current client (re-setting up their own account)
@@ -230,7 +230,7 @@ async def setup_password_post(
         )
     # Check uniqueness (exclude the current client's own existing username)
     db = get_db()
-    taken = db.table("oauth_clients").select("client_id").eq("portal_username", username.strip().lower()).eq("is_active", True).limit(1).execute()
+    taken = db.table("oauth_clients").select("client_id").eq("portal_username", username.strip().lower()).limit(1).execute()
     if taken.data and taken.data[0]["client_id"] != client_id:
         return templates.TemplateResponse(
             request=request, name="portal_setup_password.html",
@@ -249,8 +249,9 @@ async def setup_password_post(
 
     db = get_db()
     db.table("oauth_clients").update({
-        "portal_username": username.strip(),
+        "portal_username": username.strip().lower(),
         "portal_password_hash": hash_secret(password),
+        "is_active": True,
     }).eq("client_id", client_id).execute()
     _consume_setup_token(token)
 
