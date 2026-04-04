@@ -37,7 +37,7 @@ _APPROVAL_HTML = """\
 <body>
 <div class="card">
   <div class="brand">
-    <img src="https://res.cloudinary.com/dq2ajrfxl/image/upload/v1742962914/dsmoz_logos/dsmoz-logo-white.png"
+    <img src="https://res.cloudinary.com/dq2ajrfxl/image/upload/v1742962913/dsmoz_logos/dsmoz-logo-orange.png"
          alt="DS-MOZ Intelligence" width="180" height="45"
          style="display:block;margin-bottom:1.5rem">
   </div>
