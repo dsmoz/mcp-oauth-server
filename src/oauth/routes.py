@@ -38,6 +38,7 @@ def _discovery_doc() -> dict:
         "issuer": base,
         "authorization_endpoint": f"{base}/authorize",
         "token_endpoint": f"{base}/token",
+        "registration_endpoint": f"{base}/register",
         "revocation_endpoint": f"{base}/revoke",
         "scopes_supported": ["mcp"],
         "response_types_supported": ["code"],
@@ -414,9 +415,51 @@ async def register_success(request: Request):
 
 @router.post("/register")
 async def dynamic_client_registration(request: Request):
-    """Dynamic client registration is disabled — clients must register via the self-service form."""
-    return JSONResponse(
-        {"error": "dynamic_registration_not_supported",
-         "error_description": "Dynamic client registration is not supported. Please register at /register."},
-        status_code=400,
-    )
+    """RFC 7591 Dynamic Client Registration for MCP clients (Claude Desktop, mcp-remote, etc.)."""
+    import sys
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(
+            {"error": "invalid_request", "error_description": "Invalid JSON body"},
+            status_code=400,
+        )
+
+    client_name = body.get("client_name", "MCP Client")
+    redirect_uris = body.get("redirect_uris", [])
+    grant_types = body.get("grant_types", ["authorization_code"])
+    scope = body.get("scope", "mcp")
+
+    db = get_db()
+    client_id = generate_client_id()
+    raw_secret = generate_token(32)
+    secret_hash = hash_secret(raw_secret)
+
+    # Pre-populate toolbox with all published MCPs
+    published = db.table("mcp_catalogue").select("slug").eq("is_published", True).execute()
+    allowed_mcps = [r["slug"] for r in (published.data or [])]
+
+    db.table("oauth_clients").insert({
+        "client_id": client_id,
+        "client_secret_hash": secret_hash,
+        "client_name": client_name,
+        "redirect_uris": redirect_uris,
+        "grant_types": grant_types,
+        "scope": scope if isinstance(scope, str) else " ".join(scope),
+        "allowed_mcp_resources": allowed_mcps,
+        "created_by": f"dynamic:{client_name}",
+        "is_active": True,
+        "credit_balance": 0,
+    }).execute()
+
+    print(f"DCR: registered {client_id} ({client_name})", file=sys.stderr)
+
+    # RFC 7591 response — merge client metadata with issued credentials
+    response_body = {
+        **body,
+        "client_id": client_id,
+        "client_secret": raw_secret,
+        "client_id_issued_at": now_unix(),
+        "client_secret_expires_at": 0,  # does not expire
+    }
+    return JSONResponse(response_body, status_code=201)
