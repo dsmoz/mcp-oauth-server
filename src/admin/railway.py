@@ -79,7 +79,7 @@ async def _fetch_project_services(client: httpx.AsyncClient, token: str, project
             if domain:
                 break
 
-        upstream_url = f"https://{domain}/sse" if domain else None
+        upstream_url = f"https://{domain}/mcp" if domain else None
 
         services.append({
             "id": svc_id,

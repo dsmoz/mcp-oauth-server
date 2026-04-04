@@ -49,10 +49,12 @@ async def fetch_tool_list(upstream_url: str, api_key: str = "") -> list[dict]:
     base = upstream_url.rstrip("/").removesuffix("/sse").removesuffix("/mcp")
 
     # Try the configured URL first, then fall back to the other transport path
-    candidates = [upstream_url]
-    if upstream_url.endswith("/sse"):
+    # Normalise trailing slashes to avoid 307 redirects
+    normalised = upstream_url.rstrip("/")
+    candidates = [normalised]
+    if normalised.endswith("/sse"):
         candidates.append(f"{base}/mcp")
-    elif upstream_url.endswith("/mcp"):
+    elif normalised.endswith("/mcp"):
         candidates.append(f"{base}/sse")
     else:
         candidates += [f"{base}/mcp", f"{base}/sse"]
