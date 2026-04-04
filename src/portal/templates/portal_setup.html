@@ -43,6 +43,19 @@
 </div>
 
 <div class="card">
+  <h2>Claude.ai (Web)</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.5">
+    Go to <strong style="color:var(--text-ui)">Claude.ai → Settings → Connectors → Add custom connector</strong>, paste your gateway URL, and sign in when the browser prompts you.
+  </p>
+  <div class="code-pill">
+    <span>{{ gateway_url }}</span>
+    <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy">
+      <i class="ph-light ph-copy" style="font-size:14px"></i>
+    </button>
+  </div>
+</div>
+
+<div class="card">
   <h2>How the Gateway Works</h2>
   <p style="font-size:0.8125rem;color:var(--text-muted);line-height:1.6;margin-bottom:0.75rem">
     Your LLM connects to the gateway once and gets access to all your enabled MCP tools via four meta-tools:
