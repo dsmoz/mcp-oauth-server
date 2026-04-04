@@ -119,7 +119,11 @@ async def portal_login_post(
     next_session: Optional[str] = Query(None),
 ):
     db = get_db()
-    result = db.table("oauth_clients").select("*").eq("portal_username", username).eq("is_active", True).limit(1).execute()
+    identifier = username.strip().lower()
+    # Try username first, then fall back to email (stored in created_by)
+    result = db.table("oauth_clients").select("*").eq("portal_username", identifier).eq("is_active", True).limit(1).execute()
+    if not result.data:
+        result = db.table("oauth_clients").select("*").eq("created_by", identifier).eq("is_active", True).limit(1).execute()
     client = result.data[0] if result.data else None
 
     def _login_error(msg: str):
@@ -202,6 +206,11 @@ async def setup_password_post(
             request=request, name="portal_login.html",
             context={"error": "Setup link is invalid or has expired. Contact your administrator."},
         )
+    if " " in username:
+        return templates.TemplateResponse(
+            request=request, name="portal_setup_password.html",
+            context={"token": token, "username": username, "error": "Username cannot contain spaces"},
+        )
     if password != password_confirm:
         return templates.TemplateResponse(
             request=request, name="portal_setup_password.html",
@@ -248,7 +257,10 @@ async def forgot_password_get(request: Request):
 @router.post("/forgot-password", response_class=HTMLResponse)
 async def forgot_password_post(request: Request, email: str = Form(...)):
     db = get_db()
-    result = db.table("oauth_clients").select("client_id,portal_username").eq("portal_username", email.strip().lower()).eq("is_active", True).limit(1).execute()
+    identifier = email.strip().lower()
+    result = db.table("oauth_clients").select("client_id,portal_username,created_by").eq("portal_username", identifier).eq("is_active", True).limit(1).execute()
+    if not result.data:
+        result = db.table("oauth_clients").select("client_id,portal_username,created_by").eq("created_by", identifier).eq("is_active", True).limit(1).execute()
     # Always show the same "sent" page to prevent email enumeration
     if result.data:
         client = result.data[0]
@@ -260,7 +272,7 @@ async def forgot_password_post(request: Request, email: str = Form(...)):
         try:
             await em.send_password_reset_email(
                 contact_name=client.get("portal_username") or "there",
-                contact_email=email.strip().lower(),
+                contact_email=client.get("created_by") or email.strip().lower(),
                 reset_url=reset_url,
             )
         except Exception as exc:
