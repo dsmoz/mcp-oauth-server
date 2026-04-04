@@ -601,7 +601,9 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
             f"Call search_tools with a keyword or list_tools with this MCP's slug "
             f"to discover the full tool list before calling any tool."
         )
-    except Exception:
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("_auto_describe_mcp failed for %s: %s", upstream_url, exc)
         return None
 
 

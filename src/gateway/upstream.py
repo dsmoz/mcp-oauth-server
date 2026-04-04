@@ -21,30 +21,53 @@ def _is_sse(url: str) -> bool:
     return path.endswith("/sse")
 
 
+async def _list_tools_via_url(url: str, headers: dict) -> list[dict]:
+    """Try to fetch tools from a single URL. Raises on failure."""
+    if _is_sse(url):
+        async with sse_client(url, headers=headers) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.list_tools()
+    else:
+        async with streamablehttp_client(url, headers=headers) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.list_tools()
+
+    return [
+        {
+            "name": t.name,
+            "description": t.description or "",
+            "inputSchema": t.inputSchema if hasattr(t, "inputSchema") else {},
+        }
+        for t in (result.tools or [])
+    ]
+
+
 async def fetch_tool_list(upstream_url: str, api_key: str = "") -> list[dict]:
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-    try:
-        if _is_sse(upstream_url):
-            async with sse_client(upstream_url, headers=headers) as (read, write):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.list_tools()
-        else:
-            async with streamablehttp_client(upstream_url, headers=headers) as (read, write, _):
-                async with ClientSession(read, write) as session:
-                    await session.initialize()
-                    result = await session.list_tools()
+    base = upstream_url.rstrip("/").removesuffix("/sse").removesuffix("/mcp")
 
-        return [
-            {
-                "name": t.name,
-                "description": t.description or "",
-                "inputSchema": t.inputSchema if hasattr(t, "inputSchema") else {},
-            }
-            for t in (result.tools or [])
-        ]
-    except Exception:
-        return []
+    # Try the configured URL first, then fall back to the other transport path
+    candidates = [upstream_url]
+    if upstream_url.endswith("/sse"):
+        candidates.append(f"{base}/mcp")
+    elif upstream_url.endswith("/mcp"):
+        candidates.append(f"{base}/sse")
+    else:
+        candidates += [f"{base}/mcp", f"{base}/sse"]
+
+    last_exc: Exception | None = None
+    for url in candidates:
+        try:
+            return await _list_tools_via_url(url, headers)
+        except Exception as exc:
+            last_exc = exc
+            continue
+
+    import logging
+    logging.getLogger(__name__).warning("fetch_tool_list failed for %s: %s", upstream_url, last_exc)
+    return []
 
 
 async def call_upstream_tool(
