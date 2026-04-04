@@ -297,7 +297,6 @@ async def register_submit(
     captcha_signed: str = Form(""),
 ):
     import sys
-    import asyncio as _asyncio
 
     # Anti-bot: honeypot field must be empty
     if website:
@@ -377,9 +376,9 @@ async def register_submit(
     from src.portal.routes import create_setup_token
     setup_token = create_setup_token(client_id)
 
-    # Send credentials email (non-blocking)
+    # Send credentials email
     try:
-        _asyncio.create_task(em.send_approval_email(
+        await em.send_approval_email(
             contact_name=contact_name,
             contact_email=contact_email,
             company_name=company_name,
@@ -387,7 +386,7 @@ async def register_submit(
             raw_secret=raw_secret,
             issuer_url=settings.OAUTH_ISSUER_URL,
             setup_token=setup_token,
-        ))
+        )
     except Exception as exc:
         print(f"WARNING: credentials email failed: {exc}", file=sys.stderr)
 
