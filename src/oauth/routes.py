@@ -661,6 +661,9 @@ async def register_submit(
     website: str = Form(""),
     form_loaded_at: str = Form(""),
 ):
+    import sys
+    import asyncio as _asyncio
+
     # Anti-bot: honeypot field must be empty
     if website:
         return RedirectResponse(url="/register/success", status_code=303)
@@ -674,21 +677,67 @@ async def register_submit(
     except (ValueError, TypeError):
         pass
 
-    from src.db import get_db
+    settings = get_settings()
     db = get_db()
-    result = db.table("oauth_registration_requests").insert({
+
+    # Parse redirect URIs
+    redirect_uris = [u.strip() for u in redirect_uris_raw.splitlines() if u.strip()]
+
+    # Create OAuth client immediately (no admin approval gate)
+    client_id = generate_client_id()
+    raw_secret = generate_token(32)
+    secret_hash = hash_secret(raw_secret)
+
+    # Pre-populate toolbox with all published MCPs
+    published = db.table("mcp_catalogue").select("slug").eq("is_published", True).execute()
+    allowed_mcps = [r["slug"] for r in (published.data or [])]
+
+    db.table("oauth_clients").insert({
+        "client_id": client_id,
+        "client_secret_hash": secret_hash,
+        "client_name": company_name,
+        "redirect_uris": redirect_uris,
+        "grant_types": ["authorization_code"],
+        "scope": "mcp",
+        "allowed_mcp_resources": allowed_mcps,
+        "created_by": contact_email,
+        "is_active": True,
+        "portal_username": contact_email,
+        "credit_balance": 0,
+    }).execute()
+
+    # Log registration request for admin visibility (status=approved immediately)
+    reg_result = db.table("oauth_registration_requests").insert({
         "company_name": company_name,
         "contact_name": contact_name,
         "contact_email": contact_email,
         "use_case": use_case,
         "redirect_uris_raw": redirect_uris_raw.strip(),
-        "status": "pending",
+        "status": "approved",
+        "reviewed_at": "now()",
+        "reviewed_by": "self-service",
     }).execute()
+    request_id = reg_result.data[0]["id"] if reg_result.data else "unknown"
 
-    request_id = result.data[0]["id"] if result.data else "unknown"
+    # Generate portal setup token (one-time 24h link to set password)
+    from src.portal.routes import create_setup_token
+    setup_token = create_setup_token(client_id)
 
-    # Notify owner via Telegram (non-blocking — failure must not block the user)
-    settings = get_settings()
+    # Send credentials email (non-blocking)
+    try:
+        _asyncio.create_task(em.send_approval_email(
+            contact_name=contact_name,
+            contact_email=contact_email,
+            company_name=company_name,
+            client_id=client_id,
+            raw_secret=raw_secret,
+            issuer_url=settings.OAUTH_ISSUER_URL,
+            setup_token=setup_token,
+        ))
+    except Exception as exc:
+        print(f"WARNING: credentials email failed: {exc}", file=sys.stderr)
+
+    # Notify owner via Telegram (non-blocking)
     if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_OWNER_CHAT_ID:
         try:
             await tg.send_registration_alert(
@@ -698,7 +747,6 @@ async def register_submit(
                 contact_email=contact_email,
             )
         except Exception as exc:
-            import sys
             print(f"WARNING: Telegram registration alert failed: {exc}", file=sys.stderr)
 
     return RedirectResponse(url="/register/success", status_code=303)

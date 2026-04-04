@@ -6,6 +6,19 @@
   <h1>Overview</h1>
 </div>
 
+<div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+  <div>
+    <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem">Credit Balance</div>
+    <div style="display:flex;align-items:baseline;gap:0.4rem">
+      <span style="font-size:2rem;font-weight:800;color:var(--vivid);line-height:1">{{ "%.2f"|format(credit_balance) }}</span>
+      <span style="font-size:0.85rem;color:var(--text-muted)">credits</span>
+    </div>
+  </div>
+  <a href="/portal/credits" class="btn btn-primary">
+    <i class="ph-light ph-plus-circle"></i> Buy Credits
+  </a>
+</div>
+
 <div class="card">
   <h2>Usage</h2>
   <div class="stat-grid">
@@ -57,8 +70,8 @@
       <div style="font-size:0.875rem;color:var(--success)">&#9679; Active</div>
     </div>
     <div>
-      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">MCPs Enabled</div>
-      <div style="font-size:0.875rem;color:var(--text-h)">{{ (client.allowed_mcp_resources or []) | length }}</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">Toolbox</div>
+      <div style="font-size:0.875rem;color:var(--text-h)">{{ (client.allowed_mcp_resources or []) | length }} tools</div>
     </div>
   </div>
 </div>

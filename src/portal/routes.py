@@ -245,6 +245,7 @@ async def portal_overview(request: Request, client_id: str = Depends(_require_po
             "usage_month": usage_month,
             "usage_total": usage_total,
             "gateway_url": gateway_url,
+            "credit_balance": float(client.get("credit_balance") or 0),
         }
     )
 
@@ -366,4 +367,61 @@ async def portal_setup_download(client_id: str = Depends(_require_portal_client)
         content=json.dumps(config, indent=2),
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=claude_desktop_config.json"},
+    )
+
+
+# ── Credits ───────────────────────────────────────────────────────────────────
+
+_CREDIT_PLANS = {
+    "starter": 10.0,
+    "pro": 50.0,
+    "enterprise": 200.0,
+}
+
+
+@router.get("/credits", response_class=HTMLResponse)
+async def portal_credits_get(
+    request: Request,
+    client_id: str = Depends(_require_portal_client),
+    success: str = "",
+):
+    client = _get_client(client_id)
+    if not client:
+        raise HTTPException(status_code=401, detail="Client not found")
+    return templates.TemplateResponse(
+        request=request, name="portal_credits.html", context={
+            "client": client,
+            "active_nav": "credits",
+            "credit_balance": float(client.get("credit_balance") or 0),
+            "success": success,
+        }
+    )
+
+
+@router.post("/credits/buy", response_class=HTMLResponse)
+async def portal_credits_buy(
+    request: Request,
+    plan: str = Form(...),
+    client_id: str = Depends(_require_portal_client),
+):
+    client = _get_client(client_id)
+    if not client:
+        raise HTTPException(status_code=401, detail="Client not found")
+
+    credits_to_add = _CREDIT_PLANS.get(plan)
+    if not credits_to_add:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+
+    db = get_db()
+    current = float(client.get("credit_balance") or 0)
+    new_balance = current + credits_to_add
+    db.table("oauth_clients").update({"credit_balance": new_balance}).eq("client_id", client_id).execute()
+
+    return templates.TemplateResponse(
+        request=request, name="portal_credits.html", context={
+            "client": _get_client(client_id),
+            "active_nav": "credits",
+            "credit_balance": new_balance,
+            "success": f"{credits_to_add:.0f} credits added to your account. New balance: {new_balance:.2f}",
+        }
     )

@@ -107,6 +107,23 @@
   </form>
 </div>
 
+<div class="card">
+  <h2>Credits</h2>
+  <p style="color: var(--text-muted); font-size: 0.8125rem; margin-bottom: 1rem; line-height: 1.6;">
+    Current balance: <strong style="color: var(--accent-vivid);">{{ "%.4f"|format(client.credit_balance or 0) }}</strong> credits
+  </p>
+  <form method="post" action="/admin/clients/{{ client.client_id }}/add-credits" style="display:flex;gap:0.75rem;align-items:flex-end">
+    <div>
+      <label style="display:block;font-size:0.75rem;color:var(--text-muted);margin-bottom:0.3rem">Add Credits</label>
+      <input type="number" name="amount" min="0.01" step="0.01" placeholder="e.g. 10.00" required
+             style="width:140px;padding:0.5rem 0.75rem;border:1px solid var(--border);border-radius:6px;background:var(--bg-input);color:var(--text-h);font-size:0.875rem">
+    </div>
+    <button type="submit" class="btn btn-secondary">
+      <i class="ph-light ph-plus-circle"></i> Add Credits
+    </button>
+  </form>
+</div>
+
 <div class="card" style="border-color: var(--focus);">
   <h2 style="color: var(--info-fg);">Rotate Secret</h2>
   <p style="color: var(--text-muted); font-size: 0.8125rem; margin-bottom: 1rem; line-height: 1.6;">

@@ -284,6 +284,23 @@ async def set_portal_credentials(
     return RedirectResponse(url=f"/admin/clients/{client_id}", status_code=303)
 
 
+# ── Add credits ───────────────────────────────────────────────────────────────
+
+@router.post("/clients/{client_id}/add-credits", response_class=HTMLResponse)
+async def add_credits(
+    client_id: str,
+    amount: float = Form(...),
+    _: str = Depends(_require_admin),
+):
+    db = get_db()
+    row = _get_client_row(db, client_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+    current = float(row.get("credit_balance") or 0)
+    db.table("oauth_clients").update({"credit_balance": current + amount}).eq("client_id", client_id).execute()
+    return RedirectResponse(url=f"/admin/clients/{client_id}", status_code=303)
+
+
 # ── Re-key client ─────────────────────────────────────────────────────────────
 
 @router.post("/clients/{client_id}/rekey", response_class=HTMLResponse)

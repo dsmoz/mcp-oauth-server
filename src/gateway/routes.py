@@ -94,11 +94,33 @@ def _load_enabled_mcps(client_id: str) -> list[dict]:
     )
 
 
-def _log_tool_call(client_id: str, mcp_slug: str, tool_name: str) -> None:
+def _get_credit_cost(mcp_slug: str) -> float:
+    """Return credit_cost_per_call for an MCP slug (0 if not set)."""
+    try:
+        row = get_db().table("mcp_catalogue").select("credit_cost_per_call").eq("slug", mcp_slug).limit(1).execute()
+        return float((row.data or [{}])[0].get("credit_cost_per_call") or 0)
+    except Exception:
+        return 0.0
+
+
+def _deduct_credits(client_id: str, amount: float) -> None:
+    """Atomically subtract credits from client balance."""
+    try:
+        db = get_db()
+        row = db.table("oauth_clients").select("credit_balance").eq("client_id", client_id).limit(1).execute()
+        current = float((row.data or [{}])[0].get("credit_balance") or 0)
+        new_balance = max(0.0, current - amount)
+        db.table("oauth_clients").update({"credit_balance": new_balance}).eq("client_id", client_id).execute()
+    except Exception:
+        pass
+
+
+def _log_tool_call(client_id: str, mcp_slug: str, tool_name: str, credits_used: float = 0.0) -> None:
     try:
         get_db().table("oauth_usage_logs").insert({
             "client_id": client_id,
             "endpoint": f"gateway/{mcp_slug}/{tool_name}",
+            "credits_used": credits_used,
         }).execute()
     except Exception:
         pass
@@ -125,7 +147,7 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
         return [
             types.Tool(
                 name="list_mcps",
-                description="List all MCP servers you currently have enabled.",
+                description="List all MCP servers currently in your toolbox.",
                 inputSchema={"type": "object", "properties": {}},
             ),
             types.Tool(
@@ -260,12 +282,25 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                 text = json.dumps({"error": f"MCP '{slug}' not found"})
             else:
                 mcp = mcp_by_slug[slug]
+                credit_cost = _get_credit_cost(slug)
+                # Credit gate — check balance before calling upstream
+                if credit_cost > 0:
+                    try:
+                        bal_row = get_db().table("oauth_clients").select("credit_balance").eq("client_id", client_id).limit(1).execute()
+                        balance = float((bal_row.data or [{}])[0].get("credit_balance") or 0)
+                    except Exception:
+                        balance = 0.0
+                    if balance < credit_cost:
+                        text = json.dumps({"error": "Insufficient credits. Visit your portal to buy more credits."})
+                        return [types.TextContent(type="text", text=text)]
                 try:
                     text = await call_upstream_tool(mcp["upstream_url"], tool_name, tool_args,
                                                     mcp.get("upstream_api_key", ""))
+                    if credit_cost > 0:
+                        _deduct_credits(client_id, credit_cost)
                 except Exception as exc:
                     text = json.dumps({"error": str(exc)})
-                _log_tool_call(client_id, slug, tool_name)
+                _log_tool_call(client_id, slug, tool_name, credits_used=credit_cost)
 
         else:
             text = json.dumps({"error": f"Unknown tool: {name}"})

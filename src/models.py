@@ -13,6 +13,7 @@ class OAuthClient(BaseModel):
     allowed_mcp_resources: List[str] = []
     created_by: Optional[str] = None
     is_active: bool = True
+    credit_balance: float = 0.0
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
