@@ -326,14 +326,13 @@ async def _run_streamable_http(client_id: str, request: Request):
                 stateless=True,
             )
 
-    from starlette.requests import ClientDisconnect
     try:
         async with anyio.create_task_group() as tg:
             await tg.start(run_stateless_server)  # waits until server is ready
             await transport.handle_request(request.scope, request.receive, request._send)
             tg.cancel_scope.cancel()
-    except (ClientDisconnect, anyio.EndOfStream, Exception):
-        pass  # client disconnected — terminate quietly
+    except BaseException:
+        pass  # client disconnected or cancellation — terminate quietly
     finally:
         with anyio.move_on_after(2, shield=True):
             await transport.terminate()
