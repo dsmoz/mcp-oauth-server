@@ -470,6 +470,7 @@ async def portal_setup(request: Request, client_id: str = Depends(_require_porta
             "client": client,
             "active_nav": "setup",
             "gateway_url": gateway_url,
+            "client_id": client_id,
         }
     )
 
