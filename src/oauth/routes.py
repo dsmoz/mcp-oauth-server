@@ -93,9 +93,10 @@ async def authorize(
     if client is None or not client.is_active:
         raise HTTPException(status_code=400, detail="invalid_client")
 
-    # Validate redirect_uri
+    # Validate redirect_uri — always allow localhost for native clients (MCP spec)
     if redirect_uri and client.redirect_uris:
-        if redirect_uri not in client.redirect_uris:
+        is_localhost = redirect_uri.startswith("http://localhost") or redirect_uri.startswith("http://127.0.0.1")
+        if not is_localhost and redirect_uri not in client.redirect_uris:
             raise HTTPException(status_code=400, detail="invalid_redirect_uri")
 
     scopes = ["mcp"]

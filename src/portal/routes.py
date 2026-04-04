@@ -544,11 +544,8 @@ async def portal_setup_download(client_id: str = Depends(_require_portal_client)
     config = {
         "mcpServers": {
             server_name: {
-                "type": "sse",
-                "url": gateway_url,
-                "headers": {
-                    "Authorization": "Bearer <your-access-token>"
-                }
+                "command": "npx",
+                "args": ["-y", "mcp-remote@latest", gateway_url],
             }
         }
     }

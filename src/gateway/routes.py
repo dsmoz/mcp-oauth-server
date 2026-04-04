@@ -1,18 +1,14 @@
 """
-Gateway SSE endpoint — one MCP endpoint per client.
+Gateway — one MCP endpoint per client via Streamable HTTP transport.
 
-GET  /gateway/{client_id}                    — SSE stream
-POST /gateway/{client_id}/messages           — MCP message channel
-
-Uses a single shared SseServerTransport per path so session IDs
-created on the GET are findable by the POST.
+GET/POST/DELETE  /gateway/{client_id}       — primary endpoint
+GET/POST/DELETE  /gateway/{client_id}/mcp   — alias with /mcp suffix
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import sys
-from typing import Any
 
 import anyio
 
@@ -300,24 +296,48 @@ def _unauth_response(request: Request) -> JSONResponse:
     )
 
 
-class _AlreadySent(Response):
-    """Sentinel response — transport already sent ASGI messages; this is a no-op."""
-    async def __call__(self, scope, receive, send) -> None:
-        pass  # response was already sent by transport.handle_request()
+class _OnceOnlySend:
+    """Wraps an ASGI send callable so that only the first response gets through.
+
+    After http.response.start has been sent, any further http.response.start
+    messages (e.g. from FastAPI's response pipeline) are silently dropped along
+    with their body chunks, preventing ASGI protocol violations.
+    """
+
+    def __init__(self, send):
+        self._send = send
+        self.response_started = False
+        self._done = False  # True after the first response has been fully sent
+
+    async def __call__(self, message):
+        msg_type = message.get("type")
+        if msg_type == "http.response.start":
+            if self.response_started:
+                # A second response is being attempted — drop it
+                self._done = True
+                return
+            self.response_started = True
+        elif msg_type == "http.response.body" and self._done:
+            return
+        await self._send(message)
 
 
-async def _run_streamable_http(client_id: str, request: Request):
+async def _run_streamable_http(request: Request, client_id: str, once_send: _OnceOnlySend):
     """Shared handler for Streamable HTTP transport (MCP spec 2025-03-26)."""
     token = _get_bearer(request)
     if not token:
         print(f"GATEWAY: no bearer token on {request.method} {request.url.path}", file=sys.stderr)
-        return _unauth_response(request)
+        response = _unauth_response(request)
+        await response(request.scope, request.receive, once_send)
+        return
 
     provider = SupabaseOAuthProvider()
     at = provider.load_access_token(token)
     if at is None:
         print(f"GATEWAY: invalid token on {request.method} {request.url.path}", file=sys.stderr)
-        return _unauth_response(request)
+        response = _unauth_response(request)
+        await response(request.scope, request.receive, once_send)
+        return
 
     actual_client_id = at.client_id
     print(f"GATEWAY: auth OK for {actual_client_id}, {request.method} {request.url.path}", file=sys.stderr)
@@ -327,7 +347,7 @@ async def _run_streamable_http(client_id: str, request: Request):
 
     async def run_stateless_server(*, task_status=anyio.TASK_STATUS_IGNORED):
         async with transport.connect() as (read_stream, write_stream):
-            task_status.started()  # signals: ready, proceed with handle_request
+            task_status.started()
             await mcp_server.run(
                 read_stream,
                 write_stream,
@@ -337,28 +357,36 @@ async def _run_streamable_http(client_id: str, request: Request):
 
     try:
         async with anyio.create_task_group() as tg:
-            await tg.start(run_stateless_server)  # waits until server is ready
+            await tg.start(run_stateless_server)
             print(f"GATEWAY: MCP server ready, handling request", file=sys.stderr)
-            await transport.handle_request(request.scope, request.receive, request._send)
+            await transport.handle_request(request.scope, request.receive, once_send)
             print(f"GATEWAY: handle_request completed", file=sys.stderr)
             tg.cancel_scope.cancel()
-    except BaseException as exc:
+    except Exception as exc:
         print(f"GATEWAY: exception: {type(exc).__name__}: {exc}", file=sys.stderr)
+        if not once_send.response_started:
+            error = JSONResponse(
+                content={"error": "internal_error", "error_description": str(exc)},
+                status_code=500,
+            )
+            await error(request.scope, request.receive, once_send)
     finally:
         with anyio.move_on_after(2, shield=True):
             await transport.terminate()
-
-    return _AlreadySent()
 
 
 # Primary endpoint — Streamable HTTP for all methods
 # GET also uses Streamable HTTP (Claude Desktop probes with GET before POST)
 @router.api_route("/gateway/{client_id}", methods=["GET", "POST", "DELETE"])
 async def gateway_endpoint(client_id: str, request: Request):
-    return await _run_streamable_http(client_id, request)
+    once_send = _OnceOnlySend(request._send)
+    await _run_streamable_http(request, client_id, once_send)
+    return Response(status_code=200)
 
 
 # Also handle /mcp suffix for clients that use it explicitly
 @router.api_route("/gateway/{client_id}/mcp", methods=["GET", "POST", "DELETE"])
 async def gateway_streamable_http_mcp(client_id: str, request: Request):
-    return await _run_streamable_http(client_id, request)
+    once_send = _OnceOnlySend(request._send)
+    await _run_streamable_http(request, client_id, once_send)
+    return Response(status_code=200)
