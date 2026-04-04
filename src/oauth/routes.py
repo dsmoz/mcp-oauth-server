@@ -415,58 +415,9 @@ async def register_success(request: Request):
 
 @router.post("/register")
 async def dynamic_client_registration(request: Request):
-    """RFC 7591 dynamic client registration — used by Claude Desktop and other MCP clients."""
-    content_type = request.headers.get("content-type", "")
-    if "application/json" not in content_type:
-        raise HTTPException(status_code=400, detail="Content-Type must be application/json")
-
-    body = await request.json()
-    client_name = body.get("client_name", "MCP Client")
-    redirect_uris = body.get("redirect_uris", [])
-
-    if not redirect_uris:
-        raise HTTPException(status_code=400, detail="redirect_uris required")
-
-    db = get_db()
-    client_id = generate_client_id()
-    raw_secret = generate_token(32)
-    secret_hash = hash_secret(raw_secret)
-
-    db.table("oauth_clients").insert({
-        "client_id": client_id,
-        "client_secret_hash": secret_hash,
-        "client_name": client_name,
-        "redirect_uris": redirect_uris,
-        "grant_types": ["authorization_code", "refresh_token"],
-        "scope": "mcp",
-        "allowed_mcp_resources": [
-            row["slug"] for row in
-            (get_db().table("mcp_catalogue").select("slug").eq("is_published", True).execute().data or [])
-        ],
-        "is_active": True,
-        "created_by": "dynamic_registration",
-    }).execute()
-
-    # Notify owner via Telegram (informational only — client already created)
-    settings = get_settings()
-    if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_OWNER_CHAT_ID:
-        try:
-            await tg.send_dynamic_registration_notice(
-                client_id=client_id,
-                client_name=client_name,
-                redirect_uris=redirect_uris,
-            )
-        except Exception:
-            pass
-
+    """Dynamic client registration is disabled — clients must register via the self-service form."""
     return JSONResponse(
-        {
-            "client_id": client_id,
-            "client_secret": raw_secret,
-            "client_name": client_name,
-            "redirect_uris": redirect_uris,
-            "grant_types": ["authorization_code", "refresh_token"],
-            "token_endpoint_auth_method": "none",
-        },
-        status_code=201,
+        {"error": "dynamic_registration_not_supported",
+         "error_description": "Dynamic client registration is not supported. Please register at /register."},
+        status_code=400,
     )
