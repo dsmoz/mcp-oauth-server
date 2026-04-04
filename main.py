@@ -1,7 +1,23 @@
 from dotenv import load_dotenv
 load_dotenv()  # Must be first — before any src imports that consume env vars
 
+import os
+import sys
 import asyncio
+
+# Initialise Sentry (no-op if SENTRY_DSN is not set)
+_sentry_dsn = os.getenv("SENTRY_DSN")
+if _sentry_dsn:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.starlette import StarletteIntegration
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        traces_sample_rate=0.1,
+        environment=os.getenv("RAILWAY_ENVIRONMENT", "development"),
+        integrations=[StarletteIntegration(), FastApiIntegration()],
+    )
+    print("✅ Sentry error tracking enabled", file=sys.stderr)
 from fastapi import FastAPI
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
