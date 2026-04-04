@@ -15,11 +15,13 @@ import sys
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp import types
 
+from src.config import get_settings
 from src.db import get_db
 from src.gateway.upstream import call_upstream_tool, fetch_tool_list
 from src.oauth.provider import SupabaseOAuthProvider
@@ -65,14 +67,6 @@ async def start_cleanup_loop() -> None:
     while True:
         await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
         _evict_idle_transports()
-
-
-def _validate_token(token: str) -> str:
-    provider = SupabaseOAuthProvider()
-    at = provider.load_access_token(token)
-    if at is None:
-        raise HTTPException(status_code=401, detail="Invalid or expired access token")
-    return at.client_id
 
 
 def _load_enabled_mcps(client_id: str) -> list[dict]:
@@ -310,18 +304,43 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
     return server
 
 
-def _get_bearer(request: Request) -> str:
+def _get_bearer(request: Request) -> str | None:
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing Bearer token")
+        return None
     return auth[7:]
+
+
+def _unauth_response(request: Request) -> JSONResponse:
+    """Return a 401 with OAuth discovery headers before the SSE transport starts."""
+    issuer = get_settings().OAUTH_ISSUER_URL
+    return JSONResponse(
+        content={"error": "unauthorized", "error_description": "Bearer token required"},
+        status_code=401,
+        headers={
+            "WWW-Authenticate": (
+                f'Bearer realm="{issuer}",'
+                f' error="invalid_token",'
+                f' error_description="Bearer token required"'
+            ),
+            "Link": f'<{issuer}/.well-known/oauth-authorization-server>; rel="oauth-authorization-server"',
+        },
+    )
 
 
 @router.get("/gateway/{client_id}")
 async def gateway_sse(client_id: str, request: Request):
     """SSE stream — Claude Desktop connects here to establish the MCP session."""
     token = _get_bearer(request)
-    actual_client_id = _validate_token(token)
+    if not token:
+        return _unauth_response(request)
+
+    provider = SupabaseOAuthProvider()
+    at = provider.load_access_token(token)
+    if at is None:
+        return _unauth_response(request)
+
+    actual_client_id = at.client_id
     enabled_mcps = _load_enabled_mcps(actual_client_id)
     mcp_server = _build_mcp_server(actual_client_id, enabled_mcps)
     transport = _get_transport(client_id)
@@ -334,6 +353,13 @@ async def gateway_sse(client_id: str, request: Request):
 async def gateway_messages(client_id: str, request: Request):
     """MCP POST message channel — uses the same shared transport as the SSE stream."""
     token = _get_bearer(request)
-    _validate_token(token)
+    if not token:
+        return _unauth_response(request)
+
+    provider = SupabaseOAuthProvider()
+    at = provider.load_access_token(token)
+    if at is None:
+        return _unauth_response(request)
+
     transport = _get_transport(client_id)
     await transport.handle_post_message(request.scope, request.receive, request._send)
