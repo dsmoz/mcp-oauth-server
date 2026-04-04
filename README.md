@@ -25,7 +25,7 @@ flowchart TD
     Portal["Client Portal\n/portal/"] --> Supabase
     Portal -->|credits| Credits["Buy Credits\n/portal/credits"]
 
-    Register["Self-service\n/register"] -->|instant account| Supabase
+    Register["Self-service\n/register"] -->|instant account\n+ RFC 7591 DCR| Supabase
     Register -->|credentials email| Brevo(("Brevo\nSMTP API"))
 
     Telegram(("Telegram Bot")) -->|consent webhook| OAuth
@@ -59,10 +59,11 @@ flowchart TD
 | `/register/success` | GET | Confirmation page |
 
 ### Gateway
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/gateway/{client_id}` | GET | SSE stream (MCP server) |
-| `/gateway/{client_id}/messages` | POST | MCP message channel |
+
+| Endpoint                    | Method          | Description                  |
+|-----------------------------|-----------------|------------------------------|
+| `/gateway/{client_id}`      | GET/POST/DELETE | Streamable HTTP MCP endpoint |
+| `/gateway/{client_id}/mcp`  | GET/POST/DELETE | Alias — same handler         |
 
 ### Client Portal
 | Endpoint | Method | Description |
@@ -172,6 +173,7 @@ Deployed on Railway via `Dockerfile`. Push to `main` → auto-deploy.
 
 | Version | Date | Summary |
 |---------|------|---------|
+| 1.9.0 | 2026-04-04 | RFC 7591 dynamic client registration, ASGI gateway middleware, Claude Desktop connector support |
 | 1.8.0 | 2026-04-04 | Instant registration, credit system, Buy Credits portal page, toolbox rename |
 | 1.7.0 | 2026-04-04 | Admin MCP catalogue with Railway auto-discovery |
 | 1.6.0 | 2026-04-04 | DS-MOZ Intelligence Gateway — multi-MCP proxy per client |

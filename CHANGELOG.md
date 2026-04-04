@@ -3,6 +3,25 @@
 All notable changes to this project are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [1.9.0] - 2026-04-04
+
+### Added
+- RFC 7591 dynamic client registration (`POST /register`) — MCP clients like Claude Desktop and mcp-remote can now auto-register OAuth clients
+- `registration_endpoint` in OAuth discovery metadata (`/.well-known/oauth-authorization-server`)
+- GatewayASGI middleware — raw ASGI handler for `/gateway/` that bypasses FastAPI's response pipeline
+- Localhost redirect_uri exemption — `http://localhost` and `http://127.0.0.1` always accepted for native MCP clients
+- Portal setup page: two-option layout — Option A (Custom Connector UI) and Option B (JSON config via mcp-remote)
+
+### Changed
+- Gateway transport: replaced FastAPI `api_route` handlers with raw ASGI middleware (`GatewayASGI`) to eliminate double-send errors
+- Portal config download (`/setup/download`): generates `mcp-remote` wrapper format instead of static Bearer token JSON
+- Portal setup template: Remote MCP Server URL now uses base gateway URL (without `/mcp` suffix) for OAuth discovery compatibility
+
+### Fixed
+- ASGI protocol violations: "Unexpected ASGI message http.response.start sent, after response already completed" (43+ Sentry events)
+- JSONResponse missing required `content` argument when gateway exceptions occurred (11 Sentry events)
+- Gateway error responses now only sent if transport hasn't already started a response
+
 ## [1.8.0] - 2026-04-04
 
 ### Added
