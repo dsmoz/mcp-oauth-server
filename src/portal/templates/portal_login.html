@@ -86,7 +86,7 @@
 <div class="card">
   <div class="brand">DS-MOZ Intelligence</div>
   <h1>Client Portal</h1>
-  <p class="subtitle">Sign in to manage your MCP tools and download your configuration.</p>
+  <p class="subtitle">{% if next_session %}Sign in to authorise access to your MCP tools.{% else %}Sign in to manage your MCP tools and download your configuration.{% endif %}</p>
 
   {% if error %}
   <div class="error-box">
@@ -108,7 +108,10 @@
       <i class="ph-light ph-sign-in"></i> Sign In
     </button>
   </form>
-  <a href="/portal/forgot-password" style="display:block;text-align:center;margin-top:1.25rem;font-size:0.8125rem;color:#5A8A90;text-decoration:none">Forgot your password?</a>
+  <div style="margin-top:1.25rem;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+    <a href="/portal/forgot-password" style="font-size:0.8125rem;color:#5A8A90;text-decoration:none">Forgot your password?</a>
+    <span style="font-size:0.8125rem;color:#91BCC1">Don't have an account? <a href="/register" style="color:#E8500A;text-decoration:none;font-weight:600">Register here</a></span>
+  </div>
 </div>
 </body>
 </html>
