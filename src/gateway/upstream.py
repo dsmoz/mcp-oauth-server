@@ -48,16 +48,15 @@ async def fetch_tool_list(upstream_url: str, api_key: str = "") -> list[dict]:
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     base = upstream_url.rstrip("/").removesuffix("/sse").removesuffix("/mcp")
 
-    # Try the configured URL first, then fall back to the other transport path
-    # Normalise trailing slashes to avoid 307 redirects
+    # Build candidate URLs — try both with and without trailing slash to handle
+    # servers that redirect /mcp → /mcp/, as well as SSE vs streamable-http variants
     normalised = upstream_url.rstrip("/")
-    candidates = [normalised]
     if normalised.endswith("/sse"):
-        candidates.append(f"{base}/mcp")
+        candidates = [normalised, f"{base}/mcp/", f"{base}/mcp"]
     elif normalised.endswith("/mcp"):
-        candidates.append(f"{base}/sse")
+        candidates = [normalised, f"{base}/mcp/", f"{base}/sse"]
     else:
-        candidates += [f"{base}/mcp", f"{base}/sse"]
+        candidates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
 
     last_exc: Exception | None = None
     for url in candidates:
