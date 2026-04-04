@@ -310,14 +310,17 @@ async def _run_streamable_http(client_id: str, request: Request):
     """Shared handler for Streamable HTTP transport (MCP spec 2025-03-26)."""
     token = _get_bearer(request)
     if not token:
+        print(f"GATEWAY: no bearer token on {request.method} {request.url.path}", file=sys.stderr)
         return _unauth_response(request)
 
     provider = SupabaseOAuthProvider()
     at = provider.load_access_token(token)
     if at is None:
+        print(f"GATEWAY: invalid token on {request.method} {request.url.path}", file=sys.stderr)
         return _unauth_response(request)
 
     actual_client_id = at.client_id
+    print(f"GATEWAY: auth OK for {actual_client_id}, {request.method} {request.url.path}", file=sys.stderr)
     enabled_mcps = _load_enabled_mcps(actual_client_id)
     mcp_server = _build_mcp_server(actual_client_id, enabled_mcps)
     transport = StreamableHTTPServerTransport(mcp_session_id=None)
@@ -335,10 +338,12 @@ async def _run_streamable_http(client_id: str, request: Request):
     try:
         async with anyio.create_task_group() as tg:
             await tg.start(run_stateless_server)  # waits until server is ready
+            print(f"GATEWAY: MCP server ready, handling request", file=sys.stderr)
             await transport.handle_request(request.scope, request.receive, request._send)
+            print(f"GATEWAY: handle_request completed", file=sys.stderr)
             tg.cancel_scope.cancel()
-    except BaseException:
-        pass  # client disconnected or cancellation — terminate quietly
+    except BaseException as exc:
+        print(f"GATEWAY: exception: {type(exc).__name__}: {exc}", file=sys.stderr)
     finally:
         with anyio.move_on_after(2, shield=True):
             await transport.terminate()
