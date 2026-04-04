@@ -3,6 +3,9 @@ load_dotenv()  # Must be first — before any src imports that consume env vars
 
 import asyncio
 from fastapi import FastAPI
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from src.limiter import limiter
 from src.oauth.routes import router as oauth_router
 from src.admin.routes import router as admin_router
 from src.portal.routes import router as portal_router
@@ -14,6 +17,8 @@ app = FastAPI(
     description="OAuth 2.0 authorization server for Claude Desktop custom connectors.",
     version="1.0.0",
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.on_event("startup")

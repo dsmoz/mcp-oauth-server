@@ -205,6 +205,91 @@ async def portal_logout():
     return response
 
 
+# ── Password reset ────────────────────────────────────────────────────────────
+
+@router.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_get(request: Request):
+    return templates.TemplateResponse(
+        request=request, name="portal_forgot_password.html",
+        context={"sent": False, "error": None},
+    )
+
+
+@router.post("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_post(request: Request, email: str = Form(...)):
+    db = get_db()
+    result = db.table("oauth_clients").select("client_id,portal_username,contact_name,contact_email").eq("contact_email", email.strip().lower()).eq("is_active", True).limit(1).execute()
+    # Always show the same "sent" page to prevent email enumeration
+    if result.data:
+        client = result.data[0]
+        raw = create_setup_token(client["client_id"])
+        from src.config import get_settings as _gs
+        issuer_url = _gs().OAUTH_ISSUER_URL
+        reset_url = f"{issuer_url}/portal/reset-password?token={raw}"
+        import asyncio as _asyncio
+        from src import email as em
+        _asyncio.create_task(em.send_password_reset_email(
+            contact_name=client.get("contact_name") or client.get("portal_username") or "there",
+            contact_email=email.strip().lower(),
+            reset_url=reset_url,
+        ))
+    return templates.TemplateResponse(
+        request=request, name="portal_forgot_password.html",
+        context={"sent": True, "error": None},
+    )
+
+
+@router.get("/reset-password", response_class=HTMLResponse)
+async def reset_password_get(request: Request, token: str = ""):
+    client_id = _redeem_setup_token(token)
+    if not client_id:
+        return templates.TemplateResponse(
+            request=request, name="portal_login.html",
+            context={"error": "Reset link is invalid or has expired. Please request a new one."},
+        )
+    return templates.TemplateResponse(
+        request=request, name="portal_reset_password.html",
+        context={"token": token, "error": None},
+    )
+
+
+@router.post("/reset-password", response_class=HTMLResponse)
+async def reset_password_post(
+    request: Request,
+    token: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+):
+    client_id = _redeem_setup_token(token)
+    if not client_id:
+        return templates.TemplateResponse(
+            request=request, name="portal_login.html",
+            context={"error": "Reset link is invalid or has expired. Please request a new one."},
+        )
+    if password != password_confirm:
+        return templates.TemplateResponse(
+            request=request, name="portal_reset_password.html",
+            context={"token": token, "error": "Passwords do not match"},
+        )
+    if len(password) < 8:
+        return templates.TemplateResponse(
+            request=request, name="portal_reset_password.html",
+            context={"token": token, "error": "Password must be at least 8 characters"},
+        )
+
+    get_db().table("oauth_clients").update({
+        "portal_password_hash": hash_secret(password),
+    }).eq("client_id", client_id).execute()
+    _consume_setup_token(token)
+
+    response = RedirectResponse(url="/portal/", status_code=303)
+    response.set_cookie(
+        _COOKIE_NAME, _sign_session(client_id),
+        httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE,
+    )
+    return response
+
+
 # ── Overview ──────────────────────────────────────────────────────────────────
 
 @router.get("/", response_class=HTMLResponse)

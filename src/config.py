@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-portal-secret"
     RAILWAY_API_TOKEN: str = ""
     RAILWAY_PROJECT_ID: str = ""
+    TELEGRAM_WEBHOOK_SECRET: str = ""
 
 
 @lru_cache()

@@ -94,8 +94,7 @@ Replaced browser password consent with mobile-first Telegram bot approval.
 ### Client Management
 
 #### Password & Account Security — Priority: High
-- [ ] Password reset flow: `GET/POST /portal/forgot-password` → token email → new password form
-- [ ] Password reset token table (same pattern as `portal_setup_tokens`)
+- [x] Password reset flow: `GET/POST /portal/forgot-password` → token email → `GET/POST /portal/reset-password` (reuses `portal_setup_tokens`)
 - [ ] Email verification on registration (confirm email before credentials sent)
 
 #### Client Lifecycle — Priority: Medium
@@ -124,10 +123,10 @@ Replaced browser password consent with mobile-first Telegram bot approval.
 
 ### Security
 
-- [ ] Rate-limit `/register/submit` and `/consent/status` polling (e.g. 5 req/min per IP)
+- [x] Rate-limit `/register/submit` (5/min per IP) and `/consent/status` (30/min per IP) — `slowapi`
 - [ ] CSRF tokens on admin forms (currently rely on Basic auth + SameSite cookies)
 - [ ] Audit log table — record all admin actions with timestamp, actor, resource, action
-- [ ] Webhook secret verification — validate `X-Telegram-Bot-Api-Secret-Token` on `/telegram/webhook`
+- [x] Webhook secret verification — validate `X-Telegram-Bot-Api-Secret-Token` on `/telegram/webhook`
 - [ ] Email verification before account activation
 
 ### Operational

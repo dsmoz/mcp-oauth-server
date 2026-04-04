@@ -115,10 +115,14 @@ async def send_registration_alert(
 
 async def register_webhook(webhook_url: str) -> None:
     """Register the webhook URL with Telegram on startup."""
+    settings = get_settings()
+    payload: dict = {"url": webhook_url}
+    if settings.TELEGRAM_WEBHOOK_SECRET:
+        payload["secret_token"] = settings.TELEGRAM_WEBHOOK_SECRET
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             _url("setWebhook"),
-            json={"url": webhook_url},
+            json=payload,
             timeout=10.0,
         )
     data = resp.json()

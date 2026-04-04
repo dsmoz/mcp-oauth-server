@@ -13,6 +13,7 @@ from src.config import get_settings
 from src.crypto import generate_client_id, generate_token, hash_secret, now_unix, verify_secret
 from src.db import get_db
 from src import email as em
+from src.limiter import limiter
 from src.oauth.provider import SupabaseOAuthProvider
 from src import telegram as tg
 
@@ -222,7 +223,8 @@ async def consent_post(
 
 
 @router.get("/consent/status")
-async def consent_status(session: str):
+@limiter.limit("30/minute")
+async def consent_status(request: Request, session: str):
     """Polled by the waiting page every 2 seconds to check approval state."""
     provider = _provider()
 
@@ -390,6 +392,12 @@ h1{color:#2ECC71;font-size:1.2rem}p{color:#91BCC1;font-size:0.875rem}</style></h
 @router.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
     """Receive Telegram inline button callbacks."""
+    settings = get_settings()
+    if settings.TELEGRAM_WEBHOOK_SECRET:
+        incoming = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if incoming != settings.TELEGRAM_WEBHOOK_SECRET:
+            return JSONResponse({"ok": False}, status_code=403)
+
     body = await request.json()
     callback = body.get("callback_query", {})
     data = callback.get("data", "")
@@ -651,6 +659,7 @@ async def register_get(request: Request):
 
 
 @router.post("/register/submit", response_class=HTMLResponse)
+@limiter.limit("5/minute")
 async def register_submit(
     request: Request,
     company_name: str = Form(...),

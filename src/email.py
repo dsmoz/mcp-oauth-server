@@ -180,3 +180,80 @@ async def send_approval_email(
     if not resp.is_success:
         import sys
         print(f"WARNING: Brevo email failed ({resp.status_code}): {resp.text}", file=sys.stderr)
+
+
+_RESET_HTML = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reset Your Password</title>
+<style>
+  body {{ font-family: 'Segoe UI', Helvetica Neue, Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 2rem; }}
+  .card {{ background: #ffffff; border-radius: 10px; max-width: 480px; margin: 0 auto; padding: 2rem 2.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }}
+  .brand {{ margin-bottom: 1.5rem; }}
+  h1 {{ font-size: 1.3rem; color: #0A1C20; margin: 0 0 0.5rem; }}
+  p {{ color: #5A8A90; font-size: 0.95rem; line-height: 1.6; margin: 0.5rem 0; }}
+  .btn {{ display: inline-block; margin: 1.5rem 0; padding: 0.75rem 2rem; background: #FF5E00; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 0.95rem; }}
+  .link {{ font-size: 0.8rem; color: #91BCC1; word-break: break-all; }}
+  .footer {{ margin-top: 2rem; font-size: 0.75rem; color: #91BCC1; border-top: 1px solid #d4e8ea; padding-top: 1rem; }}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">
+    <img src="https://res.cloudinary.com/dq2ajrfxl/image/upload/v1742962913/dsmoz_logos/dsmoz-logo-orange.png"
+         alt="DS-MOZ Intelligence" width="180" height="45" style="display:block">
+  </div>
+  <h1>Reset Your Password</h1>
+  <p>Hi {contact_name}, we received a request to reset the password for your DS-MOZ Intelligence portal account.</p>
+  <p>Click the button below to set a new password. This link is valid for 24 hours and can only be used once.</p>
+  <a href="{reset_url}" class="btn">Reset Password</a>
+  <p class="link">If the button doesn't work, paste this URL into your browser:<br>{reset_url}</p>
+  <p style="margin-top:1rem;font-size:0.8rem;color:#91BCC1">If you did not request a password reset, you can safely ignore this email.</p>
+  <div class="footer">&copy; DS-MOZ Intelligence</div>
+</div>
+</body>
+</html>
+"""
+
+
+async def send_password_reset_email(
+    contact_name: str,
+    contact_email: str,
+    reset_url: str,
+) -> None:
+    """Send password reset link to the portal user."""
+    settings = get_settings()
+    if not settings.BREVO_API_KEY or not settings.BREVO_SENDER_EMAIL:
+        import sys
+        print("WARNING: Brevo not configured — skipping password reset email", file=sys.stderr)
+        return
+
+    html = _RESET_HTML.format(contact_name=contact_name, reset_url=reset_url)
+
+    payload = {
+        "sender": {
+            "name": settings.BREVO_SENDER_NAME,
+            "email": settings.BREVO_SENDER_EMAIL,
+        },
+        "to": [{"name": contact_name, "email": contact_email}],
+        "subject": "Reset your DS-MOZ Intelligence portal password",
+        "htmlContent": html,
+    }
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            _BREVO_SEND_URL,
+            json=payload,
+            headers={
+                "api-key": settings.BREVO_API_KEY,
+                "Content-Type": "application/json",
+            },
+            timeout=15.0,
+        )
+
+    if not resp.is_success:
+        import sys
+        print(f"WARNING: Brevo reset email failed ({resp.status_code}): {resp.text}", file=sys.stderr)
