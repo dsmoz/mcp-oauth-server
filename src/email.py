@@ -47,7 +47,7 @@ _APPROVAL_HTML = """\
 
   <div class="section">
     <h2>Step 2 — Connect Claude Desktop</h2>
-    <p>Open Claude Desktop → <strong>Settings → Integrations → Add integration</strong>, paste your gateway URL below, and sign in when the browser opens.</p>
+    <p>Open Claude Desktop → <strong>Settings → Connectors → Add custom connector</strong>. Enter any name, paste the URL below as the Remote MCP server URL, leave OAuth fields empty, and click Add. Claude will open a browser to sign you in.</p>
     <div class="code-block">{gateway_url}</div>
   </div>
 

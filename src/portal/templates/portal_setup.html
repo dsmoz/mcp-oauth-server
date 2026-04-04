@@ -25,8 +25,12 @@
 <div class="card">
   <h2>Claude Desktop</h2>
   <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.5">
-    Open Claude Desktop, go to <strong style="color:var(--text-ui)">Settings → Integrations → Add integration</strong>, paste your gateway URL, and sign in when the browser opens.
+    Open Claude Desktop → <strong style="color:var(--text-ui)">Settings → Connectors → Add custom connector</strong>. Fill in:
   </p>
+  <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem">
+    <li style="font-size:0.8125rem;color:var(--text-muted)"><strong style="color:var(--text-ui)">Name:</strong> DS-MOZ Intelligence (or any label you like)</li>
+    <li style="font-size:0.8125rem;color:var(--text-muted)"><strong style="color:var(--text-ui)">Remote MCP server URL:</strong></li>
+  </ul>
   <div class="code-pill" style="margin-bottom:0.75rem">
     <span>{{ gateway_url }}</span>
     <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy">
@@ -34,7 +38,7 @@
     </button>
   </div>
   <p style="font-size:0.75rem;color:var(--text-muted);line-height:1.5">
-    Do not add the URL manually to <code style="color:var(--amber)">claude_desktop_config.json</code> — this bypasses OAuth and the connection will spin indefinitely.
+    Leave the OAuth Client ID and Secret fields empty — Claude Desktop will open a browser to sign you in automatically when you click <strong>Add</strong>.
   </p>
 </div>
 
