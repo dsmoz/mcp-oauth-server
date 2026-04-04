@@ -196,9 +196,7 @@ async def portal_login_post(
             location = f"{redirect_uri}{sep}code={code}"
             if state:
                 location += f"&state={state}"
-            # Show a success page with a meta-redirect so the browser doesn't hang
-            # on Claude Desktop's localhost callback (which closes immediately)
-            response = HTMLResponse(_oauth_success_page(redirect=location))
+            response = RedirectResponse(url=location, status_code=302)
         response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
         return response
 
