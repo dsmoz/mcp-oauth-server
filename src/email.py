@@ -36,7 +36,11 @@ _APPROVAL_HTML = """\
 </head>
 <body>
 <div class="card">
-  <div class="brand">DS-MOZ Intelligence</div>
+  <div class="brand">
+    <img src="https://res.cloudinary.com/dq2ajrfxl/image/upload/v1742962914/dsmoz_logos/dsmoz-logo-white.png"
+         alt="DS-MOZ Intelligence" width="180" height="45"
+         style="display:block;margin-bottom:1.5rem">
+  </div>
   <h1>Your MCP Access is Approved</h1>
   <p>Hi {contact_name}, your registration for <strong>{company_name}</strong> has been approved. Below are your credentials — keep them safe.</p>
 
