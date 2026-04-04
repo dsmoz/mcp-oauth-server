@@ -331,9 +331,46 @@ def _unauth_response(request: Request) -> JSONResponse:
     )
 
 
-@router.get("/gateway/{client_id}")
-async def gateway_sse(client_id: str, request: Request):
-    """SSE stream — Claude Desktop connects here to establish the MCP session."""
+async def _run_streamable_http(client_id: str, request: Request):
+    """Shared handler for Streamable HTTP transport (MCP spec 2025-03-26)."""
+    token = _get_bearer(request)
+    if not token:
+        return _unauth_response(request)
+
+    provider = SupabaseOAuthProvider()
+    at = provider.load_access_token(token)
+    if at is None:
+        return _unauth_response(request)
+
+    actual_client_id = at.client_id
+    enabled_mcps = _load_enabled_mcps(actual_client_id)
+    mcp_server = _build_mcp_server(actual_client_id, enabled_mcps)
+    transport = StreamableHTTPServerTransport(mcp_session_id=None)
+
+    async with transport.connect() as (read_stream, write_stream):
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(
+                mcp_server.run,
+                read_stream,
+                write_stream,
+                mcp_server.create_initialization_options(),
+            )
+            await transport.handle_request(request.scope, request.receive, request._send)
+            tg.cancel_scope.cancel()
+
+
+# Primary endpoint — handles both Streamable HTTP (POST/DELETE) and SSE legacy (GET)
+@router.api_route("/gateway/{client_id}", methods=["GET", "POST", "DELETE"])
+async def gateway_endpoint(client_id: str, request: Request):
+    """
+    Unified gateway endpoint.
+    POST/DELETE → Streamable HTTP (Claude Desktop connector UI, MCP spec 2025-03-26)
+    GET         → Legacy SSE stream (older clients)
+    """
+    if request.method in ("POST", "DELETE"):
+        return await _run_streamable_http(client_id, request)
+
+    # GET → legacy SSE
     token = _get_bearer(request)
     if not token:
         return _unauth_response(request)
@@ -348,13 +385,16 @@ async def gateway_sse(client_id: str, request: Request):
     mcp_server = _build_mcp_server(actual_client_id, enabled_mcps)
     transport = _get_transport(client_id)
 
-    async with transport.connect_sse(request.scope, request.receive, request._send) as streams:
-        await mcp_server.run(streams[0], streams[1], mcp_server.create_initialization_options())
+    try:
+        async with transport.connect_sse(request.scope, request.receive, request._send) as streams:
+            await mcp_server.run(streams[0], streams[1], mcp_server.create_initialization_options())
+    except Exception:
+        pass  # SSE response already started — swallow to avoid ASGI double-response error
 
 
 @router.post("/gateway/{client_id}/messages")
 async def gateway_messages(client_id: str, request: Request):
-    """MCP POST message channel — uses the same shared transport as the SSE stream."""
+    """Legacy SSE POST message channel."""
     token = _get_bearer(request)
     if not token:
         return _unauth_response(request)
@@ -365,36 +405,14 @@ async def gateway_messages(client_id: str, request: Request):
         return _unauth_response(request)
 
     transport = _get_transport(client_id)
-    await transport.handle_post_message(request.scope, request.receive, request._send)
+    try:
+        await transport.handle_post_message(request.scope, request.receive, request._send)
+    except Exception:
+        pass  # Client disconnected — normal SSE churn
 
 
+# Also keep /mcp suffix for clients that use it explicitly
 @router.api_route("/gateway/{client_id}/mcp", methods=["GET", "POST", "DELETE"])
 async def gateway_streamable_http(client_id: str, request: Request):
-    """Streamable HTTP transport — used by Claude Desktop connector UI (MCP spec 2025-03-26)."""
-    token = _get_bearer(request)
-    if not token:
-        return _unauth_response(request)
-
-    provider = SupabaseOAuthProvider()
-    at = provider.load_access_token(token)
-    if at is None:
-        return _unauth_response(request)
-
-    actual_client_id = at.client_id
-    enabled_mcps = _load_enabled_mcps(actual_client_id)
-    mcp_server = _build_mcp_server(actual_client_id, enabled_mcps)
-
-    transport = StreamableHTTPServerTransport(mcp_session_id=None)
-
-    async def run_server(read_stream, write_stream):
-        await mcp_server.run(
-            read_stream,
-            write_stream,
-            mcp_server.create_initialization_options(),
-        )
-
-    async with transport.connect() as (read_stream, write_stream):
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(run_server, read_stream, write_stream)
-            await transport.handle_request(request.scope, request.receive, request._send)
-            tg.cancel_scope.cancel()
+    """Streamable HTTP endpoint with explicit /mcp suffix."""
+    return await _run_streamable_http(client_id, request)
