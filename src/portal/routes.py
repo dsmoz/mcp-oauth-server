@@ -24,6 +24,31 @@ _COOKIE_NAME = "portal_session"
 _SETUP_TOKEN_TTL_HOURS = 24
 
 
+def _oauth_success_page(redirect: str | None = None) -> str:
+    """Success page shown after OAuth login. Fires redirect via JS then shows success message."""
+    js = f"window.location.href={redirect!r};" if redirect else ""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8">
+<script>{js}</script>
+<style>
+  body{{font-family:'Segoe UI',sans-serif;background:#f4f6f8;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}
+  .card{{background:#fff;border-radius:10px;padding:2rem 2.5rem;box-shadow:0 4px 20px rgba(0,0,0,.08);text-align:center;max-width:400px}}
+  .icon{{font-size:2.5rem;color:#22c55e;margin-bottom:1rem}}
+  h1{{font-size:1.2rem;color:#0A1C20;margin:0 0 .5rem}}
+  p{{color:#5A8A90;font-size:.9rem;margin:0}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">&#10003;</div>
+  <h1>Authorisation complete</h1>
+  <p>You are now connected. You can close this window and return to Claude.</p>
+</div>
+</body>
+</html>"""
+
+
 def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(get_settings().SECRET_KEY, salt="portal")
 
@@ -165,13 +190,15 @@ async def portal_login_post(
             response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
             return response
         if not redirect_uri:
-            response = HTMLResponse("<h1>Authorization complete. You may close this window.</h1>")
+            response = HTMLResponse(_oauth_success_page())
         else:
             sep = "&" if "?" in redirect_uri else "?"
             location = f"{redirect_uri}{sep}code={code}"
             if state:
                 location += f"&state={state}"
-            response = RedirectResponse(url=location, status_code=302)
+            # Show a success page with a meta-redirect so the browser doesn't hang
+            # on Claude Desktop's localhost callback (which closes immediately)
+            response = HTMLResponse(_oauth_success_page(redirect=location))
         response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
         return response
 
