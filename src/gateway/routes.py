@@ -300,6 +300,12 @@ def _unauth_response(request: Request) -> JSONResponse:
     )
 
 
+class _AlreadySent(JSONResponse):
+    """Sentinel response — transport already sent ASGI messages; this is a no-op."""
+    async def __call__(self, scope, receive, send) -> None:
+        pass  # response was already sent by transport.handle_request()
+
+
 async def _run_streamable_http(client_id: str, request: Request):
     """Shared handler for Streamable HTTP transport (MCP spec 2025-03-26)."""
     token = _get_bearer(request)
@@ -336,6 +342,8 @@ async def _run_streamable_http(client_id: str, request: Request):
     finally:
         with anyio.move_on_after(2, shield=True):
             await transport.terminate()
+
+    return _AlreadySent()
 
 
 # Primary endpoint — Streamable HTTP for all methods
