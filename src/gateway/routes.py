@@ -225,8 +225,13 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
             for mcp in enabled_mcps:
                 for t in await _get_tools(mcp["slug"]):
                     if q in t["name"].lower() or q in t.get("description", "").lower():
-                        results.append({"mcp": mcp["slug"], "mcp_name": mcp["name"],
-                                        "tool": t["name"], "description": t.get("description", "")})
+                        results.append({
+                            "mcp": mcp["slug"],
+                            "mcp_name": mcp["name"],
+                            "tool": t["name"],
+                            "description": t.get("description", ""),
+                            "inputSchema": t.get("inputSchema", {}),
+                        })
             text = json.dumps(results)
 
         elif name == "list_tools":
