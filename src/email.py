@@ -57,26 +57,35 @@ _APPROVAL_HTML = """\
   </div>
 
   <div class="section">
-    <h2>Configure Claude Desktop</h2>
-    <p>Add the following to your <code>claude_desktop_config.json</code>:</p>
+    <h2>Option 1 — Claude.ai (Web)</h2>
+    <p>Go to <strong>Claude.ai → Settings → Connectors → Add custom connector</strong> and enter:</p>
+    <div class="code-block">Name              : DS-MOZ Intelligence
+Remote MCP URL    : {gateway_url}
+OAuth Client ID   : {client_id}
+OAuth Client Secret: {client_secret}</div>
+    <p style="font-size:0.8rem;color:#91BCC1;margin-top:0.5rem">Click <strong>Advanced settings</strong> to reveal the OAuth fields.</p>
+  </div>
+
+  <div class="section">
+    <h2>Option 2 — Claude Desktop / Cursor</h2>
+    <p>Add the following to your <code>claude_desktop_config.json</code> (Claude Desktop) or MCP settings (Cursor):</p>
     <div class="code-block">{claude_config}</div>
-    <p>Config file location:<br>
+    <p>Claude Desktop config file location:<br>
       <strong>macOS:</strong> <code>~/Library/Application Support/Claude/claude_desktop_config.json</code><br>
       <strong>Windows:</strong> <code>%APPDATA%\\Claude\\claude_desktop_config.json</code>
     </p>
   </div>
 
   <div class="section">
-    <h2>Configure ChatGPT (Custom GPT / Plugin)</h2>
-    <p>Use these values when setting up an OAuth connection in your Custom GPT or GPT Action:</p>
+    <h2>Option 3 — ChatGPT (Custom GPT / GPT Action)</h2>
+    <p>Use these values when setting up an OAuth connection:</p>
     <div class="code-block">{chatgpt_config}</div>
   </div>
 
   <div class="section">
     <h2>Set Up Your Client Portal</h2>
-    <p>Use the link below to create your portal login (valid for 24 hours, one-time use):</p>
+    <p>Use the link below to create your portal password and configure your toolbox (valid for 24 hours, one-time use):</p>
     <p style="margin:0.75rem 0"><a href="{setup_url}" style="color:#FF5E00;font-weight:600;word-break:break-all">{setup_url}</a></p>
-    <p>In the portal you can toggle which MCP tools you want access to and download your gateway configuration.</p>
   </div>
 
   <div class="footer">
@@ -92,14 +101,8 @@ _CLAUDE_CONFIG_TEMPLATE = """\
 {{
   "mcpServers": {{
     "{server_name}": {{
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-everything"],
-      "env": {{
-        "MCP_SERVER_URL": "{issuer_url}/mcp",
-        "CLIENT_ID": "{client_id}",
-        "CLIENT_SECRET": "{client_secret}",
-        "OAUTH_TOKEN_URL": "{issuer_url}/oauth/token"
-      }}
+      "type": "sse",
+      "url": "{gateway_url}"
     }}
   }}
 }}"""
@@ -129,13 +132,12 @@ async def send_approval_email(
         return
 
     server_name = company_name.lower().replace(" ", "-")
+    gateway_url = f"{issuer_url}/gateway/{client_id}"
     setup_url = f"{issuer_url}/portal/setup-password?token={setup_token}" if setup_token else f"{issuer_url}/portal/login"
 
     claude_config = _CLAUDE_CONFIG_TEMPLATE.format(
         server_name=server_name,
-        issuer_url=issuer_url,
-        client_id=client_id,
-        client_secret=raw_secret,
+        gateway_url=gateway_url,
     )
     chatgpt_config = _CHATGPT_CONFIG_TEMPLATE.format(
         issuer_url=issuer_url,
@@ -148,6 +150,7 @@ async def send_approval_email(
         company_name=company_name,
         client_id=client_id,
         client_secret=raw_secret,
+        gateway_url=gateway_url,
         claude_config=claude_config,
         chatgpt_config=chatgpt_config,
         setup_url=setup_url,
