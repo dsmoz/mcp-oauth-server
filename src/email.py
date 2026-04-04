@@ -46,19 +46,15 @@ _APPROVAL_HTML = """\
   </div>
 
   <div class="section">
-    <h2>Step 2 — Connect Claude Desktop or Cursor</h2>
-    <p>After setting up your portal, copy your gateway URL and add it to your <code>claude_desktop_config.json</code>:</p>
-    <div class="code-block">{claude_config}</div>
-    <p style="font-size:0.8rem;color:#91BCC1">Config file location:<br>
-      <strong>macOS:</strong> ~/Library/Application Support/Claude/claude_desktop_config.json<br>
-      <strong>Windows:</strong> %APPDATA%\Claude\claude_desktop_config.json
-    </p>
-    <p style="font-size:0.8rem;color:#5A8A90;margin-top:0.5rem">Claude Desktop will prompt you to sign in via browser when you first connect.</p>
+    <h2>Step 2 — Connect Claude Desktop</h2>
+    <p>Open Claude Desktop → <strong>Settings → Integrations → Add integration</strong>, paste your gateway URL below, and sign in when the browser opens.</p>
+    <div class="code-block">{gateway_url}</div>
   </div>
 
   <div class="section">
     <h2>Step 3 — Connect Claude.ai (Web)</h2>
-    <p>Go to <strong>Claude.ai → Settings → Connectors → Add custom connector</strong>, enter your gateway URL, and sign in when prompted.</p>
+    <p>Go to <strong>Claude.ai → Settings → Connectors → Add custom connector</strong>, paste your gateway URL, and sign in when prompted.</p>
+    <div class="code-block">{gateway_url}</div>
   </div>
 
   <div class="footer">
@@ -69,17 +65,6 @@ _APPROVAL_HTML = """\
 </body>
 </html>
 """
-
-_CLAUDE_CONFIG_TEMPLATE = """\
-{{
-  "mcpServers": {{
-    "{server_name}": {{
-      "type": "sse",
-      "url": "{gateway_url}"
-    }}
-  }}
-}}"""
-
 
 async def send_approval_email(
     contact_name: str,
@@ -96,20 +81,13 @@ async def send_approval_email(
         print("WARNING: Brevo not configured — skipping approval email", file=sys.stderr)
         return
 
-    server_name = company_name.lower().replace(" ", "-")
     gateway_url = f"{issuer_url}/gateway/{client_id}"
     setup_url = f"{issuer_url}/portal/setup-password?token={setup_token}" if setup_token else f"{issuer_url}/portal/login"
-
-    claude_config = _CLAUDE_CONFIG_TEMPLATE.format(
-        server_name=server_name,
-        gateway_url=gateway_url,
-    )
 
     html = _APPROVAL_HTML.format(
         contact_name=contact_name,
         company_name=company_name,
         gateway_url=gateway_url,
-        claude_config=claude_config,
         setup_url=setup_url,
     )
 

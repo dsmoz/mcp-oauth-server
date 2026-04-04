@@ -25,20 +25,16 @@
 <div class="card">
   <h2>Claude Desktop</h2>
   <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.5">
-    Add the following to your <code style="background:var(--elevated);padding:0.1em 0.3em;border-radius:3px;color:var(--amber)">claude_desktop_config.json</code>.
-    Claude Desktop will open a browser to sign you in automatically — no credentials to copy.
+    Open Claude Desktop, go to <strong style="color:var(--text-ui)">Settings → Integrations → Add integration</strong>, paste your gateway URL, and sign in when the browser opens.
   </p>
-  <div style="position:relative">
-    <pre id="claude-config" style="background:var(--elevated);border:1px solid var(--border);border-radius:6px;padding:1rem;font-family:monospace;font-size:0.8rem;color:var(--text-b);overflow-x:auto;white-space:pre-wrap;word-break:break-all">{{ claude_config }}</pre>
-    <button class="copy-btn" onclick="copyText(document.getElementById('claude-config').textContent, this)"
-            style="position:absolute;top:0.5rem;right:0.5rem" title="Copy">
+  <div class="code-pill" style="margin-bottom:0.75rem">
+    <span>{{ gateway_url }}</span>
+    <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy">
       <i class="ph-light ph-copy" style="font-size:14px"></i>
     </button>
   </div>
-  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem">
-    Config file location:<br>
-    <strong style="color:var(--text-ui)">macOS:</strong> <code style="color:var(--amber)">~/Library/Application Support/Claude/claude_desktop_config.json</code><br>
-    <strong style="color:var(--text-ui)">Windows:</strong> <code style="color:var(--amber)">%APPDATA%\Claude\claude_desktop_config.json</code>
+  <p style="font-size:0.75rem;color:var(--text-muted);line-height:1.5">
+    Do not add the URL manually to <code style="color:var(--amber)">claude_desktop_config.json</code> — this bypasses OAuth and the connection will spin indefinitely.
   </p>
 </div>
 

@@ -463,27 +463,13 @@ async def portal_setup(request: Request, client_id: str = Depends(_require_porta
         raise HTTPException(status_code=401, detail="Client not found")
 
     from src.config import get_settings
-    settings = get_settings()
-    gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{client_id}"
-    server_name = (client.get("client_name") or "dsmoz-intelligence").lower().replace(" ", "-")
-
-    claude_config = (
-        '{\n'
-        '  "mcpServers": {\n'
-        f'    "{server_name}": {{\n'
-        '      "type": "sse",\n'
-        f'      "url": "{gateway_url}"\n'
-        '    }}\n'
-        '  }\n'
-        '}'
-    )
+    gateway_url = f"{get_settings().OAUTH_ISSUER_URL}/gateway/{client_id}"
 
     return templates.TemplateResponse(
         request=request, name="portal_setup.html", context={
             "client": client,
             "active_nav": "setup",
             "gateway_url": gateway_url,
-            "claude_config": claude_config,
         }
     )
 
