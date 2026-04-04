@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()  # Must be first — before any src imports that consume env vars
 
+import asyncio
 from fastapi import FastAPI
 from src.oauth.routes import router as oauth_router
 from src.admin.routes import router as admin_router
@@ -13,6 +14,12 @@ app = FastAPI(
     description="OAuth 2.0 authorization server for Claude Desktop custom connectors.",
     version="1.0.0",
 )
+
+
+@app.on_event("startup")
+async def start_gateway_cleanup():
+    from src.gateway.routes import start_cleanup_loop
+    asyncio.create_task(start_cleanup_loop())
 
 
 @app.on_event("startup")

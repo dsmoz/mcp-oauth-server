@@ -347,6 +347,8 @@ async def revoke_client(
     ).execute()
     provider = SupabaseOAuthProvider()
     provider.revoke_client_tokens(client_id)
+    from src.gateway.routes import evict_transport
+    evict_transport(client_id)
     return RedirectResponse(url="/admin/clients/", status_code=303)
 
 

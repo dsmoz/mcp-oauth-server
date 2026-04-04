@@ -9,7 +9,10 @@ created on the GET are findable by the POST.
 """
 from __future__ import annotations
 
+import asyncio
 import json
+import sys
+import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -25,13 +28,43 @@ router = APIRouter()
 
 # One shared transport per client_id — keeps session state between GET and POST
 _transports: dict[str, SseServerTransport] = {}
+_transport_last_used: dict[str, float] = {}
+
+_TRANSPORT_TTL_HOURS = 4
+_CLEANUP_INTERVAL_SECONDS = 1800  # 30 minutes
 
 
 def _get_transport(client_id: str) -> SseServerTransport:
     if client_id not in _transports:
         messages_path = f"/gateway/{client_id}/messages"
         _transports[client_id] = SseServerTransport(messages_path)
+    _transport_last_used[client_id] = time.time()
     return _transports[client_id]
+
+
+def evict_transport(client_id: str) -> None:
+    """Immediately remove a client's transport — call on token revocation."""
+    _transports.pop(client_id, None)
+    _transport_last_used.pop(client_id, None)
+
+
+def _evict_idle_transports() -> int:
+    """Remove transports idle for longer than TTL. Returns count evicted."""
+    cutoff = time.time() - _TRANSPORT_TTL_HOURS * 3600
+    stale = [cid for cid, last in _transport_last_used.items() if last < cutoff]
+    for cid in stale:
+        _transports.pop(cid, None)
+        _transport_last_used.pop(cid, None)
+    if stale:
+        print(f"INFO: evicted {len(stale)} idle gateway transports: {stale}", file=sys.stderr)
+    return len(stale)
+
+
+async def start_cleanup_loop() -> None:
+    """Background task — periodically evicts idle transports."""
+    while True:
+        await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
+        _evict_idle_transports()
 
 
 def _validate_token(token: str) -> str:
