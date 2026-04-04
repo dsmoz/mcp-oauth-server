@@ -147,36 +147,43 @@
         <input type="text" name="website" tabindex="-1" autocomplete="off">
       </div>
       <input type="hidden" name="form_loaded_at" id="form_loaded_at">
+      <input type="hidden" name="captcha_signed" value="{{ captcha_signed }}">
 
       <div class="form-group">
         <label for="company_name">Organisation / Company Name *</label>
         <input type="text" id="company_name" name="company_name" required
-               placeholder="e.g. LAMBDA Association">
+               placeholder="e.g. LAMBDA Association" value="{{ company_name or '' }}">
       </div>
 
       <div class="form-group">
         <label for="contact_name">Contact Name *</label>
         <input type="text" id="contact_name" name="contact_name" required
-               placeholder="Your full name">
+               placeholder="Your full name" value="{{ contact_name or '' }}">
       </div>
 
       <div class="form-group">
         <label for="contact_email">Contact Email *</label>
         <input type="email" id="contact_email" name="contact_email" required
-               placeholder="you@organisation.org">
+               placeholder="you@organisation.org" value="{{ contact_email or '' }}">
       </div>
 
       <div class="form-group">
         <label for="use_case">Intended Use *</label>
         <textarea id="use_case" name="use_case" required
-                  placeholder="Briefly describe how you plan to use the MCP API"></textarea>
+                  placeholder="Briefly describe how you plan to use the MCP API">{{ use_case or '' }}</textarea>
       </div>
 
       <div class="form-group">
         <label for="redirect_uris_raw">Redirect URIs</label>
         <textarea id="redirect_uris_raw" name="redirect_uris_raw"
-                  placeholder="One URI per line&#10;e.g. https://myapp.example.com/callback"></textarea>
+                  placeholder="One URI per line&#10;e.g. https://myapp.example.com/callback">{{ redirect_uris_raw or '' }}</textarea>
         <span class="hint">Leave empty if you don't know yet — you can update this later.</span>
+      </div>
+
+      <div class="form-group">
+        <label for="captcha_answer">{{ captcha_question }}</label>
+        <input type="text" id="captcha_answer" name="captcha_answer" required
+               autocomplete="off" inputmode="numeric" placeholder="Enter the answer">
       </div>
 
       <button type="submit" class="btn-submit">
@@ -185,7 +192,7 @@
     </form>
 
     <p class="footer-note">
-      Requests are reviewed manually. You will be notified by email once a decision is made.
+      You will receive your credentials and setup instructions by email.
     </p>
   </div>
   <script>

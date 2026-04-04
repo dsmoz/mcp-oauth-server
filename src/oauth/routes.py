@@ -649,12 +649,33 @@ async def introspect(
 
 # ── Self-service registration ─────────────────────────────────────────────────
 
+def _make_captcha() -> tuple[str, str]:
+    """Return (question_text, signed_answer) for a simple arithmetic CAPTCHA."""
+    import random
+    from itsdangerous import URLSafeSerializer
+    a, b = random.randint(2, 12), random.randint(2, 12)
+    question = f"What is {a} + {b}?"
+    answer = str(a + b)
+    signed = URLSafeSerializer(get_settings().SECRET_KEY, salt="captcha").dumps(answer)
+    return question, signed
+
+
+def _verify_captcha(user_answer: str, signed_answer: str) -> bool:
+    from itsdangerous import URLSafeSerializer, BadSignature
+    try:
+        expected = URLSafeSerializer(get_settings().SECRET_KEY, salt="captcha").loads(signed_answer)
+        return user_answer.strip() == expected
+    except BadSignature:
+        return False
+
+
 @router.get("/register", response_class=HTMLResponse)
 async def register_get(request: Request):
+    question, signed = _make_captcha()
     return templates.TemplateResponse(
         request=request,
         name="register.html",
-        context={"error": None},
+        context={"error": None, "captcha_question": question, "captcha_signed": signed},
     )
 
 
@@ -669,6 +690,8 @@ async def register_submit(
     redirect_uris_raw: str = Form(""),
     website: str = Form(""),
     form_loaded_at: str = Form(""),
+    captcha_answer: str = Form(""),
+    captcha_signed: str = Form(""),
 ):
     import sys
     import asyncio as _asyncio
@@ -685,6 +708,25 @@ async def register_submit(
             return RedirectResponse(url="/register/success", status_code=303)
     except (ValueError, TypeError):
         pass
+
+    # Anti-bot: math CAPTCHA
+    if not _verify_captcha(captcha_answer, captcha_signed):
+        new_q, new_signed = _make_captcha()
+        return templates.TemplateResponse(
+            request=request,
+            name="register.html",
+            context={
+                "error": "Incorrect answer to the security question. Please try again.",
+                "captcha_question": new_q,
+                "captcha_signed": new_signed,
+                "company_name": company_name,
+                "contact_name": contact_name,
+                "contact_email": contact_email,
+                "use_case": use_case,
+                "redirect_uris_raw": redirect_uris_raw,
+            },
+            status_code=422,
+        )
 
     settings = get_settings()
     db = get_db()
