@@ -124,11 +124,47 @@ def _consume_setup_token(raw: str) -> None:
 
 # ── Login ─────────────────────────────────────────────────────────────────────
 
+def _complete_oauth_session(next_session: str, client_id: str) -> Optional[RedirectResponse]:
+    """If next_session is valid, complete the OAuth flow and return a redirect. None if expired."""
+    from src.oauth.provider import SupabaseOAuthProvider
+    import json as _json
+    provider = SupabaseOAuthProvider()
+    pending = provider.get_pending_session(next_session)
+    if pending is None:
+        return None
+    try:
+        session_data = _json.loads(pending.get("resource") or "{}")
+    except (ValueError, TypeError):
+        session_data = {}
+    state = session_data.get("state")
+    try:
+        code, redirect_uri = provider.mark_session_approved(next_session)
+    except ValueError:
+        return None
+    if not redirect_uri:
+        return HTMLResponse(_oauth_success_page())
+    sep = "&" if "?" in redirect_uri else "?"
+    location = f"{redirect_uri}{sep}code={code}"
+    if state:
+        location += f"&state={state}"
+    return RedirectResponse(url=location, status_code=302)
+
+
 @router.get("/login", response_class=HTMLResponse)
 async def portal_login_get(
     request: Request,
     next_session: Optional[str] = Query(None),
 ):
+    # Auto-complete OAuth if user already has a valid portal session
+    if next_session:
+        token = request.cookies.get(_COOKIE_NAME)
+        if token:
+            client_id = _verify_session(token)
+            if client_id:
+                response = _complete_oauth_session(next_session, client_id)
+                if response is not None:
+                    return response
+                # Session expired — fall through to login form
     return templates.TemplateResponse(
         request=request,
         name="portal_login.html",
@@ -169,34 +205,9 @@ async def portal_login_post(
 
     # OAuth flow: complete the pending authorization session and redirect back to the client
     if next_session:
-        from src.oauth.provider import SupabaseOAuthProvider
-        provider = SupabaseOAuthProvider()
-        pending = provider.get_pending_session(next_session)
-        if pending is None:
-            # Session expired — user is logged in but needs to reconnect from Claude Code
+        response = _complete_oauth_session(next_session, client["client_id"])
+        if response is None:
             response = RedirectResponse(url="/portal/?oauth_expired=1", status_code=303)
-            response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
-            return response
-        import json as _json
-        try:
-            session_data = _json.loads(pending.get("resource") or "{}")
-        except (ValueError, TypeError):
-            session_data = {}
-        state = session_data.get("state")
-        try:
-            code, redirect_uri = provider.mark_session_approved(next_session)
-        except ValueError:
-            response = RedirectResponse(url="/portal/?oauth_expired=1", status_code=303)
-            response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
-            return response
-        if not redirect_uri:
-            response = HTMLResponse(_oauth_success_page())
-        else:
-            sep = "&" if "?" in redirect_uri else "?"
-            location = f"{redirect_uri}{sep}code={code}"
-            if state:
-                location += f"&state={state}"
-            response = RedirectResponse(url=location, status_code=302)
         response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
         return response
 
