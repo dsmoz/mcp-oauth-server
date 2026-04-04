@@ -25,7 +25,7 @@ from src.limiter import limiter
 from src.oauth.routes import router as oauth_router
 from src.admin.routes import router as admin_router
 from src.portal.routes import router as portal_router
-from src.gateway.routes import router as gateway_router
+from src.gateway.routes import GatewayASGI
 from src.config import get_settings
 
 app = FastAPI(
@@ -64,12 +64,16 @@ async def startup_checks():
 app.include_router(oauth_router)
 app.include_router(admin_router)
 app.include_router(portal_router)
-app.include_router(gateway_router)
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# Wrap with gateway ASGI middleware — intercepts /gateway/ requests before
+# FastAPI so the MCP transport can own the full response lifecycle.
+app = GatewayASGI(app)
 
 
 if __name__ == "__main__":
