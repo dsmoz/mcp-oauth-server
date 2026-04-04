@@ -846,15 +846,14 @@ async def dynamic_client_registration(request: Request):
         "created_by": "dynamic_registration",
     }).execute()
 
-    # Notify owner via Telegram
+    # Notify owner via Telegram (informational only — client already created)
     settings = get_settings()
     if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_OWNER_CHAT_ID:
         try:
-            await tg.send_registration_alert(
-                request_id="dynamic",
-                company_name=client_name,
-                contact_name="Dynamic Registration",
-                contact_email=", ".join(redirect_uris),
+            await tg.send_dynamic_registration_notice(
+                client_id=client_id,
+                client_name=client_name,
+                redirect_uris=redirect_uris,
             )
         except Exception:
             pass

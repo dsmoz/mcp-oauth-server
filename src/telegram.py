@@ -82,6 +82,31 @@ async def answer_callback(callback_id: str, text: str) -> None:
         )
 
 
+async def send_dynamic_registration_notice(
+    client_id: str,
+    client_name: str,
+    redirect_uris: list[str],
+) -> None:
+    """Informational notice for dynamic client registrations (no approval buttons — client already created)."""
+    settings = get_settings()
+    text = (
+        f"⚡ *Dynamic Client Registered*\n\n"
+        f"Client: *{client_name}*\n"
+        f"ID: `{client_id}`\n"
+        f"Redirect URIs: {', '.join(redirect_uris)}"
+    )
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            _url("sendMessage"),
+            json={
+                "chat_id": settings.TELEGRAM_OWNER_CHAT_ID,
+                "text": text,
+                "parse_mode": "Markdown",
+            },
+            timeout=10.0,
+        )
+
+
 async def send_registration_alert(
     request_id: str,
     company_name: str,
