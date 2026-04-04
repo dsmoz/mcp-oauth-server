@@ -12,7 +12,6 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
-import time
 from typing import Any
 
 import anyio
@@ -20,7 +19,6 @@ import anyio
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from mcp.server import Server
-from mcp.server.sse import SseServerTransport
 from mcp.server.streamable_http import StreamableHTTPServerTransport
 from mcp import types
 
@@ -31,45 +29,16 @@ from src.oauth.provider import SupabaseOAuthProvider
 
 router = APIRouter()
 
-# One shared transport per client_id — keeps session state between GET and POST
-_transports: dict[str, SseServerTransport] = {}
-_transport_last_used: dict[str, float] = {}
-
-_TRANSPORT_TTL_HOURS = 4
-_CLEANUP_INTERVAL_SECONDS = 1800  # 30 minutes
-
-
-def _get_transport(client_id: str) -> SseServerTransport:
-    if client_id not in _transports:
-        messages_path = f"/gateway/{client_id}/messages"
-        _transports[client_id] = SseServerTransport(messages_path)
-    _transport_last_used[client_id] = time.time()
-    return _transports[client_id]
-
 
 def evict_transport(client_id: str) -> None:
-    """Immediately remove a client's transport — call on token revocation."""
-    _transports.pop(client_id, None)
-    _transport_last_used.pop(client_id, None)
-
-
-def _evict_idle_transports() -> int:
-    """Remove transports idle for longer than TTL. Returns count evicted."""
-    cutoff = time.time() - _TRANSPORT_TTL_HOURS * 3600
-    stale = [cid for cid, last in _transport_last_used.items() if last < cutoff]
-    for cid in stale:
-        _transports.pop(cid, None)
-        _transport_last_used.pop(cid, None)
-    if stale:
-        print(f"INFO: evicted {len(stale)} idle gateway transports: {stale}", file=sys.stderr)
-    return len(stale)
+    """No-op — kept for call-site compatibility. Streamable HTTP is stateless."""
+    pass
 
 
 async def start_cleanup_loop() -> None:
-    """Background task — periodically evicts idle transports."""
+    """No-op — kept for main.py compatibility. No persistent transports to clean up."""
     while True:
-        await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
-        _evict_idle_transports()
+        await asyncio.sleep(3600)
 
 
 def _load_enabled_mcps(client_id: str) -> list[dict]:
@@ -357,67 +326,27 @@ async def _run_streamable_http(client_id: str, request: Request):
                 stateless=True,
             )
 
-    async with anyio.create_task_group() as tg:
-        await tg.start(run_stateless_server)  # waits until server is ready
-        await transport.handle_request(request.scope, request.receive, request._send)
-        await transport.terminate()
-        tg.cancel_scope.cancel()
+    from starlette.requests import ClientDisconnect
+    try:
+        async with anyio.create_task_group() as tg:
+            await tg.start(run_stateless_server)  # waits until server is ready
+            await transport.handle_request(request.scope, request.receive, request._send)
+            tg.cancel_scope.cancel()
+    except (ClientDisconnect, anyio.EndOfStream, Exception):
+        pass  # client disconnected — terminate quietly
+    finally:
+        with anyio.move_on_after(2, shield=True):
+            await transport.terminate()
 
 
-# Primary endpoint — handles both Streamable HTTP (POST/DELETE) and SSE legacy (GET)
+# Primary endpoint — Streamable HTTP for all methods
+# GET also uses Streamable HTTP (Claude Desktop probes with GET before POST)
 @router.api_route("/gateway/{client_id}", methods=["GET", "POST", "DELETE"])
 async def gateway_endpoint(client_id: str, request: Request):
-    """
-    Unified gateway endpoint.
-    POST/DELETE → Streamable HTTP (Claude Desktop connector UI, MCP spec 2025-03-26)
-    GET         → Legacy SSE stream (older clients)
-    """
-    if request.method in ("POST", "DELETE"):
-        return await _run_streamable_http(client_id, request)
-
-    # GET → legacy SSE
-    token = _get_bearer(request)
-    if not token:
-        return _unauth_response(request)
-
-    provider = SupabaseOAuthProvider()
-    at = provider.load_access_token(token)
-    if at is None:
-        return _unauth_response(request)
-
-    actual_client_id = at.client_id
-    enabled_mcps = _load_enabled_mcps(actual_client_id)
-    mcp_server = _build_mcp_server(actual_client_id, enabled_mcps)
-    transport = _get_transport(client_id)
-
-    try:
-        async with transport.connect_sse(request.scope, request.receive, request._send) as streams:
-            await mcp_server.run(streams[0], streams[1], mcp_server.create_initialization_options())
-    except Exception:
-        pass  # SSE response already started — swallow to avoid ASGI double-response error
+    return await _run_streamable_http(client_id, request)
 
 
-@router.post("/gateway/{client_id}/messages")
-async def gateway_messages(client_id: str, request: Request):
-    """Legacy SSE POST message channel."""
-    token = _get_bearer(request)
-    if not token:
-        return _unauth_response(request)
-
-    provider = SupabaseOAuthProvider()
-    at = provider.load_access_token(token)
-    if at is None:
-        return _unauth_response(request)
-
-    transport = _get_transport(client_id)
-    try:
-        await transport.handle_post_message(request.scope, request.receive, request._send)
-    except Exception:
-        pass  # Client disconnected — normal SSE churn
-
-
-# Also keep /mcp suffix for clients that use it explicitly
+# Also handle /mcp suffix for clients that use it explicitly
 @router.api_route("/gateway/{client_id}/mcp", methods=["GET", "POST", "DELETE"])
-async def gateway_streamable_http(client_id: str, request: Request):
-    """Streamable HTTP endpoint with explicit /mcp suffix."""
+async def gateway_streamable_http_mcp(client_id: str, request: Request):
     return await _run_streamable_http(client_id, request)
