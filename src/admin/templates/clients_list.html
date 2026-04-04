@@ -14,6 +14,21 @@
   </div>
 </div>
 
+<div style="display:flex;gap:0.5rem;margin-bottom:1.25rem">
+  <a href="/admin/clients/?status=active"
+     class="btn {% if status_filter == 'active' %}btn-primary{% else %}btn-secondary{% endif %}">
+    Active
+  </a>
+  <a href="/admin/clients/?status=inactive"
+     class="btn {% if status_filter == 'inactive' %}btn-primary{% else %}btn-secondary{% endif %}">
+    Pending / Revoked
+  </a>
+  <a href="/admin/clients/?status=all"
+     class="btn {% if status_filter == 'all' %}btn-primary{% else %}btn-secondary{% endif %}">
+    All
+  </a>
+</div>
+
 {% if clients %}
 <form method="post" action="/admin/clients/bulk-delete" id="bulk-form"
       onsubmit="return confirm('Delete ' + document.querySelectorAll('.row-check:checked').length + ' client(s)? This cannot be undone.')">
@@ -53,6 +68,8 @@
         <td>
           {% if client.is_active %}
             <span class="badge badge-active">Active</span>
+          {% elif not client.portal_password_hash %}
+            <span class="badge badge-inactive" style="background:#7A5C00;color:#FFD966">Pending</span>
           {% else %}
             <span class="badge badge-inactive">Revoked</span>
           {% endif %}

@@ -123,9 +123,15 @@ async def dashboard(request: Request, _: str = Depends(_require_admin)):
 # ── Client list ───────────────────────────────────────────────────────────────
 
 @router.get("/clients/", response_class=HTMLResponse)
-async def list_clients(request: Request, _: str = Depends(_require_admin)):
+async def list_clients(request: Request, status: str = "active", _: str = Depends(_require_admin)):
     db = get_db()
-    result = db.table("oauth_clients").select("*").order("created_at", desc=True).execute()
+    query = db.table("oauth_clients").select("*").order("created_at", desc=True)
+    if status == "active":
+        query = query.eq("is_active", True)
+    elif status == "inactive":
+        query = query.eq("is_active", False)
+    # "all" — no filter
+    result = query.execute()
     clients = result.data or []
 
     # Attach total call count to each client
@@ -138,7 +144,7 @@ async def list_clients(request: Request, _: str = Depends(_require_admin)):
     return templates.TemplateResponse(
         request=request,
         name="clients_list.html",
-        context={"clients": clients},
+        context={"clients": clients, "status_filter": status},
     )
 
 
