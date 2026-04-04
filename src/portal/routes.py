@@ -188,8 +188,25 @@ async def setup_password_get(request: Request, token: str = ""):
     client = _get_client(client_id)
     return templates.TemplateResponse(
         request=request, name="portal_setup_password.html",
-        context={"token": token, "username": client.get("portal_username", ""), "error": None},
+        context={"token": token, "username": client.get("portal_username", ""), "client_id": client_id, "error": None},
     )
+
+
+@router.get("/check-username")
+async def check_username(username: str = Query(...), exclude_client_id: Optional[str] = Query(None)):
+    """JSON endpoint: returns {available: bool} for live username availability check."""
+    identifier = username.strip().lower()
+    if not identifier or " " in identifier:
+        return JSONResponse({"available": False})
+    db = get_db()
+    result = db.table("oauth_clients").select("client_id").eq("portal_username", identifier).eq("is_active", True).limit(1).execute()
+    if result.data:
+        taken_by = result.data[0]["client_id"]
+        # Allow if the only match is the current client (re-setting up their own account)
+        if exclude_client_id and taken_by == exclude_client_id:
+            return JSONResponse({"available": True})
+        return JSONResponse({"available": False})
+    return JSONResponse({"available": True})
 
 
 @router.post("/setup-password", response_class=HTMLResponse)
@@ -209,17 +226,25 @@ async def setup_password_post(
     if " " in username:
         return templates.TemplateResponse(
             request=request, name="portal_setup_password.html",
-            context={"token": token, "username": username, "error": "Username cannot contain spaces"},
+            context={"token": token, "username": username, "client_id": client_id, "error": "Username cannot contain spaces"},
+        )
+    # Check uniqueness (exclude the current client's own existing username)
+    db = get_db()
+    taken = db.table("oauth_clients").select("client_id").eq("portal_username", username.strip().lower()).eq("is_active", True).limit(1).execute()
+    if taken.data and taken.data[0]["client_id"] != client_id:
+        return templates.TemplateResponse(
+            request=request, name="portal_setup_password.html",
+            context={"token": token, "username": username, "client_id": client_id, "error": "Username is already taken. Please choose another."},
         )
     if password != password_confirm:
         return templates.TemplateResponse(
             request=request, name="portal_setup_password.html",
-            context={"token": token, "username": username, "error": "Passwords do not match"},
+            context={"token": token, "username": username, "client_id": client_id, "error": "Passwords do not match"},
         )
     if len(password) < 8:
         return templates.TemplateResponse(
             request=request, name="portal_setup_password.html",
-            context={"token": token, "username": username, "error": "Password must be at least 8 characters"},
+            context={"token": token, "username": username, "client_id": client_id, "error": "Password must be at least 8 characters"},
         )
 
     db = get_db()
