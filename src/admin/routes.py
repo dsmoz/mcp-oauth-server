@@ -765,8 +765,8 @@ async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_
     else:
         new_published = not entry["is_published"]
         update: dict = {"is_published": new_published}
-        # Auto-refresh description when publishing (not unpublishing) and description is empty
-        if new_published and not entry.get("description"):
+        # Auto-refresh description when publishing (not unpublishing)
+        if new_published:
             description = await _auto_describe_mcp(
                 entry["upstream_url"], entry.get("upstream_api_key", ""), entry["name"]
             )
@@ -774,6 +774,20 @@ async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_
                 update["description"] = description
         db.table("mcp_catalogue").update(update).eq("slug", slug).execute()
 
+    return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+@router.post("/catalogue/{slug}/refresh-description", response_class=HTMLResponse)
+async def refresh_description(request: Request, slug: str, _: str = Depends(_require_admin)):
+    db = get_db()
+    entry = _get_catalogue_row(db, slug)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    description = await _auto_describe_mcp(
+        entry["upstream_url"], entry.get("upstream_api_key", ""), entry["name"]
+    )
+    if description:
+        db.table("mcp_catalogue").update({"description": description}).eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
 

@@ -72,6 +72,11 @@
             {% if e.is_published %}Unpublish{% else %}Publish{% endif %}
           </button>
         </form>
+        <form method="post" action="/admin/catalogue/{{ e.slug }}/refresh-description" style="display:inline">
+          <button type="submit" class="btn btn-secondary" title="Regenerate description from tool list">
+            <i class="ph-light ph-arrows-clockwise"></i>
+          </button>
+        </form>
         {% if not e.from_railway %}
         <form method="post" action="/admin/catalogue/{{ e.slug }}/delete" style="display:inline"
               onsubmit="return confirm('Delete {{ e.name }}?')">
