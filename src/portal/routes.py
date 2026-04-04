@@ -478,21 +478,12 @@ async def portal_setup(request: Request, client_id: str = Depends(_require_porta
         '}'
     )
 
-    chatgpt_config = (
-        f"Authorization URL : {settings.OAUTH_ISSUER_URL}/oauth/authorize\n"
-        f"Token URL         : {settings.OAUTH_ISSUER_URL}/oauth/token\n"
-        f"Client ID         : {client_id}\n"
-        f"Client Secret     : <your-client-secret>\n"
-        f"Scope             : mcp"
-    )
-
     return templates.TemplateResponse(
         request=request, name="portal_setup.html", context={
             "client": client,
             "active_nav": "setup",
             "gateway_url": gateway_url,
             "claude_config": claude_config,
-            "chatgpt_config": chatgpt_config,
         }
     )
 

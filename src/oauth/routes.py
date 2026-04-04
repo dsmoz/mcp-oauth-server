@@ -382,7 +382,6 @@ async def register_submit(
             contact_email=contact_email,
             company_name=company_name,
             client_id=client_id,
-            raw_secret=raw_secret,
             issuer_url=settings.OAUTH_ISSUER_URL,
             setup_token=setup_token,
         )
