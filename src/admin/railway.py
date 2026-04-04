@@ -41,19 +41,15 @@ query ProjectServices($projectId: String!) {
 """
 
 
-async def fetch_railway_services(token: str, project_id: str) -> list[dict]:
-    """Return list of {id, name, slug, domain, upstream_url} for every Railway service."""
-    if not token or not project_id:
-        return []
-
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(
-            _RAILWAY_GQL,
-            json={"query": _SERVICES_QUERY, "variables": {"projectId": project_id}},
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        )
-        resp.raise_for_status()
-        data = resp.json()
+async def _fetch_project_services(client: httpx.AsyncClient, token: str, project_id: str) -> list[dict]:
+    """Fetch services for a single Railway project."""
+    resp = await client.post(
+        _RAILWAY_GQL,
+        json={"query": _SERVICES_QUERY, "variables": {"projectId": project_id}},
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    resp.raise_for_status()
+    data = resp.json()
 
     if data.get("errors"):
         raise ValueError(data["errors"][0].get("message", "GraphQL error"))
@@ -94,3 +90,35 @@ async def fetch_railway_services(token: str, project_id: str) -> list[dict]:
         })
 
     return services
+
+
+async def fetch_railway_services(token: str, project_id: str, project_ids: str = "") -> list[dict]:
+    """Return list of {id, name, slug, domain, upstream_url} for every Railway service.
+
+    project_ids: comma-separated list of project IDs (overrides project_id when set).
+    project_id: single project ID (legacy, used when project_ids is empty).
+    """
+    if not token:
+        return []
+
+    # Build the list of project IDs to query
+    if project_ids:
+        ids = [p.strip() for p in project_ids.split(",") if p.strip()]
+    elif project_id:
+        ids = [project_id]
+    else:
+        return []
+
+    all_services: list[dict] = []
+    seen_slugs: set[str] = set()
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        for pid in ids:
+            services = await _fetch_project_services(client, token, pid)
+            for svc in services:
+                # Deduplicate by slug — first project wins
+                if svc["slug"] not in seen_slugs:
+                    seen_slugs.add(svc["slug"])
+                    all_services.append(svc)
+
+    return all_services

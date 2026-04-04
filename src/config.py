@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "change-me-portal-secret"
     RAILWAY_API_TOKEN: str = ""
     RAILWAY_PROJECT_ID: str = ""
+    RAILWAY_PROJECT_IDS: str = ""  # Comma-separated; overrides RAILWAY_PROJECT_ID when set
     TELEGRAM_WEBHOOK_SECRET: str = ""
 
 

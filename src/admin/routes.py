@@ -583,7 +583,8 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
         try:
             from src.admin.railway import fetch_railway_services
             railway_services = await fetch_railway_services(
-                settings.RAILWAY_API_TOKEN, settings.RAILWAY_PROJECT_ID
+                settings.RAILWAY_API_TOKEN, settings.RAILWAY_PROJECT_ID,
+                project_ids=settings.RAILWAY_PROJECT_IDS,
             )
         except Exception as exc:
             railway_error = str(exc)
@@ -696,7 +697,10 @@ async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_
         settings = get_settings()
         if settings.RAILWAY_API_TOKEN and settings.RAILWAY_PROJECT_ID:
             from src.admin.railway import fetch_railway_services
-            services = await fetch_railway_services(settings.RAILWAY_API_TOKEN, settings.RAILWAY_PROJECT_ID)
+            services = await fetch_railway_services(
+                settings.RAILWAY_API_TOKEN, settings.RAILWAY_PROJECT_ID,
+                project_ids=settings.RAILWAY_PROJECT_IDS,
+            )
             svc = next((s for s in services if s["slug"] == slug), None)
             if svc is None:
                 raise HTTPException(status_code=404, detail="Not found")
