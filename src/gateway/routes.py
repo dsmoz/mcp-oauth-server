@@ -15,10 +15,13 @@ import sys
 import time
 from typing import Any
 
+import anyio
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
+from mcp.server.streamable_http import StreamableHTTPServerTransport
 from mcp import types
 
 from src.config import get_settings
@@ -363,3 +366,35 @@ async def gateway_messages(client_id: str, request: Request):
 
     transport = _get_transport(client_id)
     await transport.handle_post_message(request.scope, request.receive, request._send)
+
+
+@router.api_route("/gateway/{client_id}/mcp", methods=["GET", "POST", "DELETE"])
+async def gateway_streamable_http(client_id: str, request: Request):
+    """Streamable HTTP transport — used by Claude Desktop connector UI (MCP spec 2025-03-26)."""
+    token = _get_bearer(request)
+    if not token:
+        return _unauth_response(request)
+
+    provider = SupabaseOAuthProvider()
+    at = provider.load_access_token(token)
+    if at is None:
+        return _unauth_response(request)
+
+    actual_client_id = at.client_id
+    enabled_mcps = _load_enabled_mcps(actual_client_id)
+    mcp_server = _build_mcp_server(actual_client_id, enabled_mcps)
+
+    transport = StreamableHTTPServerTransport(mcp_session_id=None)
+
+    async def run_server(read_stream, write_stream):
+        await mcp_server.run(
+            read_stream,
+            write_stream,
+            mcp_server.create_initialization_options(),
+        )
+
+    async with transport.connect() as (read_stream, write_stream):
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(run_server, read_stream, write_stream)
+            await transport.handle_request(request.scope, request.receive, request._send)
+            tg.cancel_scope.cancel()

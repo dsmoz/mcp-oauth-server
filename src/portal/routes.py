@@ -463,7 +463,9 @@ async def portal_setup(request: Request, client_id: str = Depends(_require_porta
         raise HTTPException(status_code=401, detail="Client not found")
 
     from src.config import get_settings
-    gateway_url = f"{get_settings().OAUTH_ISSUER_URL}/gateway/{client_id}"
+    settings = get_settings()
+    gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{client_id}"
+    streamable_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{client_id}/mcp"
     # Show newly generated secret if just rotated (passed via query param, shown once)
     new_secret = request.query_params.get("secret")
 
@@ -472,6 +474,7 @@ async def portal_setup(request: Request, client_id: str = Depends(_require_porta
             "client": client,
             "active_nav": "setup",
             "gateway_url": gateway_url,
+            "streamable_url": streamable_url,
             "client_id": client_id,
             "new_secret": new_secret,
         }
