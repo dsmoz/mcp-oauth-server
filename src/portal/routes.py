@@ -248,21 +248,24 @@ async def forgot_password_get(request: Request):
 @router.post("/forgot-password", response_class=HTMLResponse)
 async def forgot_password_post(request: Request, email: str = Form(...)):
     db = get_db()
-    result = db.table("oauth_clients").select("client_id,portal_username,contact_name,contact_email").eq("contact_email", email.strip().lower()).eq("is_active", True).limit(1).execute()
+    result = db.table("oauth_clients").select("client_id,portal_username").eq("portal_username", email.strip().lower()).eq("is_active", True).limit(1).execute()
     # Always show the same "sent" page to prevent email enumeration
     if result.data:
         client = result.data[0]
         raw = create_setup_token(client["client_id"])
         from src.config import get_settings as _gs
+        from src import email as em
         issuer_url = _gs().OAUTH_ISSUER_URL
         reset_url = f"{issuer_url}/portal/reset-password?token={raw}"
-        import asyncio as _asyncio
-        from src import email as em
-        _asyncio.create_task(em.send_password_reset_email(
-            contact_name=client.get("contact_name") or client.get("portal_username") or "there",
-            contact_email=email.strip().lower(),
-            reset_url=reset_url,
-        ))
+        try:
+            await em.send_password_reset_email(
+                contact_name=client.get("portal_username") or "there",
+                contact_email=email.strip().lower(),
+                reset_url=reset_url,
+            )
+        except Exception as exc:
+            import sys
+            print(f"WARNING: password reset email failed: {exc}", file=sys.stderr)
     return templates.TemplateResponse(
         request=request, name="portal_forgot_password.html",
         context={"sent": True, "error": None},

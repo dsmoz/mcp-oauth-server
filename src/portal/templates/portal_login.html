@@ -97,8 +97,8 @@
 
   <form method="post" action="/portal/login{% if next_session %}?next_session={{ next_session }}{% endif %}">
     <div class="form-group">
-      <label for="username">Username</label>
-      <input type="text" id="username" name="username" required autocomplete="username" autofocus>
+      <label for="username">Email</label>
+      <input type="email" id="username" name="username" required autocomplete="username" autofocus>
     </div>
     <div class="form-group">
       <label for="password">Password</label>
