@@ -254,25 +254,137 @@ async def consent_status(session: str):
 
 @router.get("/consent/complete")
 async def consent_complete(session: str):
-    """Server-side redirect after approval — ensures the browser follows the OAuth callback."""
+    """
+    Confirmation page shown after approval.
+    Attempts the OAuth callback redirect automatically via meta-refresh.
+    If the webview blocks it, shows instructions to close the window.
+    """
     provider = _provider()
     approved = provider.get_completed_code_for_session(session)
     if not approved:
-        return HTMLResponse("<h1>Session not found or expired.</h1>", status_code=400)
+        return HTMLResponse("""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Session Expired</title>
+<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#060E10;color:#fff}
+.card{background:#0f1e20;border-radius:12px;padding:2.5rem;max-width:400px;text-align:center}
+h1{color:#E8500A;font-size:1.2rem}p{color:#91BCC1;font-size:0.875rem}</style></head>
+<body><div class="card"><h1>Session Expired</h1>
+<p>This authorization session has expired or was already used. Please restart the connection from Claude Desktop.</p>
+</div></body></html>""", status_code=400)
 
     redirect_uri = approved.get("redirect_uri")
     code = approved["code"]
     state = approved.get("state")
 
+    # Clean up immediately — one-time use
+    provider._approved_redirects.pop(session, None)
+
     if not redirect_uri:
-        return HTMLResponse("<h1>No redirect URI configured for this client.</h1>", status_code=400)
+        return HTMLResponse("""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Authorized</title>
+<style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#060E10;color:#fff}
+.card{background:#0f1e20;border-radius:12px;padding:2.5rem;max-width:400px;text-align:center}
+h1{color:#2ECC71;font-size:1.2rem}p{color:#91BCC1;font-size:0.875rem}</style></head>
+<body><div class="card"><h1>✓ Authorization Complete</h1>
+<p>You can close this window and return to Claude Desktop.</p>
+</div></body></html>""")
 
     sep = "&" if "?" in redirect_uri else "?"
     location = f"{redirect_uri}{sep}code={code}"
     if state:
         location += f"&state={state}"
 
-    return RedirectResponse(url=location, status_code=302)
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="1; url={location}">
+  <title>Authorization Complete — DS-MOZ Intelligence</title>
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: 'Avenir Next', 'Avenir', 'Segoe UI', Arial, sans-serif;
+      background: #060E10;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }}
+    .card {{
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 2.5rem;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 16px 56px rgba(0,0,0,0.6);
+      text-align: center;
+    }}
+    .brand {{
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #FF5E00;
+      margin-bottom: 2rem;
+    }}
+    .checkmark {{
+      width: 56px;
+      height: 56px;
+      background: #E8F8F0;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+      font-size: 1.75rem;
+    }}
+    h1 {{
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #0A1C20;
+      margin-bottom: 0.75rem;
+    }}
+    .subtitle {{
+      font-size: 0.875rem;
+      color: #5A8A90;
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }}
+    .close-note {{
+      font-size: 0.8rem;
+      color: #91BCC1;
+      background: #F0F7F8;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-top: 1rem;
+    }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">DS-MOZ Intelligence</div>
+    <div class="checkmark">✓</div>
+    <h1>Authorization Complete</h1>
+    <p class="subtitle">
+      Returning you to Claude Desktop&hellip;<br>
+      If nothing happens, click the button below.
+    </p>
+    <a href="{location}" style="display:inline-block;background:#115E67;color:#fff;padding:0.65rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.875rem;">
+      Return to Claude Desktop
+    </a>
+    <div class="close-note">
+      If the button doesn't work, you can close this window and return to Claude Desktop manually.
+    </div>
+  </div>
+  <script>
+    // Attempt redirect after short delay — falls back gracefully if webview blocks it
+    setTimeout(function() {{
+      window.location.href = "{location}";
+    }}, 800);
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(html)
 
 
 @router.post("/telegram/webhook")

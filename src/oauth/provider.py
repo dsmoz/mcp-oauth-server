@@ -383,7 +383,12 @@ class SupabaseOAuthProvider:
         Cleanest approach: store approved redirect in a transient dict in provider memory
         (acceptable since we have a single process on Railway).
         """
-        return self._approved_redirects.get(session_id)
+        import time
+        entry = self._approved_redirects.get(session_id)
+        if entry and (time.time() - entry.get("approved_at", 0)) > 900:
+            self._approved_redirects.pop(session_id, None)
+            return None
+        return entry
 
     # In-process store for approved redirect info (single-process Railway deployment)
     @property
