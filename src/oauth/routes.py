@@ -268,7 +268,7 @@ async def consent_complete(session: str):
 .card{background:#0f1e20;border-radius:12px;padding:2.5rem;max-width:400px;text-align:center}
 h1{color:#E8500A;font-size:1.2rem}p{color:#91BCC1;font-size:0.875rem}</style></head>
 <body><div class="card"><h1>Session Expired</h1>
-<p>This authorization session has expired or was already used. Please restart the connection from Claude Desktop.</p>
+<p>This authorization session has expired or was already used. Please restart the connection from your MCP client.</p>
 </div></body></html>""", status_code=400)
 
     redirect_uri = approved.get("redirect_uri")
@@ -285,7 +285,7 @@ h1{color:#E8500A;font-size:1.2rem}p{color:#91BCC1;font-size:0.875rem}</style></h
 .card{background:#0f1e20;border-radius:12px;padding:2.5rem;max-width:400px;text-align:center}
 h1{color:#2ECC71;font-size:1.2rem}p{color:#91BCC1;font-size:0.875rem}</style></head>
 <body><div class="card"><h1>✓ Authorization Complete</h1>
-<p>You can close this window and return to Claude Desktop.</p>
+<p>You can close this window and return to your MCP client.</p>
 </div></body></html>""")
 
     sep = "&" if "?" in redirect_uri else "?"
@@ -366,14 +366,14 @@ h1{color:#2ECC71;font-size:1.2rem}p{color:#91BCC1;font-size:0.875rem}</style></h
     <div class="checkmark">✓</div>
     <h1>Authorization Complete</h1>
     <p class="subtitle">
-      Returning you to Claude Desktop&hellip;<br>
+      Returning you to your MCP client&hellip;<br>
       If nothing happens, click the button below.
     </p>
     <a href="{location}" style="display:inline-block;background:#115E67;color:#fff;padding:0.65rem 1.5rem;border-radius:8px;text-decoration:none;font-weight:600;font-size:0.875rem;">
-      Return to Claude Desktop
+      Return to your MCP client
     </a>
     <div class="close-note">
-      If the button doesn't work, you can close this window and return to Claude Desktop manually.
+      If the button doesn't work, close this window and return to your MCP client manually.
     </div>
   </div>
   <script>
