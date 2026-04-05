@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from src.config import get_settings
-from src.crypto import generate_client_id, generate_token, hash_secret, now_unix, verify_secret
+from src.crypto import compute_dcr_fingerprint, generate_client_id, generate_token, hash_secret, now_unix, verify_secret
 from src.db import get_db
 from src import email as em
 from src.limiter import limiter
@@ -431,6 +431,45 @@ async def dynamic_client_registration(request: Request):
     scope = body.get("scope", "mcp")
 
     db = get_db()
+    fingerprint = compute_dcr_fingerprint(client_name, redirect_uris)
+
+    # --- Dedup: return existing client if fingerprint matches ---
+    existing = None
+    if fingerprint:
+        result = (
+            db.table("oauth_clients")
+            .select("client_id, created_at")
+            .eq("dcr_fingerprint", fingerprint)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        existing = result.data[0] if result.data else None
+
+    if existing:
+        # Rotate secret so the caller gets a working credential
+        raw_secret = generate_token(32)
+        secret_hash = hash_secret(raw_secret)
+        db.table("oauth_clients").update({
+            "client_secret_hash": secret_hash,
+        }).eq("client_id", existing["client_id"]).execute()
+
+        print(f"DCR: dedup hit — returning {existing['client_id']} ({client_name})", file=sys.stderr)
+
+        response_body = {
+            **body,
+            "client_id": existing["client_id"],
+            "client_secret": raw_secret,
+            "client_id_issued_at": int(
+                __import__("datetime").datetime.fromisoformat(
+                    existing["created_at"].replace("Z", "+00:00")
+                ).timestamp()
+            ) if existing.get("created_at") else now_unix(),
+            "client_secret_expires_at": 0,
+        }
+        return JSONResponse(response_body, status_code=200)
+
+    # --- New client registration ---
     client_id = generate_client_id()
     raw_secret = generate_token(32)
     secret_hash = hash_secret(raw_secret)
@@ -439,18 +478,46 @@ async def dynamic_client_registration(request: Request):
     published = db.table("mcp_catalogue").select("slug").eq("is_published", True).execute()
     allowed_mcps = [r["slug"] for r in (published.data or [])]
 
-    db.table("oauth_clients").insert({
-        "client_id": client_id,
-        "client_secret_hash": secret_hash,
-        "client_name": client_name,
-        "redirect_uris": redirect_uris,
-        "grant_types": grant_types,
-        "scope": scope if isinstance(scope, str) else " ".join(scope),
-        "allowed_mcp_resources": allowed_mcps,
-        "created_by": f"dynamic:{client_name}",
-        "is_active": True,
-        "credit_balance": 0,
-    }).execute()
+    try:
+        db.table("oauth_clients").insert({
+            "client_id": client_id,
+            "client_secret_hash": secret_hash,
+            "client_name": client_name,
+            "redirect_uris": redirect_uris,
+            "grant_types": grant_types,
+            "scope": scope if isinstance(scope, str) else " ".join(scope),
+            "allowed_mcp_resources": allowed_mcps,
+            "created_by": f"dynamic:{client_name}",
+            "is_active": True,
+            "credit_balance": 0,
+            "dcr_fingerprint": fingerprint,
+        }).execute()
+    except Exception as exc:
+        # Race condition: another request inserted the same fingerprint concurrently
+        if fingerprint and "uq_dcr_fingerprint" in str(exc):
+            result = (
+                db.table("oauth_clients")
+                .select("client_id, created_at")
+                .eq("dcr_fingerprint", fingerprint)
+                .eq("is_active", True)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                winner = result.data[0]
+                raw_secret = generate_token(32)
+                db.table("oauth_clients").update({
+                    "client_secret_hash": hash_secret(raw_secret),
+                }).eq("client_id", winner["client_id"]).execute()
+                response_body = {
+                    **body,
+                    "client_id": winner["client_id"],
+                    "client_secret": raw_secret,
+                    "client_id_issued_at": now_unix(),
+                    "client_secret_expires_at": 0,
+                }
+                return JSONResponse(response_body, status_code=200)
+        raise
 
     print(f"DCR: registered {client_id} ({client_name})", file=sys.stderr)
 

@@ -14,6 +14,7 @@ class OAuthClient(BaseModel):
     created_by: Optional[str] = None
     is_active: bool = True
     credit_balance: float = 0.0
+    dcr_fingerprint: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
