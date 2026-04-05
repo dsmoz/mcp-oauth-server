@@ -76,8 +76,13 @@ async def call_upstream_tool(
     tool_name: str,
     arguments: dict[str, Any],
     api_key: str = "",
+    client_id: str = "",
 ) -> str:
-    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    if client_id:
+        headers["X-Client-ID"] = client_id
 
     if _is_sse(upstream_url):
         async with sse_client(upstream_url, headers=headers) as (read, write):

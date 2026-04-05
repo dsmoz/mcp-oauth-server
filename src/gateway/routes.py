@@ -260,7 +260,8 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                         return [types.TextContent(type="text", text=text)]
                 try:
                     text = await call_upstream_tool(mcp["upstream_url"], tool_name, tool_args,
-                                                    mcp.get("upstream_api_key", ""))
+                                                    mcp.get("upstream_api_key", ""),
+                                                    client_id=client_id)
                     if credit_cost > 0:
                         _deduct_credits(client_id, credit_cost)
                 except Exception as exc:
