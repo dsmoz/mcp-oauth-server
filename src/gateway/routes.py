@@ -80,8 +80,8 @@ def _log_tool_call(client_id: str, mcp_slug: str, tool_name: str, credits_used: 
             "endpoint": f"gateway/{mcp_slug}/{tool_name}",
             "credits_used": credits_used,
         }).execute()
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"WARNING: usage log failed for {client_id}: {exc}", file=sys.stderr)
 
 
 def _get_all_published_mcps() -> list[dict]:
@@ -258,6 +258,12 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                                                     mcp.get("upstream_api_key", ""),
                                                     client_id=client_id)
                 except Exception as exc:
+                    print(f"GATEWAY: upstream error {slug}/{tool_name}: {exc}", file=sys.stderr)
+                    try:
+                        import sentry_sdk
+                        sentry_sdk.capture_exception(exc)
+                    except Exception:
+                        pass
                     text = json.dumps({"error": str(exc)})
                 _log_tool_call(client_id, slug, tool_name, credits_used=credit_cost)
 
@@ -361,6 +367,11 @@ async def _gateway_asgi(scope, receive, send):
             tg.cancel_scope.cancel()
     except Exception as exc:
         print(f"GATEWAY: exception: {type(exc).__name__}: {exc}", file=sys.stderr)
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_exception(exc)
+        except Exception:
+            pass
         if not response_started:
             error = JSONResponse(
                 content={"error": "internal_error", "error_description": str(exc)},
