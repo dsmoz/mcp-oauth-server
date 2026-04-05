@@ -368,7 +368,7 @@ async def register_submit(
         "use_case": use_case,
         "redirect_uris_raw": redirect_uris_raw.strip(),
         "status": "approved",
-        "reviewed_at": "now()",
+        "reviewed_at": __import__("datetime").datetime.utcnow().isoformat(),
         "reviewed_by": "self-service",
     }).execute()
     request_id = reg_result.data[0]["id"] if reg_result.data else "unknown"
@@ -447,19 +447,13 @@ async def dynamic_client_registration(request: Request):
         existing = result.data[0] if result.data else None
 
     if existing:
-        # Rotate secret so the caller gets a working credential
-        raw_secret = generate_token(32)
-        secret_hash = hash_secret(raw_secret)
-        db.table("oauth_clients").update({
-            "client_secret_hash": secret_hash,
-        }).eq("client_id", existing["client_id"]).execute()
-
-        print(f"DCR: dedup hit — returning {existing['client_id']} ({client_name})", file=sys.stderr)
+        # Client already registered — return client_id without rotating the secret.
+        # The caller must use the secret from its original registration.
+        print(f"DCR: dedup hit — returning {existing['client_id']} ({client_name}), secret unchanged", file=sys.stderr)
 
         response_body = {
             **body,
             "client_id": existing["client_id"],
-            "client_secret": raw_secret,
             "client_id_issued_at": int(
                 __import__("datetime").datetime.fromisoformat(
                     existing["created_at"].replace("Z", "+00:00")
@@ -505,14 +499,9 @@ async def dynamic_client_registration(request: Request):
             )
             if result.data:
                 winner = result.data[0]
-                raw_secret = generate_token(32)
-                db.table("oauth_clients").update({
-                    "client_secret_hash": hash_secret(raw_secret),
-                }).eq("client_id", winner["client_id"]).execute()
                 response_body = {
                     **body,
                     "client_id": winner["client_id"],
-                    "client_secret": raw_secret,
                     "client_id_issued_at": now_unix(),
                     "client_secret_expires_at": 0,
                 }

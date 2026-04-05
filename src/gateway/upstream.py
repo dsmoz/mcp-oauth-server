@@ -9,11 +9,17 @@ Supports both transports:
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from typing import Any
 
+import anyio
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamablehttp_client
+
+# Timeouts for upstream MCP connections
+TOOL_CALL_TIMEOUT = 60  # seconds — tool calls may be slow (LLM, indexing)
+TOOL_LIST_TIMEOUT = 15  # seconds — tool discovery should be fast
 
 
 def _is_sse(url: str) -> bool:
@@ -23,16 +29,17 @@ def _is_sse(url: str) -> bool:
 
 async def _list_tools_via_url(url: str, headers: dict) -> list[dict]:
     """Try to fetch tools from a single URL. Raises on failure."""
-    if _is_sse(url):
-        async with sse_client(url, headers=headers) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.list_tools()
-    else:
-        async with streamablehttp_client(url, headers=headers) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.list_tools()
+    with anyio.fail_after(TOOL_LIST_TIMEOUT):
+        if _is_sse(url):
+            async with sse_client(url, headers=headers) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    result = await session.list_tools()
+        else:
+            async with streamablehttp_client(url, headers=headers) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    result = await session.list_tools()
 
     return [
         {
@@ -87,16 +94,17 @@ async def call_upstream_tool(
     import sys as _sys
     _sys.stderr.write(f"UPSTREAM: {tool_name} headers={list(headers.keys())} X-Client-ID={headers.get('X-Client-ID', 'NOT SET')}\n")
 
-    if _is_sse(upstream_url):
-        async with sse_client(upstream_url, headers=headers) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.call_tool(tool_name, arguments=arguments)
-    else:
-        async with streamablehttp_client(upstream_url, headers=headers) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                result = await session.call_tool(tool_name, arguments=arguments)
+    with anyio.fail_after(TOOL_CALL_TIMEOUT):
+        if _is_sse(upstream_url):
+            async with sse_client(upstream_url, headers=headers) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    result = await session.call_tool(tool_name, arguments=arguments)
+        else:
+            async with streamablehttp_client(upstream_url, headers=headers) as (read, write, _):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    result = await session.call_tool(tool_name, arguments=arguments)
 
     if result.content:
         parts = []

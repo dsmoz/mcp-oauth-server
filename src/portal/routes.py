@@ -22,6 +22,7 @@ templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 _SESSION_MAX_AGE = 60 * 60 * 8  # 8 hours
 _COOKIE_NAME = "portal_session"
 _SETUP_TOKEN_TTL_HOURS = 24
+_COOKIE_SECURE = get_settings().OAUTH_ISSUER_URL.startswith("https://")
 
 
 def _oauth_success_page(redirect: str | None = None) -> str:
@@ -208,11 +209,11 @@ async def portal_login_post(
         response = _complete_oauth_session(next_session, client["client_id"])
         if response is None:
             response = RedirectResponse(url="/portal/?oauth_expired=1", status_code=303)
-        response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
+        response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE, secure=_COOKIE_SECURE)
         return response
 
     response = RedirectResponse(url="/portal/", status_code=303)
-    response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE)
+    response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE, secure=_COOKIE_SECURE)
     return response
 
 

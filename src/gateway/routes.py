@@ -63,16 +63,14 @@ def _get_credit_cost(mcp_slug: str) -> float:
         return 0.0
 
 
-def _deduct_credits(client_id: str, amount: float) -> None:
-    """Atomically subtract credits from client balance."""
+def _deduct_credits(client_id: str, amount: float) -> float:
+    """Atomically deduct credits via Supabase RPC. Returns new balance or -1 if insufficient."""
     try:
-        db = get_db()
-        row = db.table("oauth_clients").select("credit_balance").eq("client_id", client_id).limit(1).execute()
-        current = float((row.data or [{}])[0].get("credit_balance") or 0)
-        new_balance = max(0.0, current - amount)
-        db.table("oauth_clients").update({"credit_balance": new_balance}).eq("client_id", client_id).execute()
-    except Exception:
-        pass
+        result = get_db().rpc("deduct_credits", {"p_client_id": client_id, "p_amount": amount}).execute()
+        return float(result.data) if result.data is not None else -1
+    except Exception as exc:
+        print(f"WARNING: credit deduction failed for {client_id}: {exc}", file=sys.stderr)
+        return -1
 
 
 def _log_tool_call(client_id: str, mcp_slug: str, tool_name: str, credits_used: float = 0.0) -> None:
@@ -248,14 +246,10 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
             else:
                 mcp = mcp_by_slug[slug]
                 credit_cost = _get_credit_cost(slug)
-                # Credit gate — check balance before calling upstream
+                # Atomic credit gate — deduct before calling upstream (refund not implemented)
                 if credit_cost > 0:
-                    try:
-                        bal_row = get_db().table("oauth_clients").select("credit_balance").eq("client_id", client_id).limit(1).execute()
-                        balance = float((bal_row.data or [{}])[0].get("credit_balance") or 0)
-                    except Exception:
-                        balance = 0.0
-                    if balance < credit_cost:
+                    new_balance = _deduct_credits(client_id, credit_cost)
+                    if new_balance < 0:
                         text = json.dumps({"error": "Insufficient credits. Visit your portal to buy more credits."})
                         return [types.TextContent(type="text", text=text)]
                 try:
@@ -263,8 +257,6 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                     text = await call_upstream_tool(mcp["upstream_url"], tool_name, tool_args,
                                                     mcp.get("upstream_api_key", ""),
                                                     client_id=client_id)
-                    if credit_cost > 0:
-                        _deduct_credits(client_id, credit_cost)
                 except Exception as exc:
                     text = json.dumps({"error": str(exc)})
                 _log_tool_call(client_id, slug, tool_name, credits_used=credit_cost)
@@ -323,8 +315,15 @@ async def _gateway_asgi(scope, receive, send):
 
     provider = SupabaseOAuthProvider()
     at = provider.load_access_token(token)
-    if at is None:
-        print(f"GATEWAY: invalid token on {request.method} {path}", file=sys.stderr)
+    if at is None or at.is_revoked:
+        print(f"GATEWAY: invalid/revoked token on {request.method} {path}", file=sys.stderr)
+        response = _unauth_response(request)
+        await response(scope, receive, send)
+        return
+
+    from src.crypto import now_unix
+    if at.expires_at and at.expires_at < now_unix():
+        print(f"GATEWAY: expired token for {at.client_id} on {request.method} {path}", file=sys.stderr)
         response = _unauth_response(request)
         await response(scope, receive, send)
         return

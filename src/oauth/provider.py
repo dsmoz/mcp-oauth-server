@@ -21,14 +21,11 @@ class SupabaseOAuthProvider:
         self.db = get_db()
 
     def _single(self, table: str, **filters) -> dict | None:
-        try:
-            q = self.db.table(table).select("*")
-            for k, v in filters.items():
-                q = q.eq(k, v)
-            result = q.limit(1).execute()
-            return result.data[0] if result.data else None
-        except Exception:
-            return None
+        q = self.db.table(table).select("*")
+        for k, v in filters.items():
+            q = q.eq(k, v)
+        result = q.limit(1).execute()
+        return result.data[0] if result.data else None
 
     # ── Clients ──────────────────────────────────────────────────────────────
 
