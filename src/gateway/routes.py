@@ -259,6 +259,7 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                         text = json.dumps({"error": "Insufficient credits. Visit your portal to buy more credits."})
                         return [types.TextContent(type="text", text=text)]
                 try:
+                    print(f"GATEWAY: call_upstream_tool {slug}/{tool_name} client_id={client_id!r} url={mcp['upstream_url']}", file=sys.stderr)
                     text = await call_upstream_tool(mcp["upstream_url"], tool_name, tool_args,
                                                     mcp.get("upstream_api_key", ""),
                                                     client_id=client_id)

@@ -84,6 +84,9 @@ async def call_upstream_tool(
     if client_id:
         headers["X-Client-ID"] = client_id
 
+    import sys as _sys
+    _sys.stderr.write(f"UPSTREAM: {tool_name} headers={list(headers.keys())} X-Client-ID={headers.get('X-Client-ID', 'NOT SET')}\n")
+
     if _is_sse(upstream_url):
         async with sse_client(upstream_url, headers=headers) as (read, write):
             async with ClientSession(read, write) as session:
