@@ -104,6 +104,13 @@ async def dashboard(request: Request, _: str = Depends(_require_admin)):
         db.table("oauth_usage_logs").select("*", count="exact").gte("called_at", month_start).execute().count or 0
     )
 
+    # Performance metrics — top endpoints by avg duration (last 30 days)
+    try:
+        thirty_days_ago = (datetime.datetime.utcnow() - datetime.timedelta(days=30)).isoformat() + "Z"
+        perf_stats = db.rpc("usage_stats_by_endpoint", {"p_since": thirty_days_ago}).execute().data or []
+    except Exception:
+        perf_stats = []
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -116,6 +123,7 @@ async def dashboard(request: Request, _: str = Depends(_require_admin)):
             "recent_clients": recent_result.data or [],
             "calls_today": calls_today,
             "calls_month": calls_month,
+            "perf_stats": perf_stats,
         },
     )
 
@@ -222,6 +230,12 @@ async def client_detail(
         .eq("client_id", client_id).execute().count or 0
     )
 
+    # Per-client performance breakdown
+    try:
+        client_perf = db.rpc("usage_stats_for_client", {"p_client_id": client_id}).execute().data or []
+    except Exception:
+        client_perf = []
+
     return templates.TemplateResponse(
         request=request,
         name="client_detail.html",
@@ -231,6 +245,7 @@ async def client_detail(
             "usage_today": usage_today,
             "usage_month": usage_month,
             "usage_total": usage_total,
+            "client_perf": client_perf,
         },
     )
 

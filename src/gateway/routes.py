@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import time
 
 import anyio
 
@@ -73,13 +74,22 @@ def _deduct_credits(client_id: str, amount: float) -> float:
         return -1
 
 
-def _log_tool_call(client_id: str, mcp_slug: str, tool_name: str, credits_used: float = 0.0) -> None:
+def _log_tool_call(
+    client_id: str, mcp_slug: str, tool_name: str,
+    credits_used: float = 0.0, duration_ms: int | None = None,
+    response_bytes: int | None = None,
+) -> None:
     try:
-        get_db().table("oauth_usage_logs").insert({
+        row: dict = {
             "client_id": client_id,
             "endpoint": f"gateway/{mcp_slug}/{tool_name}",
             "credits_used": credits_used,
-        }).execute()
+        }
+        if duration_ms is not None:
+            row["duration_ms"] = duration_ms
+        if response_bytes is not None:
+            row["response_bytes"] = response_bytes
+        get_db().table("oauth_usage_logs").insert(row).execute()
     except Exception as exc:
         print(f"WARNING: usage log failed for {client_id}: {exc}", file=sys.stderr)
 
@@ -252,6 +262,7 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                     if new_balance < 0:
                         text = json.dumps({"error": "Insufficient credits. Visit your portal to buy more credits."})
                         return [types.TextContent(type="text", text=text)]
+                t0 = time.monotonic()
                 try:
                     print(f"GATEWAY: call_upstream_tool {slug}/{tool_name} client_id={client_id!r} url={mcp['upstream_url']}", file=sys.stderr)
                     text = await call_upstream_tool(mcp["upstream_url"], tool_name, tool_args,
@@ -265,7 +276,10 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                     except Exception:
                         pass
                     text = json.dumps({"error": str(exc)})
-                _log_tool_call(client_id, slug, tool_name, credits_used=credit_cost)
+                elapsed_ms = int((time.monotonic() - t0) * 1000)
+                resp_bytes = len(text.encode("utf-8")) if text else 0
+                _log_tool_call(client_id, slug, tool_name, credits_used=credit_cost,
+                               duration_ms=elapsed_ms, response_bytes=resp_bytes)
 
         else:
             text = json.dumps({"error": f"Unknown tool: {name}"})

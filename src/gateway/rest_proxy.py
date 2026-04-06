@@ -8,6 +8,7 @@ X-Client-ID header.
 from __future__ import annotations
 
 import sys
+import time
 from typing import Optional
 
 import httpx
@@ -53,6 +54,25 @@ def _get_scholar_config() -> Optional[dict]:
         .execute()
     )
     return result.data[0] if result.data else None
+
+
+def _log_rest_call(
+    client_id: str, path: str,
+    duration_ms: int | None = None, response_bytes: int | None = None,
+) -> None:
+    try:
+        row: dict = {
+            "client_id": client_id,
+            "endpoint": f"rest_proxy/{path}",
+            "credits_used": 0,
+        }
+        if duration_ms is not None:
+            row["duration_ms"] = duration_ms
+        if response_bytes is not None:
+            row["response_bytes"] = response_bytes
+        get_db().table("oauth_usage_logs").insert(row).execute()
+    except Exception as exc:
+        print(f"WARNING: rest_proxy usage log failed for {client_id}: {exc}", file=sys.stderr)
 
 
 def _unauth() -> JSONResponse:
@@ -111,6 +131,7 @@ async def proxy_plugin_request(request: Request, path: str):
     accept = request.headers.get("accept", "")
     is_sse = "text/event-stream" in accept
 
+    t0 = time.monotonic()
     try:
         if is_sse:
             # Stream SSE responses back to the client
@@ -122,14 +143,19 @@ async def proxy_plugin_request(request: Request, path: str):
                 content=body if body else None,
             )
             upstream_resp = await client.send(upstream_req, stream=True)
+            total_bytes = 0
 
             async def stream_response():
+                nonlocal total_bytes
                 try:
                     async for chunk in upstream_resp.aiter_bytes():
+                        total_bytes += len(chunk)
                         yield chunk
                 finally:
                     await upstream_resp.aclose()
                     await client.aclose()
+                    elapsed_ms = int((time.monotonic() - t0) * 1000)
+                    _log_rest_call(client_id, path, duration_ms=elapsed_ms, response_bytes=total_bytes)
 
             return StreamingResponse(
                 stream_response(),
@@ -148,12 +174,19 @@ async def proxy_plugin_request(request: Request, path: str):
                     headers=upstream_headers,
                     content=body if body else None,
                 )
+                elapsed_ms = int((time.monotonic() - t0) * 1000)
+                resp_bytes = len(upstream_resp.content)
+                _log_rest_call(client_id, path, duration_ms=elapsed_ms, response_bytes=resp_bytes)
                 return JSONResponse(
                     content=upstream_resp.json() if upstream_resp.headers.get("content-type", "").startswith("application/json") else {"raw": upstream_resp.text},
                     status_code=upstream_resp.status_code,
                 )
     except httpx.TimeoutException:
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        _log_rest_call(client_id, path, duration_ms=elapsed_ms)
         return JSONResponse({"error": "Upstream timeout"}, status_code=504)
     except Exception as exc:
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        _log_rest_call(client_id, path, duration_ms=elapsed_ms)
         print(f"REST_PROXY: error proxying {path}: {exc}", file=sys.stderr)
         return JSONResponse({"error": "Proxy error", "detail": str(exc)}, status_code=502)

@@ -43,6 +43,56 @@
   </div>
 </div>
 
+{% if perf_stats %}
+<div class="card">
+  <h2>Endpoint Performance <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 400;">(last 30 days)</span></h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Endpoint</th>
+        <th style="text-align: right;">Calls</th>
+        <th style="text-align: right;">Avg Duration</th>
+        <th style="text-align: right;">Max Duration</th>
+        <th style="text-align: right;">Total Response</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in perf_stats[:15] %}
+      <tr>
+        <td style="font-family: monospace; font-size: 0.8rem;">{{ row.endpoint or "—" }}</td>
+        <td style="text-align: right;">{{ row.call_count }}</td>
+        <td style="text-align: right;">
+          {% if row.avg_duration_ms is not none %}
+            <span style="{% if row.avg_duration_ms|int > 10000 %}color: var(--danger-fg);{% elif row.avg_duration_ms|int > 3000 %}color: var(--amber);{% else %}color: var(--success-fg);{% endif %}">
+              {{ row.avg_duration_ms|int }} ms
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        <td style="text-align: right;">
+          {% if row.max_duration_ms is not none %}
+            <span style="{% if row.max_duration_ms > 30000 %}color: var(--danger-fg);{% elif row.max_duration_ms > 10000 %}color: var(--amber);{% endif %}">
+              {{ row.max_duration_ms }} ms
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        <td style="text-align: right; font-size: 0.8rem;">
+          {% if row.total_response_bytes %}
+            {% if row.total_response_bytes > 1048576 %}
+              {{ "%.1f"|format(row.total_response_bytes / 1048576) }} MB
+            {% elif row.total_response_bytes > 1024 %}
+              {{ "%.1f"|format(row.total_response_bytes / 1024) }} KB
+            {% else %}
+              {{ row.total_response_bytes }} B
+            {% endif %}
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <div class="card">
   <h2>Recent Clients</h2>
   {% if recent_clients %}
