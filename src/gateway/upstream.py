@@ -9,17 +9,26 @@ Supports both transports:
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+import logging
+import os
+import sys
 from typing import Any
 
 import anyio
+import httpx
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamablehttp_client
 
-# Timeouts for upstream MCP connections
-TOOL_CALL_TIMEOUT = 60  # seconds — tool calls may be slow (LLM, indexing)
-TOOL_LIST_TIMEOUT = 15  # seconds — tool discovery should be fast
+logger = logging.getLogger(__name__)
+
+# Timeouts for upstream MCP connections — configurable via env vars
+TOOL_CALL_TIMEOUT = int(os.getenv("MCP_CALL_TIMEOUT", "120"))
+TOOL_LIST_TIMEOUT = int(os.getenv("MCP_LIST_TIMEOUT", "15"))
+
+# Retry configuration for transient failures
+_RETRY_MAX_ATTEMPTS = 2  # 1 original + 1 retry
+_RETRY_BACKOFF_SECONDS = 3
 
 
 def _is_sse(url: str) -> bool:
@@ -73,27 +82,74 @@ async def fetch_tool_list(upstream_url: str, api_key: str = "") -> list[dict]:
             last_exc = exc
             continue
 
-    import logging
-    logging.getLogger(__name__).warning("fetch_tool_list failed for %s: %s", upstream_url, last_exc)
+    logger.warning("fetch_tool_list failed for %s: %s", upstream_url, last_exc)
     return []
 
 
-async def call_upstream_tool(
+def _is_auth_error(exc: Exception) -> bool:
+    """Check whether an exception indicates a 401 Unauthorized from upstream.
+
+    Args:
+        exc: The exception to inspect.
+
+    Returns:
+        True if the exception wraps an HTTP 401 response.
+    """
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 401:
+        return True
+    # The MCP SDK may wrap httpx errors — walk the cause chain
+    cause = exc.__cause__ or exc.__context__
+    while cause is not None:
+        if isinstance(cause, httpx.HTTPStatusError) and cause.response.status_code == 401:
+            return True
+        cause = getattr(cause, "__cause__", None) or getattr(cause, "__context__", None)
+    # Also check the string representation as a last resort (some transports
+    # surface status codes only in the message)
+    msg = str(exc).lower()
+    return "401" in msg and ("unauthorized" in msg or "authentication" in msg)
+
+
+def _is_timeout_error(exc: Exception) -> bool:
+    """Check whether an exception is a transient timeout.
+
+    Args:
+        exc: The exception to inspect.
+
+    Returns:
+        True if the exception represents a timeout that may succeed on retry.
+    """
+    if isinstance(exc, (TimeoutError, anyio.get_cancelled_exc_class())):
+        return True
+    if isinstance(exc, httpx.TimeoutException):
+        return True
+    cause = exc.__cause__ or exc.__context__
+    while cause is not None:
+        if isinstance(cause, (TimeoutError, httpx.TimeoutException)):
+            return True
+        cause = getattr(cause, "__cause__", None) or getattr(cause, "__context__", None)
+    return False
+
+
+async def _do_upstream_call(
     upstream_url: str,
     tool_name: str,
     arguments: dict[str, Any],
-    api_key: str = "",
-    client_id: str = "",
+    headers: dict[str, str],
 ) -> str:
-    headers = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    if client_id:
-        headers["X-Client-ID"] = client_id
+    """Execute a single upstream tool call attempt.
 
-    import sys as _sys
-    _sys.stderr.write(f"UPSTREAM: {tool_name} headers={list(headers.keys())} X-Client-ID={headers.get('X-Client-ID', 'NOT SET')}\n")
+    Args:
+        upstream_url: The upstream MCP server URL.
+        tool_name: Name of the tool to call.
+        arguments: Tool arguments dict.
+        headers: HTTP headers including auth.
 
+    Returns:
+        The concatenated text result from the upstream tool.
+
+    Raises:
+        Exception: Any error from the upstream call (timeout, auth, network).
+    """
     with anyio.fail_after(TOOL_CALL_TIMEOUT):
         if _is_sse(upstream_url):
             async with sse_client(upstream_url, headers=headers) as (read, write):
@@ -117,3 +173,79 @@ async def call_upstream_tool(
                 parts.append(str(block))
         return "\n".join(parts)
     return json.dumps({"result": None})
+
+
+async def call_upstream_tool(
+    upstream_url: str,
+    tool_name: str,
+    arguments: dict[str, Any],
+    api_key: str = "",
+    client_id: str = "",
+) -> str:
+    """Call a tool on an upstream MCP server with retry and error handling.
+
+    Retries once on transient timeouts with backoff. Raises a clear error
+    for 401 auth failures so operators know to refresh the upstream token.
+
+    Args:
+        upstream_url: The upstream MCP server URL.
+        tool_name: Name of the tool to call.
+        arguments: Tool arguments dict.
+        api_key: Bearer token for the upstream server.
+        client_id: Client ID to forward via X-Client-ID header.
+
+    Returns:
+        The text result from the upstream tool.
+
+    Raises:
+        RuntimeError: On 401 auth failure with an actionable message.
+        TimeoutError: When all retry attempts are exhausted.
+        Exception: Other upstream errors.
+    """
+    headers: dict[str, str] = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    if client_id:
+        headers["X-Client-ID"] = client_id
+
+    sys.stderr.write(
+        f"UPSTREAM: {tool_name} headers={list(headers.keys())} "
+        f"X-Client-ID={headers.get('X-Client-ID', 'NOT SET')} "
+        f"timeout={TOOL_CALL_TIMEOUT}s\n"
+    )
+
+    last_exc: Exception | None = None
+    for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
+        try:
+            return await _do_upstream_call(upstream_url, tool_name, arguments, headers)
+
+        except Exception as exc:
+            last_exc = exc
+
+            # 401 — no point retrying, the token is bad
+            if _is_auth_error(exc):
+                msg = (
+                    f"Upstream MCP server at {upstream_url} returned 401 Unauthorized. "
+                    f"The upstream_api_key for this MCP is expired or misconfigured. "
+                    f"Update the upstream_api_key in the mcp_catalogue table and redeploy."
+                )
+                logger.error(msg)
+                raise RuntimeError(msg) from exc
+
+            # Timeout — retry once with backoff
+            if _is_timeout_error(exc) and attempt < _RETRY_MAX_ATTEMPTS:
+                logger.warning(
+                    "Upstream timeout on attempt %d/%d for %s/%s (timeout=%ds). "
+                    "Retrying in %ds...",
+                    attempt, _RETRY_MAX_ATTEMPTS, upstream_url, tool_name,
+                    TOOL_CALL_TIMEOUT, _RETRY_BACKOFF_SECONDS,
+                )
+                await anyio.sleep(_RETRY_BACKOFF_SECONDS)
+                continue
+
+            # Non-retryable or final attempt — re-raise
+            raise
+
+    # Should not reach here, but satisfy type checker
+    assert last_exc is not None
+    raise last_exc

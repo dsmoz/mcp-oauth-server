@@ -62,6 +62,22 @@ async def startup_checks():
     if settings.INTROSPECT_SECRET in ("change-me", ""):
         print("WARNING: INTROSPECT_SECRET is set to default — change before production use!", file=sys.stderr)
 
+    # Validate upstream MCP API keys at startup
+    try:
+        from src.db import get_db
+        published_mcps = get_db().table("mcp_catalogue").select("slug, name, upstream_api_key, upstream_url").eq("is_published", True).execute().data or []
+        for mcp in published_mcps:
+            key = mcp.get("upstream_api_key") or ""
+            if not key.strip():
+                print(f"WARNING: Published MCP '{mcp['slug']}' ({mcp.get('name', '?')}) has no upstream_api_key configured. "
+                      f"Upstream calls will fail with 401 if the server requires auth.", file=sys.stderr)
+    except Exception as exc:
+        print(f"WARNING: Could not validate MCP catalogue API keys at startup: {exc}", file=sys.stderr)
+
+    # Log configured upstream timeout
+    from src.gateway.upstream import TOOL_CALL_TIMEOUT
+    print(f"INFO: Upstream MCP call timeout: {TOOL_CALL_TIMEOUT}s (set MCP_CALL_TIMEOUT env var to override)", file=sys.stderr)
+
     # Register Telegram webhook if configured
     if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_OWNER_CHAT_ID:
         from src import telegram as tg

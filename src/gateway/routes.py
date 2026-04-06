@@ -21,7 +21,7 @@ from mcp import types
 
 from src.config import get_settings
 from src.db import get_db
-from src.gateway.upstream import call_upstream_tool, fetch_tool_list
+from src.gateway.upstream import call_upstream_tool, fetch_tool_list, TOOL_CALL_TIMEOUT
 from src.oauth.provider import SupabaseOAuthProvider
 
 
@@ -268,14 +268,33 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                     text = await call_upstream_tool(mcp["upstream_url"], tool_name, tool_args,
                                                     mcp.get("upstream_api_key", ""),
                                                     client_id=client_id)
-                except Exception as exc:
-                    print(f"GATEWAY: upstream error {slug}/{tool_name}: {exc}", file=sys.stderr)
+                except RuntimeError as exc:
+                    # RuntimeError from upstream.py signals a known issue (e.g. 401 auth)
+                    print(f"GATEWAY: upstream auth/config error {slug}/{tool_name}: {exc}", file=sys.stderr)
                     try:
                         import sentry_sdk
                         sentry_sdk.capture_exception(exc)
                     except Exception:
                         pass
                     text = json.dumps({"error": str(exc)})
+                except (TimeoutError, Exception) as exc:
+                    is_timeout = isinstance(exc, TimeoutError) or "timeout" in str(exc).lower()
+                    if is_timeout:
+                        print(f"GATEWAY: upstream timeout {slug}/{tool_name} after retries: {exc}", file=sys.stderr)
+                        error_msg = (
+                            f"Upstream MCP '{slug}' timed out after retries. "
+                            f"The server may be overloaded or unreachable. "
+                            f"Try again later or increase MCP_CALL_TIMEOUT (current: {TOOL_CALL_TIMEOUT}s)."
+                        )
+                    else:
+                        print(f"GATEWAY: upstream error {slug}/{tool_name}: {exc}", file=sys.stderr)
+                        error_msg = str(exc)
+                    try:
+                        import sentry_sdk
+                        sentry_sdk.capture_exception(exc)
+                    except Exception:
+                        pass
+                    text = json.dumps({"error": error_msg})
                 elapsed_ms = int((time.monotonic() - t0) * 1000)
                 resp_bytes = len(text.encode("utf-8")) if text else 0
                 _log_tool_call(client_id, slug, tool_name, credits_used=credit_cost,
