@@ -819,3 +819,49 @@ async def delete_catalogue(request: Request, slug: str, _: str = Depends(_requir
     db = get_db()
     db.table("mcp_catalogue").delete().eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+# ── Settings ─────────────────────────────────────────────────────────────────
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request, _: str = Depends(_require_admin), saved: bool = False):
+    from src.admin.settings import get_settings_grouped, CATEGORY_META
+    grouped = get_settings_grouped()
+    # Parse JSON options for select fields
+    import json as _json
+    for cat_settings in grouped.values():
+        for s in cat_settings:
+            if s.get("options") and isinstance(s["options"], str):
+                try:
+                    s["options"] = _json.loads(s["options"])
+                except Exception:
+                    s["options"] = []
+    # Sort categories by display order
+    sorted_cats = dict(sorted(CATEGORY_META.items(), key=lambda x: x[1]["order"]))
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={"grouped": grouped, "categories": sorted_cats, "saved": saved, "error": None},
+    )
+
+
+@router.post("/settings", response_class=HTMLResponse)
+async def save_settings(request: Request, _: str = Depends(_require_admin)):
+    from src.admin.settings import get_settings_by_category, set_setting
+    form = await request.form()
+    category = form.get("category", "")
+    if not category:
+        return RedirectResponse(url="/admin/settings", status_code=303)
+    # Get all setting keys for this category
+    cat_settings = get_settings_by_category(category)
+    for s in cat_settings:
+        key = s["key"]
+        if key in form:
+            new_value = form[key]
+            # Don't overwrite secrets with empty values (means unchanged)
+            if s["value_type"] == "secret" and not new_value:
+                continue
+            if new_value != (s["value"] or ""):
+                set_setting(key, str(new_value))
+    return RedirectResponse(url="/admin/settings?saved=true", status_code=303)

@@ -129,7 +129,7 @@ async def proxy_plugin_request(request: Request, path: str):
 
     # Check if this is an SSE/streaming request (chat endpoints use Accept: text/event-stream)
     accept = request.headers.get("accept", "")
-    is_sse = "text/event-stream" in accept
+    is_sse = "text/event-stream" in accept or path.endswith("/stream")
 
     t0 = time.monotonic()
     try:

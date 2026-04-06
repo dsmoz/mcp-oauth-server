@@ -439,6 +439,11 @@
           <span class="nav-label">Catalogue</span>
         </a>
         <div class="sidebar-section-label" style="margin-top: 0.5rem;">System</div>
+        <a href="/admin/settings" class="nav-item {% if '/admin/settings' in request.url.path %}active{% endif %}"
+           title="Settings">
+          <i class="ph-light ph-gear-six"></i>
+          <span class="nav-label">Settings</span>
+        </a>
         <a href="/.well-known/openid-configuration" class="nav-item" title="Discovery">
           <i class="ph-light ph-globe"></i>
           <span class="nav-label">Discovery</span>
