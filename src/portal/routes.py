@@ -249,18 +249,15 @@ async def plugin_login(request: Request):
     if not verify_secret(password, client["portal_password_hash"]):
         return JSONResponse({"error": "Invalid username or password"}, status_code=401)
 
-    # Issue an access token for the plugin
-    from src.crypto import hash_token, now_unix
-    settings = get_settings()
+    # Issue a non-expiring access token for the plugin
+    from src.crypto import hash_token
     access_token = generate_token(32)
-    ttl = settings.ACCESS_TOKEN_TTL
-    at_expires = now_unix() + ttl
 
     db.table("oauth_access_tokens").insert({
         "token": hash_token(access_token),
         "client_id": client["client_id"],
         "scopes": ["mcp"],
-        "expires_at": at_expires,
+        "expires_at": 0,
         "is_revoked": False,
     }).execute()
 
@@ -268,7 +265,7 @@ async def plugin_login(request: Request):
         "success": True,
         "client_id": client["client_id"],
         "access_token": access_token,
-        "expires_in": ttl,
+        "expires_in": 0,
         "display_name": client.get("client_name") or client.get("portal_username") or "",
     })
 
