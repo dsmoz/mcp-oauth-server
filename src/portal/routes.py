@@ -217,6 +217,62 @@ async def portal_login_post(
     return response
 
 
+# ── Plugin JSON login ────────────────────────────────────────────────────────
+
+@router.post("/api/login")
+async def plugin_login(request: Request):
+    """JSON login for the Zotero plugin. Returns client_id + access_token."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    username = (body.get("username") or "").strip().lower()
+    password = body.get("password") or ""
+    if not username or not password:
+        return JSONResponse({"error": "username and password required"}, status_code=400)
+
+    db = get_db()
+    result = db.table("oauth_clients").select("*").eq("portal_username", username).eq("is_active", True).limit(1).execute()
+    if not result.data:
+        result = db.table("oauth_clients").select("*").eq("created_by", username).eq("is_active", True).limit(1).execute()
+    client = result.data[0] if result.data else None
+
+    if client is None:
+        return JSONResponse({"error": "Invalid username or password"}, status_code=401)
+    if not client.get("portal_password_hash"):
+        return JSONResponse({
+            "error": "Account not yet set up",
+            "action": "setup",
+            "message": "Please use the setup link from your registration email.",
+        }, status_code=403)
+    if not verify_secret(password, client["portal_password_hash"]):
+        return JSONResponse({"error": "Invalid username or password"}, status_code=401)
+
+    # Issue an access token for the plugin
+    from src.crypto import hash_token, now_unix
+    settings = get_settings()
+    access_token = generate_token(32)
+    ttl = settings.ACCESS_TOKEN_TTL
+    at_expires = now_unix() + ttl
+
+    db.table("oauth_access_tokens").insert({
+        "token": hash_token(access_token),
+        "client_id": client["client_id"],
+        "scopes": ["mcp"],
+        "expires_at": at_expires,
+        "is_revoked": False,
+    }).execute()
+
+    return JSONResponse({
+        "success": True,
+        "client_id": client["client_id"],
+        "access_token": access_token,
+        "expires_in": ttl,
+        "display_name": client.get("client_name") or client.get("portal_username") or "",
+    })
+
+
 # ── Setup password (first login) ──────────────────────────────────────────────
 
 @router.get("/setup-password", response_class=HTMLResponse)
