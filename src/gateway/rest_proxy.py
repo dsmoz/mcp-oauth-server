@@ -13,7 +13,7 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from src.crypto import hash_token, now_unix
 from src.db import get_db
@@ -177,9 +177,20 @@ async def proxy_plugin_request(request: Request, path: str):
                 elapsed_ms = int((time.monotonic() - t0) * 1000)
                 resp_bytes = len(upstream_resp.content)
                 _log_rest_call(client_id, path, duration_ms=elapsed_ms, response_bytes=resp_bytes)
-                return JSONResponse(
-                    content=upstream_resp.json() if upstream_resp.headers.get("content-type", "").startswith("application/json") else {"raw": upstream_resp.text},
+                upstream_ct = upstream_resp.headers.get("content-type", "")
+                if upstream_ct.startswith("application/json"):
+                    return JSONResponse(
+                        content=upstream_resp.json(),
+                        status_code=upstream_resp.status_code,
+                    )
+                # Pass through binary/non-JSON responses (PDF, DOCX, etc.)
+                return Response(
+                    content=upstream_resp.content,
                     status_code=upstream_resp.status_code,
+                    headers={
+                        k: v for k, v in upstream_resp.headers.items()
+                        if k.lower() in ("content-type", "content-disposition")
+                    },
                 )
     except httpx.TimeoutException:
         elapsed_ms = int((time.monotonic() - t0) * 1000)
