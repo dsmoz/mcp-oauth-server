@@ -459,7 +459,7 @@ async def reset_password_post(
 # ── Overview ──────────────────────────────────────────────────────────────────
 
 @router.get("/", response_class=HTMLResponse)
-async def portal_overview(request: Request, oauth_expired: Optional[str] = Query(None), client_id: str = Depends(_require_portal_client)):
+async def portal_overview(request: Request, oauth_expired: Optional[str] = Query(None), access_token: Optional[str] = Query(None), client_id: str = Depends(_require_portal_client)):
     client = _get_client(client_id)
     if not client:
         raise HTTPException(status_code=401, detail="Client not found")
@@ -498,6 +498,7 @@ async def portal_overview(request: Request, oauth_expired: Optional[str] = Query
             "gateway_url": gateway_url,
             "credit_balance": float(client.get("credit_balance") or 0),
             "oauth_expired": bool(oauth_expired),
+            "access_token": access_token,
         }
     )
 
@@ -580,6 +581,21 @@ async def portal_rotate_secret(client_id: str = Depends(_require_portal_client))
         {"client_secret_hash": hash_secret(raw)}
     ).eq("client_id", client_id).execute()
     return RedirectResponse(url=f"/portal/setup?secret={raw}", status_code=303)
+
+
+@router.post("/generate-token")
+async def portal_generate_token(client_id: str = Depends(_require_portal_client)):
+    """Mint a non-expiring Bearer token for direct MCP client connections."""
+    from src.crypto import generate_token, hash_token
+    raw_token = generate_token(32)
+    get_db().table("oauth_access_tokens").insert({
+        "token": hash_token(raw_token),
+        "client_id": client_id,
+        "scopes": ["mcp"],
+        "expires_at": 0,
+        "is_revoked": False,
+    }).execute()
+    return RedirectResponse(url=f"/portal/?access_token={raw_token}", status_code=303)
 
 
 @router.get("/setup/download")

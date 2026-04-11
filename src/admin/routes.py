@@ -11,7 +11,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
 from src.config import get_settings
-from src.crypto import generate_client_id, generate_token, hash_secret, now_unix
+from src.crypto import generate_client_id, generate_token, hash_secret, hash_token, now_unix
 from src.db import get_db
 from src import email as em
 from src.oauth.provider import SupabaseOAuthProvider
@@ -208,6 +208,7 @@ async def client_detail(
     request: Request,
     client_id: str,
     secret: Optional[str] = None,
+    access_token: Optional[str] = None,
     _: str = Depends(_require_admin),
 ):
     db = get_db()
@@ -242,6 +243,7 @@ async def client_detail(
         context={
             "client": client,
             "secret": secret,
+            "access_token": access_token,
             "usage_today": usage_today,
             "usage_month": usage_month,
             "usage_total": usage_total,
@@ -339,6 +341,30 @@ async def rekey_client(
     ).execute()
     return RedirectResponse(
         url=f"/admin/clients/{client_id}?secret={raw_secret}",
+        status_code=303,
+    )
+
+
+# ── Generate access token ─────────────────────────────────────────────────────
+
+@router.post("/clients/{client_id}/generate-token", response_class=HTMLResponse)
+async def generate_client_token(
+    client_id: str,
+    _: str = Depends(_require_admin),
+):
+    db = get_db()
+    if _get_client_row(db, client_id) is None:
+        raise HTTPException(status_code=404, detail="Client not found")
+    raw_token = generate_token(32)
+    db.table("oauth_access_tokens").insert({
+        "token": hash_token(raw_token),
+        "client_id": client_id,
+        "scopes": ["mcp"],
+        "expires_at": 0,
+        "is_revoked": False,
+    }).execute()
+    return RedirectResponse(
+        url=f"/admin/clients/{client_id}?access_token={raw_token}",
         status_code=303,
     )
 
