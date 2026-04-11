@@ -16,6 +16,19 @@
 </div>
 {% endif %}
 
+{% if access_token %}
+<div style="background:var(--bg-card,#1e1e2e);border:1px solid var(--warning,#F59E0B);border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.5rem">
+  <p style="font-size:0.8rem;font-weight:700;color:var(--warning,#F59E0B);margin-bottom:0.5rem"><i class="ph-light ph-key"></i> Access Token — Save This Now</p>
+  <div class="code-pill" style="margin-bottom:0.5rem">
+    <span id="new-access-token" style="word-break:break-all">{{ access_token }}</span>
+    <button class="copy-btn" onclick="copyText('{{ access_token }}', this)" title="Copy token">
+      <i class="ph-light ph-copy" style="font-size:14px"></i>
+    </button>
+  </div>
+  <p style="font-size:0.75rem;color:var(--text-muted)">This token will never be shown again. Use it as <code>Authorization: Bearer &lt;token&gt;</code> when connecting your MCP client.</p>
+</div>
+{% endif %}
+
 <div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
   <div>
     <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem">Credit Balance</div>
@@ -62,6 +75,18 @@
     Use your OAuth access token as the Bearer token when connecting.
     Visit <a href="/portal/setup" style="color:var(--vivid)">Setup Guide</a> for the full config.
   </p>
+</div>
+
+<div class="card">
+  <h2>Access Token</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.5">
+    Generate a non-expiring Bearer token to connect Cursor, Claude Code, or Codex directly to the gateway without the OAuth browser flow.
+  </p>
+  <form method="post" action="/portal/generate-token">
+    <button type="submit" class="btn btn-primary">
+      <i class="ph-light ph-key"></i> Generate Token
+    </button>
+  </form>
 </div>
 
 <div class="card">

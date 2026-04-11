@@ -25,6 +25,14 @@
 </div>
 {% endif %}
 
+{% if access_token %}
+<div class="secret-box">
+  <p class="label"><i class="ph-light ph-key"></i> Access Token — Save This Now</p>
+  <div class="secret-value">{{ access_token }}</div>
+  <p class="warning">This token will never be shown again. Copy it now and store it securely. Use it as <code>Authorization: Bearer &lt;token&gt;</code> when connecting your MCP client.</p>
+</div>
+{% endif %}
+
 <div class="card">
   <h2>Client Details</h2>
 
@@ -134,6 +142,19 @@
         onsubmit="return confirm('Rotate the secret for {{ client.client_name }}? The old secret will stop working immediately.')">
     <button type="submit" class="btn btn-secondary">
       <i class="ph-light ph-arrows-clockwise"></i> Rotate Secret
+    </button>
+  </form>
+</div>
+
+<div class="card" style="border-color: var(--focus);">
+  <h2 style="color: var(--info-fg);">Generate Access Token</h2>
+  <p style="color: var(--text-muted); font-size: 0.8125rem; margin-bottom: 1rem; line-height: 1.6;">
+    Mints a non-expiring Bearer token for this client. Use it to connect MCP clients (Cursor, Claude Code, Codex) directly to the gateway without going through the OAuth browser flow.
+  </p>
+  <form method="post" action="/admin/clients/{{ client.client_id }}/generate-token"
+        onsubmit="return confirm('Generate a new non-expiring token for {{ client.client_name }}?')">
+    <button type="submit" class="btn btn-secondary">
+      <i class="ph-light ph-key"></i> Generate Token
     </button>
   </form>
 </div>
