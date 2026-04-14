@@ -77,8 +77,8 @@ async def oauth_protected_resource(request: Request):
 async def authorize(
     client_id: str,
     response_type: str,
-    code_challenge: str,
-    code_challenge_method: str = "S256",
+    code_challenge: Optional[str] = None,
+    code_challenge_method: Optional[str] = "S256",
     redirect_uri: Optional[str] = None,
     scope: Optional[str] = None,
     state: Optional[str] = None,
@@ -86,7 +86,7 @@ async def authorize(
 ):
     if response_type != "code":
         raise HTTPException(status_code=400, detail="unsupported_response_type")
-    if code_challenge_method != "S256":
+    if code_challenge and code_challenge_method != "S256":
         raise HTTPException(status_code=400, detail="unsupported_code_challenge_method")
 
     provider = _provider()
@@ -148,7 +148,7 @@ async def token(
         raise HTTPException(status_code=401, detail="invalid_client")
 
     if grant_type == "authorization_code":
-        if not code or not code_verifier:
+        if not code:
             raise HTTPException(status_code=400, detail="missing_parameters")
         try:
             access_token, rt, expires_in = provider.exchange_authorization_code(

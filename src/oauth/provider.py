@@ -40,8 +40,8 @@ class SupabaseOAuthProvider:
     def authorize(
         self,
         client: OAuthClient,
-        code_challenge: str,
-        code_challenge_method: str,
+        code_challenge: Optional[str],
+        code_challenge_method: Optional[str],
         redirect_uri: Optional[str],
         scopes: list[str],
         state: Optional[str],
@@ -152,7 +152,7 @@ class SupabaseOAuthProvider:
             raise ValueError("PKCE verification failed")
 
     def exchange_authorization_code(
-        self, code: str, client_id: str, code_verifier: str
+        self, code: str, client_id: str, code_verifier: Optional[str]
     ) -> tuple[str, str, int]:
         """
         Validate code + PKCE, issue access + refresh tokens.
@@ -167,7 +167,10 @@ class SupabaseOAuthProvider:
             if auth_code.expires_at < now_unix():
                 raise ValueError("Authorization code expired")
 
-            self._validate_pkce(code_verifier, auth_code.code_challenge)
+            if auth_code.code_challenge:
+                if not code_verifier:
+                    raise ValueError("code_verifier required for PKCE authorization code")
+                self._validate_pkce(code_verifier, auth_code.code_challenge)
 
             # Delete the code atomically and verify it was actually deleted
             delete_result = self.db.table("oauth_authorization_codes").delete().eq("code", code).execute()
