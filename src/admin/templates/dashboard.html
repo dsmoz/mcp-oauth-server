@@ -11,16 +11,35 @@
 
 <div class="stats-grid">
   <div class="stat-card">
+    <div class="stat-number">{{ total_users }}</div>
+    <div class="stat-label">Total Users</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number" style="color: var(--success-fg);">{{ active_users }}</div>
+    <div class="stat-label">Active Users</div>
+  </div>
+  <div class="stat-card">
     <div class="stat-number">{{ total_clients }}</div>
-    <div class="stat-label">Total Clients</div>
+    <div class="stat-label">Total Devices</div>
   </div>
   <div class="stat-card">
     <div class="stat-number" style="color: var(--success-fg);">{{ active_clients }}</div>
-    <div class="stat-label">Active Clients</div>
+    <div class="stat-label">Active Devices</div>
   </div>
   <div class="stat-card">
     <div class="stat-number" style="color: var(--info-fg);">{{ active_tokens }}</div>
     <div class="stat-label">Active Tokens</div>
+  </div>
+  <div class="stat-card {% if unclaimed_stale > 0 %}stat-card-alert{% endif %}">
+    <div class="stat-number" style="{% if unclaimed_stale > 0 %}color: var(--amber);{% endif %}">{{ unclaimed_stale }}</div>
+    <div class="stat-label">
+      Stale Unclaimed (&gt;24h)
+      {% if unclaimed_stale > 0 %}
+        <form method="post" action="/admin/unclaimed/cleanup" style="display:inline; margin-left: 0.5rem;">
+          <button type="submit" style="background:none;border:none;color: var(--amber); font-size: 0.7rem; cursor:pointer; padding:0;">Clean up →</button>
+        </form>
+      {% endif %}
+    </div>
   </div>
   <div class="stat-card {% if pending_requests > 0 %}stat-card-alert{% endif %}">
     <div class="stat-number" style="{% if pending_requests > 0 %}color: var(--amber);{% endif %}">

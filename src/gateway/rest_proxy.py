@@ -1,21 +1,22 @@
 """
 REST proxy — forwards /api/plugin/* requests to mcp-scholar.
 
-Authenticates the caller's OAuth access_token, resolves the client_id,
-then proxies the request to mcp-scholar with admin credentials +
-X-Client-ID header.
+Authenticates the caller's OAuth access_token, resolves (user_id, client_id),
+then proxies the request to mcp-scholar with admin credentials. Forwards
+X-User-ID as the tenancy/namespace key and X-Client-ID as per-device
+telemetry.
 """
 from __future__ import annotations
 
 import sys
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from src.crypto import hash_token, now_unix
+from src.crypto import now_unix
 from src.db import get_db
 from src.oauth.provider import SupabaseOAuthProvider
 
@@ -31,15 +32,39 @@ def _get_bearer(request: Request) -> Optional[str]:
     return auth[7:]
 
 
-def _validate_token(token: str) -> Optional[str]:
-    """Validate an OAuth access_token. Returns client_id if valid, None otherwise."""
+def _validate_token(token: str) -> Optional[Tuple[str, str]]:
+    """Validate an OAuth access_token.
+
+    Returns (user_id, client_id) if valid and bound to a user; None otherwise.
+    Falls back to oauth_clients.user_id lookup for legacy tokens issued before
+    the users table existed.
+    """
     provider = SupabaseOAuthProvider()
     at = provider.load_access_token(token)
     if at is None or at.is_revoked:
         return None
     if at.expires_at and at.expires_at < now_unix():
         return None
-    return at.client_id
+
+    user_id = getattr(at, "user_id", None)
+    if not user_id:
+        try:
+            row = (
+                get_db()
+                .table("oauth_clients")
+                .select("user_id")
+                .eq("client_id", at.client_id)
+                .limit(1)
+                .execute()
+            )
+            if row.data and row.data[0].get("user_id"):
+                user_id = row.data[0]["user_id"]
+        except Exception:
+            pass
+
+    if not user_id:
+        return None
+    return user_id, at.client_id
 
 
 def _get_scholar_config() -> Optional[dict]:
@@ -57,11 +82,12 @@ def _get_scholar_config() -> Optional[dict]:
 
 
 def _log_rest_call(
-    client_id: str, path: str,
+    user_id: str, client_id: str, path: str,
     duration_ms: int | None = None, response_bytes: int | None = None,
 ) -> None:
     try:
         row: dict = {
+            "user_id": user_id,
             "client_id": client_id,
             "endpoint": f"rest_proxy/{path}",
             "credits_used": 0,
@@ -72,7 +98,10 @@ def _log_rest_call(
             row["response_bytes"] = response_bytes
         get_db().table("oauth_usage_logs").insert(row).execute()
     except Exception as exc:
-        print(f"WARNING: rest_proxy usage log failed for {client_id}: {exc}", file=sys.stderr)
+        print(
+            f"WARNING: rest_proxy usage log failed for user {user_id}: {exc}",
+            file=sys.stderr,
+        )
 
 
 def _unauth() -> JSONResponse:
@@ -92,9 +121,10 @@ async def proxy_plugin_request(request: Request, path: str):
     if not token:
         return _unauth()
 
-    client_id = _validate_token(token)
-    if not client_id:
+    validated = _validate_token(token)
+    if not validated:
         return _unauth()
+    user_id, client_id = validated
 
     scholar = _get_scholar_config()
     if not scholar:
@@ -111,8 +141,9 @@ async def proxy_plugin_request(request: Request, path: str):
     if request.url.query:
         upstream_url += f"?{request.url.query}"
 
-    # Build upstream headers
+    # Build upstream headers — X-User-ID is the tenancy key, X-Client-ID is telemetry
     upstream_headers = {
+        "X-User-ID": user_id,
         "X-Client-ID": client_id,
         "Content-Type": request.headers.get("content-type", "application/json"),
     }
@@ -123,7 +154,8 @@ async def proxy_plugin_request(request: Request, path: str):
     body = await request.body()
 
     print(
-        f"REST_PROXY: {request.method} /api/plugin/{path} → {upstream_url} client_id={client_id}",
+        f"REST_PROXY: {request.method} /api/plugin/{path} → {upstream_url} "
+        f"user_id={user_id} client_id={client_id}",
         file=sys.stderr,
     )
 
@@ -155,7 +187,10 @@ async def proxy_plugin_request(request: Request, path: str):
                     await upstream_resp.aclose()
                     await client.aclose()
                     elapsed_ms = int((time.monotonic() - t0) * 1000)
-                    _log_rest_call(client_id, path, duration_ms=elapsed_ms, response_bytes=total_bytes)
+                    _log_rest_call(
+                        user_id, client_id, path,
+                        duration_ms=elapsed_ms, response_bytes=total_bytes,
+                    )
 
             return StreamingResponse(
                 stream_response(),
@@ -176,7 +211,10 @@ async def proxy_plugin_request(request: Request, path: str):
                 )
                 elapsed_ms = int((time.monotonic() - t0) * 1000)
                 resp_bytes = len(upstream_resp.content)
-                _log_rest_call(client_id, path, duration_ms=elapsed_ms, response_bytes=resp_bytes)
+                _log_rest_call(
+                    user_id, client_id, path,
+                    duration_ms=elapsed_ms, response_bytes=resp_bytes,
+                )
                 upstream_ct = upstream_resp.headers.get("content-type", "")
                 if upstream_ct.startswith("application/json"):
                     return JSONResponse(
@@ -194,10 +232,10 @@ async def proxy_plugin_request(request: Request, path: str):
                 )
     except httpx.TimeoutException:
         elapsed_ms = int((time.monotonic() - t0) * 1000)
-        _log_rest_call(client_id, path, duration_ms=elapsed_ms)
+        _log_rest_call(user_id, client_id, path, duration_ms=elapsed_ms)
         return JSONResponse({"error": "Upstream timeout"}, status_code=504)
     except Exception as exc:
         elapsed_ms = int((time.monotonic() - t0) * 1000)
-        _log_rest_call(client_id, path, duration_ms=elapsed_ms)
+        _log_rest_call(user_id, client_id, path, duration_ms=elapsed_ms)
         print(f"REST_PROXY: error proxying {path}: {exc}", file=sys.stderr)
         return JSONResponse({"error": "Proxy error", "detail": str(exc)}, status_code=502)

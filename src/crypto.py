@@ -12,6 +12,10 @@ def generate_client_id() -> str:
     return "mc_" + secrets.token_urlsafe(16)
 
 
+def generate_user_id() -> str:
+    return "usr_" + secrets.token_urlsafe(12)
+
+
 def hash_secret(secret: str) -> str:
     return bcrypt.hashpw(secret.encode(), bcrypt.gensalt()).decode()
 

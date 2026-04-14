@@ -180,6 +180,7 @@ async def call_upstream_tool(
     tool_name: str,
     arguments: dict[str, Any],
     api_key: str = "",
+    user_id: str = "",
     client_id: str = "",
 ) -> str:
     """Call a tool on an upstream MCP server with retry and error handling.
@@ -192,7 +193,10 @@ async def call_upstream_tool(
         tool_name: Name of the tool to call.
         arguments: Tool arguments dict.
         api_key: Bearer token for the upstream server.
-        client_id: Client ID to forward via X-Client-ID header.
+        user_id: User (tenant) ID forwarded via X-User-ID — this is the
+            namespace key upstream MCPs use to isolate per-tenant state.
+        client_id: Client (device) ID forwarded via X-Client-ID — telemetry
+            only; upstream MCPs should NOT use this as a tenancy key.
 
     Returns:
         The text result from the upstream tool.
@@ -205,11 +209,14 @@ async def call_upstream_tool(
     headers: dict[str, str] = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
+    if user_id:
+        headers["X-User-ID"] = user_id
     if client_id:
         headers["X-Client-ID"] = client_id
 
     sys.stderr.write(
         f"UPSTREAM: {tool_name} headers={list(headers.keys())} "
+        f"X-User-ID={headers.get('X-User-ID', 'NOT SET')} "
         f"X-Client-ID={headers.get('X-Client-ID', 'NOT SET')} "
         f"timeout={TOOL_CALL_TIMEOUT}s\n"
     )

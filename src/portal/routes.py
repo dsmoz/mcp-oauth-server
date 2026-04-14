@@ -11,8 +11,9 @@ from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from src.config import get_settings
-from src.crypto import generate_token, hash_secret, verify_secret
+from src.crypto import generate_client_id, generate_token, hash_secret, hash_token, verify_secret
 from src.db import get_db
+from src.users.provider import SupabaseUserProvider
 
 router = APIRouter(prefix="/portal")
 
@@ -26,7 +27,6 @@ _COOKIE_SECURE = get_settings().OAUTH_ISSUER_URL.startswith("https://")
 
 
 def _oauth_success_page(redirect: str | None = None) -> str:
-    """Success page shown after OAuth login. Fires redirect via JS then shows success message."""
     js = f"window.location.href={redirect!r};" if redirect else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -50,49 +50,55 @@ def _oauth_success_page(redirect: str | None = None) -> str:
 </html>"""
 
 
+# ── Session (keyed on user_id) ────────────────────────────────────────────────
+
 def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(get_settings().SECRET_KEY, salt="portal")
 
 
-def _sign_session(client_id: str) -> str:
-    return _serializer().dumps({"client_id": client_id})
+def _sign_session(user_id: str) -> str:
+    return _serializer().dumps({"user_id": user_id})
 
 
 def _verify_session(token: str) -> Optional[str]:
     try:
         data = _serializer().loads(token, max_age=_SESSION_MAX_AGE)
-        return data["client_id"]
+        return data.get("user_id")
     except (BadSignature, SignatureExpired, KeyError):
         return None
 
 
-def _require_portal_client(request: Request) -> str:
+def _require_portal_user(request: Request) -> str:
     token = request.cookies.get(_COOKIE_NAME)
     if not token:
         raise HTTPException(status_code=302, headers={"Location": "/portal/login"})
-    client_id = _verify_session(token)
-    if not client_id:
+    user_id = _verify_session(token)
+    if not user_id:
         raise HTTPException(status_code=302, headers={"Location": "/portal/login"})
-    return client_id
+    return user_id
 
 
-def _get_client(client_id: str) -> Optional[dict]:
-    db = get_db()
-    result = db.table("oauth_clients").select("*").eq("client_id", client_id).limit(1).execute()
-    return result.data[0] if result.data else None
+def _users() -> SupabaseUserProvider:
+    return SupabaseUserProvider()
 
+
+def _list_devices(user_id: str) -> list[dict]:
+    return _users().list_user_clients(user_id)
+
+
+# ── Setup tokens (keyed on user_id) ───────────────────────────────────────────
 
 def _hash_setup_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def create_setup_token(client_id: str) -> str:
-    """Generate a one-time setup token, store hash in DB, return raw token."""
+def create_setup_token(user_id: str) -> str:
+    """Generate a one-time setup token keyed on user_id, return raw token."""
     raw = generate_token(32)
     token_hash = _hash_setup_token(raw)
     expires_at = (datetime.now(timezone.utc) + timedelta(hours=_SETUP_TOKEN_TTL_HOURS)).isoformat()
     get_db().table("portal_setup_tokens").insert({
-        "client_id": client_id,
+        "user_id": user_id,
         "token_hash": token_hash,
         "expires_at": expires_at,
     }).execute()
@@ -100,10 +106,16 @@ def create_setup_token(client_id: str) -> str:
 
 
 def _redeem_setup_token(raw: str) -> Optional[str]:
-    """Validate token, return client_id if valid and unused."""
+    """Return user_id if token is valid and unused."""
     token_hash = _hash_setup_token(raw)
     db = get_db()
-    result = db.table("portal_setup_tokens").select("*").eq("token_hash", token_hash).limit(1).execute()
+    result = (
+        db.table("portal_setup_tokens")
+        .select("*")
+        .eq("token_hash", token_hash)
+        .limit(1)
+        .execute()
+    )
     if not result.data:
         return None
     row = result.data[0]
@@ -112,36 +124,53 @@ def _redeem_setup_token(raw: str) -> Optional[str]:
     expires_at = datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00"))
     if datetime.now(timezone.utc) > expires_at:
         return None
-    return row["client_id"]
+    return row.get("user_id") or row.get("client_id")  # fallback for legacy tokens
 
 
 def _consume_setup_token(raw: str) -> None:
-    """Mark token as used."""
     token_hash = _hash_setup_token(raw)
     get_db().table("portal_setup_tokens").update({
         "used_at": datetime.now(timezone.utc).isoformat()
     }).eq("token_hash", token_hash).execute()
 
 
-# ── Login ─────────────────────────────────────────────────────────────────────
+# ── OAuth session completion + device claim ──────────────────────────────────
 
-def _complete_oauth_session(next_session: str, client_id: str) -> Optional[RedirectResponse]:
-    """If next_session is valid, complete the OAuth flow and return a redirect. None if expired."""
+def _complete_oauth_session(next_session: str, user_id: str) -> Optional[RedirectResponse | HTMLResponse]:
+    """Claim the pending session's client for this user, then mark approved and redirect.
+    Returns None if the session is expired or missing."""
     from src.oauth.provider import SupabaseOAuthProvider
     import json as _json
+    import sys
+
     provider = SupabaseOAuthProvider()
     pending = provider.get_pending_session(next_session)
     if pending is None:
         return None
+
+    pending_client_id = pending.get("client_id")
+    if pending_client_id:
+        try:
+            provider.claim_unclaimed_client(pending_client_id, user_id)
+        except ValueError as exc:
+            print(f"PORTAL: claim conflict on {pending_client_id} → {exc}", file=sys.stderr)
+            return HTMLResponse(
+                f"<h1>Device already connected to another account</h1>"
+                f"<p>This device is linked to a different user. Please sign out and retry on a fresh device.</p>",
+                status_code=409,
+            )
+
     try:
         session_data = _json.loads(pending.get("resource") or "{}")
     except (ValueError, TypeError):
         session_data = {}
     state = session_data.get("state")
+
     try:
         code, redirect_uri = provider.mark_session_approved(next_session)
     except ValueError:
         return None
+
     if not redirect_uri:
         return HTMLResponse(_oauth_success_page())
     sep = "&" if "?" in redirect_uri else "?"
@@ -150,6 +179,8 @@ def _complete_oauth_session(next_session: str, client_id: str) -> Optional[Redir
         location += f"&state={state}"
     return RedirectResponse(url=location, status_code=302)
 
+
+# ── Login ─────────────────────────────────────────────────────────────────────
 
 @router.get("/login", response_class=HTMLResponse)
 async def portal_login_get(
@@ -160,12 +191,11 @@ async def portal_login_get(
     if next_session:
         token = request.cookies.get(_COOKIE_NAME)
         if token:
-            client_id = _verify_session(token)
-            if client_id:
-                response = _complete_oauth_session(next_session, client_id)
+            user_id = _verify_session(token)
+            if user_id:
+                response = _complete_oauth_session(next_session, user_id)
                 if response is not None:
                     return response
-                # Session expired — fall through to login form
     return templates.TemplateResponse(
         request=request,
         name="portal_login.html",
@@ -180,82 +210,118 @@ async def portal_login_post(
     password: str = Form(...),
     next_session: Optional[str] = Query(None),
 ):
-    db = get_db()
-    identifier = username.strip().lower()
-    # Try username first, then fall back to email (stored in created_by)
-    result = db.table("oauth_clients").select("*").eq("portal_username", identifier).eq("is_active", True).limit(1).execute()
-    if not result.data:
-        result = db.table("oauth_clients").select("*").eq("created_by", identifier).eq("is_active", True).limit(1).execute()
-    client = result.data[0] if result.data else None
+    email = username.strip().lower()
+    users = _users()
+    user = users.get_user_by_email(email)
 
-    def _login_error(msg: str):
+    def _login_error(msg: str, status: int = 401):
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
-            context={"error": msg, "next_session": next_session}, status_code=401,
+            context={"error": msg, "next_session": next_session}, status_code=status,
         )
 
-    if client is None:
-        return _login_error("Invalid username or password")
-    if not client.get("portal_password_hash"):
-        return _login_error("Account not yet set up. Please use the setup link from your registration email.")
-    if not verify_secret(password, client["portal_password_hash"]):
-        return _login_error("Invalid username or password")
+    if user is None:
+        return _login_error("Invalid email or password")
+    if not user.password_hash:
+        return _login_error(
+            "Account not yet set up. Please use the setup link from your registration email."
+        )
+    if not users.verify_password(user, password):
+        return _login_error("Invalid email or password")
+    if not user.is_active:
+        return _login_error("Account is not active. Contact support.", status=403)
 
-    # Build the session cookie (used in all success paths)
-    cookie_value = _sign_session(client["client_id"])
+    cookie_value = _sign_session(user.user_id)
 
-    # OAuth flow: complete the pending authorization session and redirect back to the client
+    # OAuth flow: claim pending client, complete auth session, redirect back
     if next_session:
-        response = _complete_oauth_session(next_session, client["client_id"])
+        response = _complete_oauth_session(next_session, user.user_id)
         if response is None:
             response = RedirectResponse(url="/portal/?oauth_expired=1", status_code=303)
-        response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE, secure=_COOKIE_SECURE)
+        response.set_cookie(
+            _COOKIE_NAME, cookie_value,
+            httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE, secure=_COOKIE_SECURE,
+        )
         return response
 
     response = RedirectResponse(url="/portal/", status_code=303)
-    response.set_cookie(_COOKIE_NAME, cookie_value, httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE, secure=_COOKIE_SECURE)
+    response.set_cookie(
+        _COOKIE_NAME, cookie_value,
+        httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE, secure=_COOKIE_SECURE,
+    )
     return response
 
 
 # ── Plugin JSON login ────────────────────────────────────────────────────────
 
+def _ensure_plugin_client(user_id: str, display_name: str) -> tuple[str, str]:
+    """Find-or-create the user's plugin-default oauth_client. Returns (client_id, client_secret_hash).
+    We don't return a raw secret here — plugin clients use bearer tokens only."""
+    db = get_db()
+    existing = (
+        db.table("oauth_clients")
+        .select("client_id, client_secret_hash")
+        .eq("user_id", user_id)
+        .eq("client_name", "dsmoz plugin")
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        row = existing.data[0]
+        return row["client_id"], row["client_secret_hash"]
+
+    client_id = generate_client_id()
+    raw_secret = generate_token(32)
+    secret_hash = hash_secret(raw_secret)
+    claimed_at = datetime.now(timezone.utc).isoformat()
+    db.table("oauth_clients").insert({
+        "client_id": client_id,
+        "client_secret_hash": secret_hash,
+        "client_name": "dsmoz plugin",
+        "redirect_uris": [],
+        "grant_types": ["authorization_code"],
+        "scope": "mcp",
+        "created_by": f"plugin:{display_name}",
+        "is_active": True,
+        "user_id": user_id,
+        "claimed_at": claimed_at,
+    }).execute()
+    return client_id, secret_hash
+
+
 @router.post("/api/login")
 async def plugin_login(request: Request):
-    """JSON login for the Zotero plugin. Returns client_id + access_token."""
+    """JSON login for the Zotero plugin. Authenticates by email+password and returns a user-scoped token."""
     try:
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
 
-    username = (body.get("username") or "").strip().lower()
+    email = (body.get("username") or "").strip().lower()
     password = body.get("password") or ""
-    if not username or not password:
+    if not email or not password:
         return JSONResponse({"error": "username and password required"}, status_code=400)
 
-    db = get_db()
-    result = db.table("oauth_clients").select("*").eq("portal_username", username).eq("is_active", True).limit(1).execute()
-    if not result.data:
-        result = db.table("oauth_clients").select("*").eq("created_by", username).eq("is_active", True).limit(1).execute()
-    client = result.data[0] if result.data else None
-
-    if client is None:
+    users = _users()
+    user = users.get_user_by_email(email)
+    if user is None:
         return JSONResponse({"error": "Invalid username or password"}, status_code=401)
-    if not client.get("portal_password_hash"):
+    if not user.password_hash:
         return JSONResponse({
             "error": "Account not yet set up",
             "action": "setup",
             "message": "Please use the setup link from your registration email.",
         }, status_code=403)
-    if not verify_secret(password, client["portal_password_hash"]):
+    if not users.verify_password(user, password):
         return JSONResponse({"error": "Invalid username or password"}, status_code=401)
 
-    # Issue a non-expiring access token for the plugin
-    from src.crypto import hash_token
-    access_token = generate_token(32)
+    client_id, _ = _ensure_plugin_client(user.user_id, user.display_name or email)
 
-    db.table("oauth_access_tokens").insert({
+    access_token = generate_token(32)
+    get_db().table("oauth_access_tokens").insert({
         "token": hash_token(access_token),
-        "client_id": client["client_id"],
+        "client_id": client_id,
+        "user_id": user.user_id,
         "scopes": ["mcp"],
         "expires_at": 0,
         "is_revoked": False,
@@ -263,10 +329,11 @@ async def plugin_login(request: Request):
 
     return JSONResponse({
         "success": True,
-        "client_id": client["client_id"],
+        "client_id": client_id,
+        "user_id": user.user_id,
         "access_token": access_token,
         "expires_in": 0,
-        "display_name": client.get("client_name") or client.get("portal_username") or "",
+        "display_name": user.display_name or email,
     })
 
 
@@ -274,85 +341,64 @@ async def plugin_login(request: Request):
 
 @router.get("/setup-password", response_class=HTMLResponse)
 async def setup_password_get(request: Request, token: str = ""):
-    client_id = _redeem_setup_token(token)
-    if not client_id:
+    user_id = _redeem_setup_token(token)
+    if not user_id:
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
             context={"error": "Setup link is invalid or has expired. Contact your administrator."},
         )
-    client = _get_client(client_id)
+    user = _users().get_user(user_id)
+    if user is None:
+        return templates.TemplateResponse(
+            request=request, name="portal_login.html",
+            context={"error": "Account not found."},
+        )
     return templates.TemplateResponse(
         request=request, name="portal_setup_password.html",
-        context={"token": token, "username": client.get("portal_username", ""), "client_id": client_id, "error": None},
+        context={"token": token, "username": user.email, "client_id": user.user_id, "error": None},
     )
-
-
-@router.get("/check-username")
-async def check_username(username: str = Query(...), exclude_client_id: Optional[str] = Query(None)):
-    """JSON endpoint: returns {available: bool} for live username availability check."""
-    identifier = username.strip().lower()
-    if not identifier or " " in identifier:
-        return JSONResponse({"available": False})
-    db = get_db()
-    result = db.table("oauth_clients").select("client_id").eq("portal_username", identifier).limit(1).execute()
-    if result.data:
-        taken_by = result.data[0]["client_id"]
-        # Allow if the only match is the current client (re-setting up their own account)
-        if exclude_client_id and taken_by == exclude_client_id:
-            return JSONResponse({"available": True})
-        return JSONResponse({"available": False})
-    return JSONResponse({"available": True})
 
 
 @router.post("/setup-password", response_class=HTMLResponse)
 async def setup_password_post(
     request: Request,
     token: str = Form(...),
-    username: str = Form(...),
+    username: str = Form(...),  # kept for template compatibility; ignored (email is identity)
     password: str = Form(...),
     password_confirm: str = Form(...),
 ):
-    client_id = _redeem_setup_token(token)
-    if not client_id:
+    user_id = _redeem_setup_token(token)
+    if not user_id:
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
             context={"error": "Setup link is invalid or has expired. Contact your administrator."},
         )
-    if " " in username:
+
+    users = _users()
+    user = users.get_user(user_id)
+    if user is None:
         return templates.TemplateResponse(
-            request=request, name="portal_setup_password.html",
-            context={"token": token, "username": username, "client_id": client_id, "error": "Username cannot contain spaces"},
-        )
-    # Check uniqueness (exclude the current client's own existing username)
-    db = get_db()
-    taken = db.table("oauth_clients").select("client_id").eq("portal_username", username.strip().lower()).limit(1).execute()
-    if taken.data and taken.data[0]["client_id"] != client_id:
-        return templates.TemplateResponse(
-            request=request, name="portal_setup_password.html",
-            context={"token": token, "username": username, "client_id": client_id, "error": "Username is already taken. Please choose another."},
-        )
-    if password != password_confirm:
-        return templates.TemplateResponse(
-            request=request, name="portal_setup_password.html",
-            context={"token": token, "username": username, "client_id": client_id, "error": "Passwords do not match"},
-        )
-    if len(password) < 8:
-        return templates.TemplateResponse(
-            request=request, name="portal_setup_password.html",
-            context={"token": token, "username": username, "client_id": client_id, "error": "Password must be at least 8 characters"},
+            request=request, name="portal_login.html",
+            context={"error": "Account not found."},
         )
 
-    db = get_db()
-    db.table("oauth_clients").update({
-        "portal_username": username.strip().lower(),
-        "portal_password_hash": hash_secret(password),
-        "is_active": True,
-    }).eq("client_id", client_id).execute()
+    def _err(msg: str):
+        return templates.TemplateResponse(
+            request=request, name="portal_setup_password.html",
+            context={"token": token, "username": user.email, "client_id": user.user_id, "error": msg},
+        )
+
+    if password != password_confirm:
+        return _err("Passwords do not match")
+    if len(password) < 8:
+        return _err("Password must be at least 8 characters")
+
+    users.set_password(user.user_id, password)
     _consume_setup_token(token)
 
     response = RedirectResponse(url="/portal/", status_code=303)
     response.set_cookie(
-        _COOKIE_NAME, _sign_session(client_id),
+        _COOKIE_NAME, _sign_session(user.user_id),
         httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE,
     )
     return response
@@ -377,23 +423,18 @@ async def forgot_password_get(request: Request):
 
 @router.post("/forgot-password", response_class=HTMLResponse)
 async def forgot_password_post(request: Request, email: str = Form(...)):
-    db = get_db()
     identifier = email.strip().lower()
-    result = db.table("oauth_clients").select("client_id,portal_username,created_by").eq("portal_username", identifier).eq("is_active", True).limit(1).execute()
-    if not result.data:
-        result = db.table("oauth_clients").select("client_id,portal_username,created_by").eq("created_by", identifier).eq("is_active", True).limit(1).execute()
+    user = _users().get_user_by_email(identifier)
     # Always show the same "sent" page to prevent email enumeration
-    if result.data:
-        client = result.data[0]
-        raw = create_setup_token(client["client_id"])
-        from src.config import get_settings as _gs
-        from src import email as em
-        issuer_url = _gs().OAUTH_ISSUER_URL
+    if user is not None:
+        raw = create_setup_token(user.user_id)
+        issuer_url = get_settings().OAUTH_ISSUER_URL
         reset_url = f"{issuer_url}/portal/reset-password?token={raw}"
         try:
+            from src import email as em
             await em.send_password_reset_email(
-                contact_name=client.get("portal_username") or "there",
-                contact_email=client.get("created_by") or email.strip().lower(),
+                contact_name=user.display_name or "there",
+                contact_email=user.email,
                 reset_url=reset_url,
             )
         except Exception as exc:
@@ -407,8 +448,8 @@ async def forgot_password_post(request: Request, email: str = Form(...)):
 
 @router.get("/reset-password", response_class=HTMLResponse)
 async def reset_password_get(request: Request, token: str = ""):
-    client_id = _redeem_setup_token(token)
-    if not client_id:
+    user_id = _redeem_setup_token(token)
+    if not user_id:
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
             context={"error": "Reset link is invalid or has expired. Please request a new one."},
@@ -426,8 +467,8 @@ async def reset_password_post(
     password: str = Form(...),
     password_confirm: str = Form(...),
 ):
-    client_id = _redeem_setup_token(token)
-    if not client_id:
+    user_id = _redeem_setup_token(token)
+    if not user_id:
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
             context={"error": "Reset link is invalid or has expired. Please request a new one."},
@@ -443,14 +484,12 @@ async def reset_password_post(
             context={"token": token, "error": "Password must be at least 8 characters"},
         )
 
-    get_db().table("oauth_clients").update({
-        "portal_password_hash": hash_secret(password),
-    }).eq("client_id", client_id).execute()
+    _users().set_password(user_id, password)
     _consume_setup_token(token)
 
     response = RedirectResponse(url="/portal/", status_code=303)
     response.set_cookie(
-        _COOKIE_NAME, _sign_session(client_id),
+        _COOKIE_NAME, _sign_session(user_id),
         httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE,
     )
     return response
@@ -459,13 +498,18 @@ async def reset_password_post(
 # ── Overview ──────────────────────────────────────────────────────────────────
 
 @router.get("/", response_class=HTMLResponse)
-async def portal_overview(request: Request, oauth_expired: Optional[str] = Query(None), client_id: str = Depends(_require_portal_client)):
-    client = _get_client(client_id)
-    if not client:
-        raise HTTPException(status_code=401, detail="Client not found")
+async def portal_overview(
+    request: Request,
+    oauth_expired: Optional[str] = Query(None),
+    user_id: str = Depends(_require_portal_user),
+):
+    users = _users()
+    user = users.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
 
     db = get_db()
-    from datetime import date, timezone as _tz
+    from datetime import date
     today = date.today().isoformat()
     month_start = date.today().replace(day=1).isoformat()
 
@@ -474,29 +518,41 @@ async def portal_overview(request: Request, oauth_expired: Optional[str] = Query
 
     usage_today = _count(
         db.table("oauth_usage_logs").select("count", count="exact")
-          .eq("client_id", client_id).gte("called_at", today).execute()
+          .eq("user_id", user_id).gte("called_at", today).execute()
     )
     usage_month = _count(
         db.table("oauth_usage_logs").select("count", count="exact")
-          .eq("client_id", client_id).gte("called_at", month_start).execute()
+          .eq("user_id", user_id).gte("called_at", month_start).execute()
     )
     usage_total = _count(
         db.table("oauth_usage_logs").select("count", count="exact")
-          .eq("client_id", client_id).execute()
+          .eq("user_id", user_id).execute()
     )
 
-    from src.config import get_settings
-    gateway_url = f"{get_settings().OAUTH_ISSUER_URL}/gateway/{client_id}"
+    gateway_url = f"{get_settings().OAUTH_ISSUER_URL}/gateway/{user_id}"
+    devices = _list_devices(user_id)
+
+    # Template compatibility: expose a `client` dict mirroring the old shape
+    client_ctx = {
+        "client_id": user_id,
+        "client_name": user.display_name or user.email,
+        "portal_username": user.email,
+        "credit_balance": user.credit_balance,
+        "allowed_mcp_resources": user.allowed_mcp_resources,
+        "is_active": user.is_active,
+    }
 
     return templates.TemplateResponse(
         request=request, name="portal_overview.html", context={
-            "client": client,
+            "client": client_ctx,
+            "user": user,
+            "devices": devices,
             "active_nav": "overview",
             "usage_today": usage_today,
             "usage_month": usage_month,
             "usage_total": usage_total,
             "gateway_url": gateway_url,
-            "credit_balance": float(client.get("credit_balance") or 0),
+            "credit_balance": float(user.credit_balance or 0),
             "oauth_expired": bool(oauth_expired),
         }
     )
@@ -505,18 +561,28 @@ async def portal_overview(request: Request, oauth_expired: Optional[str] = Query
 # ── MCP selection ─────────────────────────────────────────────────────────────
 
 @router.get("/mcps", response_class=HTMLResponse)
-async def portal_mcps_get(request: Request, client_id: str = Depends(_require_portal_client)):
-    client = _get_client(client_id)
-    if not client:
-        raise HTTPException(status_code=401, detail="Client not found")
+async def portal_mcps_get(request: Request, user_id: str = Depends(_require_portal_user)):
+    user = _users().get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
 
     db = get_db()
-    catalogue = db.table("mcp_catalogue").select("*").eq("is_published", True).order("name").execute().data or []
-    enabled = set(client.get("allowed_mcp_resources") or [])
+    catalogue = (
+        db.table("mcp_catalogue").select("*").eq("is_published", True).order("name").execute().data
+        or []
+    )
+    enabled = set(user.allowed_mcp_resources or [])
+
+    client_ctx = {
+        "client_id": user_id,
+        "client_name": user.display_name or user.email,
+        "portal_username": user.email,
+    }
 
     return templates.TemplateResponse(
         request=request, name="portal_mcps.html", context={
-            "client": client,
+            "client": client_ctx,
+            "user": user,
             "active_nav": "mcps",
             "catalogue": catalogue,
             "enabled": enabled,
@@ -525,75 +591,115 @@ async def portal_mcps_get(request: Request, client_id: str = Depends(_require_po
 
 
 @router.post("/mcps", response_class=HTMLResponse)
-async def portal_mcps_post(request: Request, client_id: str = Depends(_require_portal_client)):
-    client = _get_client(client_id)
-    if not client:
-        raise HTTPException(status_code=401, detail="Client not found")
-
-    form = await request.form()
+async def portal_mcps_post(request: Request, user_id: str = Depends(_require_portal_user)):
     db = get_db()
+    form = await request.form()
     catalogue = db.table("mcp_catalogue").select("slug").eq("is_published", True).execute().data or []
     valid_slugs = {row["slug"] for row in catalogue}
-
     selected = [slug for slug in form.getlist("mcps") if slug in valid_slugs]
 
-    db.table("oauth_clients").update({
-        "allowed_mcp_resources": selected,
-    }).eq("client_id", client_id).execute()
-
+    _users().set_allowed_mcps(user_id, selected)
     return RedirectResponse(url="/portal/mcps", status_code=303)
 
 
 # ── Setup guide ───────────────────────────────────────────────────────────────
 
 @router.get("/setup", response_class=HTMLResponse)
-async def portal_setup(request: Request, client_id: str = Depends(_require_portal_client)):
-    client = _get_client(client_id)
-    if not client:
-        raise HTTPException(status_code=401, detail="Client not found")
+async def portal_setup(request: Request, user_id: str = Depends(_require_portal_user)):
+    user = _users().get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
 
-    from src.config import get_settings
     settings = get_settings()
-    gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{client_id}"
-    streamable_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{client_id}/mcp"
-    # Show newly generated secret if just rotated (passed via query param, shown once)
+    gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{user_id}"
+    streamable_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{user_id}/mcp"
     new_secret = request.query_params.get("secret")
+    rotated_client_id = request.query_params.get("client_id")
+    devices = _list_devices(user_id)
+
+    client_ctx = {
+        "client_id": user_id,
+        "client_name": user.display_name or user.email,
+        "portal_username": user.email,
+    }
 
     return templates.TemplateResponse(
         request=request, name="portal_setup.html", context={
-            "client": client,
+            "client": client_ctx,
+            "user": user,
+            "devices": devices,
             "active_nav": "setup",
             "gateway_url": gateway_url,
             "streamable_url": streamable_url,
-            "client_id": client_id,
+            "client_id": user_id,
             "new_secret": new_secret,
+            "rotated_client_id": rotated_client_id,
         }
     )
 
 
 @router.post("/setup/rotate-secret")
-async def portal_rotate_secret(client_id: str = Depends(_require_portal_client)):
-    """Generate a new client secret, store the hash, redirect to setup page showing it once."""
-    from src.crypto import generate_token, hash_secret
+async def portal_rotate_secret(
+    user_id: str = Depends(_require_portal_user),
+    client_id: str = Form(...),
+):
+    """Rotate a specific device's client secret. client_id must be owned by the user."""
+    db = get_db()
+    owner = (
+        db.table("oauth_clients")
+        .select("client_id")
+        .eq("client_id", client_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not owner.data:
+        raise HTTPException(status_code=404, detail="Device not found")
+
     raw = generate_token(32)
-    get_db().table("oauth_clients").update(
+    db.table("oauth_clients").update(
         {"client_secret_hash": hash_secret(raw)}
     ).eq("client_id", client_id).execute()
-    return RedirectResponse(url=f"/portal/setup?secret={raw}", status_code=303)
+    return RedirectResponse(
+        url=f"/portal/setup?secret={raw}&client_id={client_id}", status_code=303,
+    )
+
+
+@router.post("/setup/revoke-device")
+async def portal_revoke_device(
+    user_id: str = Depends(_require_portal_user),
+    client_id: str = Form(...),
+):
+    """Deactivate a device. Revokes its tokens by setting is_active=False."""
+    db = get_db()
+    owner = (
+        db.table("oauth_clients")
+        .select("client_id")
+        .eq("client_id", client_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not owner.data:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    db.table("oauth_clients").update({"is_active": False}).eq("client_id", client_id).execute()
+    db.table("oauth_access_tokens").update({"is_revoked": True}).eq("client_id", client_id).execute()
+    db.table("oauth_refresh_tokens").update({"is_revoked": True}).eq("client_id", client_id).execute()
+    return RedirectResponse(url="/portal/setup", status_code=303)
 
 
 @router.get("/setup/download")
-async def portal_setup_download(client_id: str = Depends(_require_portal_client)):
+async def portal_setup_download(user_id: str = Depends(_require_portal_user)):
     import json
     from fastapi.responses import Response
-    client = _get_client(client_id)
-    if not client:
-        raise HTTPException(status_code=401, detail="Client not found")
+    user = _users().get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
 
-    from src.config import get_settings
     settings = get_settings()
-    gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{client_id}"
-    server_name = (client.get("client_name") or "dsmoz-intelligence").lower().replace(" ", "-")
+    gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{user_id}"
+    server_name = (user.display_name or "dsmoz-intelligence").lower().replace(" ", "-")
 
     config = {
         "mcpServers": {
@@ -623,17 +729,24 @@ _CREDIT_PLANS = {
 @router.get("/credits", response_class=HTMLResponse)
 async def portal_credits_get(
     request: Request,
-    client_id: str = Depends(_require_portal_client),
+    user_id: str = Depends(_require_portal_user),
     success: str = "",
 ):
-    client = _get_client(client_id)
-    if not client:
-        raise HTTPException(status_code=401, detail="Client not found")
+    user = _users().get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+
+    client_ctx = {
+        "client_id": user_id,
+        "client_name": user.display_name or user.email,
+        "credit_balance": user.credit_balance,
+    }
     return templates.TemplateResponse(
         request=request, name="portal_credits.html", context={
-            "client": client,
+            "client": client_ctx,
+            "user": user,
             "active_nav": "credits",
-            "credit_balance": float(client.get("credit_balance") or 0),
+            "credit_balance": float(user.credit_balance or 0),
             "success": success,
         }
     )
@@ -643,26 +756,29 @@ async def portal_credits_get(
 async def portal_credits_buy(
     request: Request,
     plan: str = Form(...),
-    client_id: str = Depends(_require_portal_client),
+    user_id: str = Depends(_require_portal_user),
 ):
-    client = _get_client(client_id)
-    if not client:
-        raise HTTPException(status_code=401, detail="Client not found")
-
     credits_to_add = _CREDIT_PLANS.get(plan)
     if not credits_to_add:
         raise HTTPException(status_code=400, detail="Invalid plan")
 
-    db = get_db()
-    current = float(client.get("credit_balance") or 0)
-    new_balance = current + credits_to_add
-    db.table("oauth_clients").update({"credit_balance": new_balance}).eq("client_id", client_id).execute()
+    users = _users()
+    users.add_credits(user_id, credits_to_add)
+    user = users.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
 
+    client_ctx = {
+        "client_id": user_id,
+        "client_name": user.display_name or user.email,
+        "credit_balance": user.credit_balance,
+    }
     return templates.TemplateResponse(
         request=request, name="portal_credits.html", context={
-            "client": _get_client(client_id),
+            "client": client_ctx,
+            "user": user,
             "active_nav": "credits",
-            "credit_balance": new_balance,
-            "success": f"{credits_to_add:.0f} credits added to your account. New balance: {new_balance:.2f}",
+            "credit_balance": float(user.credit_balance or 0),
+            "success": f"{credits_to_add:.0f} credits added to your account. New balance: {user.credit_balance:.2f}",
         }
     )

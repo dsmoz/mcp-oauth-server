@@ -35,6 +35,45 @@ class SupabaseOAuthProvider:
             return None
         return OAuthClient(**row)
 
+    def claim_unclaimed_client(self, client_id: str, user_id: str) -> bool:
+        """
+        Atomically bind an unclaimed DCR client to a user.
+
+        Returns True if the client was newly claimed by this user, False if it
+        was already claimed by this same user (idempotent). Raises ValueError
+        if the client is already claimed by a different user, or if the client
+        does not exist.
+        """
+        import time as _time
+        row = self._single("oauth_clients", client_id=client_id)
+        if row is None:
+            raise ValueError("Client not found")
+
+        existing_user = row.get("user_id")
+        if existing_user == user_id:
+            return False
+        if existing_user is not None:
+            raise ValueError("Client already claimed by a different user")
+
+        # Atomic: only update when user_id IS NULL. If another process won the race,
+        # the update returns zero rows and we surface a clear error.
+        from datetime import datetime, timezone
+        claimed_at = datetime.now(timezone.utc).isoformat()
+        result = (
+            self.db.table("oauth_clients")
+            .update({"user_id": user_id, "claimed_at": claimed_at})
+            .eq("client_id", client_id)
+            .is_("user_id", "null")
+            .execute()
+        )
+        if not result.data:
+            # Lost the race — re-read and fail if a different user grabbed it
+            fresh = self._single("oauth_clients", client_id=client_id)
+            if fresh and fresh.get("user_id") == user_id:
+                return False
+            raise ValueError("Client already claimed by a different user")
+        return True
+
     # ── Authorization ─────────────────────────────────────────────────────────
 
     def authorize(
@@ -181,6 +220,12 @@ class SupabaseOAuthProvider:
                 # Code was already used (concurrent request beat us)
                 raise ValueError("Authorization code already used or expired")
 
+            # Resolve user_id from the claimed client (may be NULL for legacy clients
+            # issued before the users migration, but backfill ensured all existing
+            # rows are populated).
+            client_row = self._single("oauth_clients", client_id=client_id)
+            user_id = client_row.get("user_id") if client_row else None
+
             # Issue tokens — if inserts fail after deletion, caller gets a clear error
             access_token = generate_token(32)
             refresh_token = generate_token(32)
@@ -194,6 +239,7 @@ class SupabaseOAuthProvider:
                     {
                         "token": hash_token(access_token),
                         "client_id": client_id,
+                        "user_id": user_id,
                         "scopes": auth_code.scopes,
                         "resource": auth_code.resource,
                         "expires_at": at_expires,
@@ -205,6 +251,7 @@ class SupabaseOAuthProvider:
                     {
                         "token": hash_token(refresh_token),
                         "client_id": client_id,
+                        "user_id": user_id,
                         "scopes": auth_code.scopes,
                         "access_token": hash_token(access_token),
                         "expires_at": rt_expires,
@@ -276,10 +323,18 @@ class SupabaseOAuthProvider:
             at_expires = now_unix() + ttl
             rt_expires = now_unix() + refresh_ttl
 
+            # Carry user_id forward. Prefer the rt record; fall back to the client row
+            # for legacy refresh tokens issued before the users migration.
+            user_id = getattr(rt, "user_id", None)
+            if user_id is None:
+                client_row = self._single("oauth_clients", client_id=client_id)
+                user_id = client_row.get("user_id") if client_row else None
+
             self.db.table("oauth_access_tokens").insert(
                 {
                     "token": hash_token(new_access),
                     "client_id": client_id,
+                    "user_id": user_id,
                     "scopes": rt.scopes,
                     "resource": None,
                     "expires_at": at_expires,
@@ -291,6 +346,7 @@ class SupabaseOAuthProvider:
                 {
                     "token": hash_token(new_refresh),
                     "client_id": client_id,
+                    "user_id": user_id,
                     "scopes": rt.scopes,
                     "access_token": hash_token(new_access),
                     "expires_at": rt_expires,
