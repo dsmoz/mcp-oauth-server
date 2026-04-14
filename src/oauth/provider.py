@@ -55,13 +55,16 @@ class SupabaseOAuthProvider:
         try:
             session_id = generate_token(24)
             expires_at = now_unix() + SESSION_EXPIRY_SECONDS
+            normalized_code_challenge_method: Optional[str] = None
+            if code_challenge:
+                normalized_code_challenge_method = code_challenge_method or "S256"
 
             # Store all pending session params as JSON in the resource column.
             # This avoids the fragile "state|||resource" delimiter approach.
             session_data = json.dumps({
                 "client_id": client.client_id,
                 "code_challenge": code_challenge,
-                "code_challenge_method": code_challenge_method,
+                "code_challenge_method": normalized_code_challenge_method,
                 "redirect_uri": redirect_uri,
                 "scopes": scopes,
                 "state": state,
@@ -75,7 +78,7 @@ class SupabaseOAuthProvider:
                 "redirect_uri_provided_explicitly": redirect_uri is not None,
                 "scopes": scopes,
                 "code_challenge": code_challenge,
-                "code_challenge_method": code_challenge_method,
+                "code_challenge_method": normalized_code_challenge_method,
                 "resource": session_data,
                 "expires_at": expires_at,
             }

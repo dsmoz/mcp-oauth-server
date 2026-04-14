@@ -78,7 +78,7 @@ async def authorize(
     client_id: str,
     response_type: str,
     code_challenge: Optional[str] = None,
-    code_challenge_method: Optional[str] = "S256",
+    code_challenge_method: Optional[str] = None,
     redirect_uri: Optional[str] = None,
     scope: Optional[str] = None,
     state: Optional[str] = None,
@@ -86,8 +86,13 @@ async def authorize(
 ):
     if response_type != "code":
         raise HTTPException(status_code=400, detail="unsupported_response_type")
-    if code_challenge and code_challenge_method != "S256":
-        raise HTTPException(status_code=400, detail="unsupported_code_challenge_method")
+    normalized_code_challenge_method: Optional[str] = None
+    if code_challenge:
+        normalized_code_challenge_method = code_challenge_method or "S256"
+        if normalized_code_challenge_method != "S256":
+            raise HTTPException(status_code=400, detail="unsupported_code_challenge_method")
+    elif code_challenge_method is not None:
+        raise HTTPException(status_code=400, detail="invalid_request")
 
     provider = _provider()
     client = provider.get_client(client_id)
@@ -105,7 +110,7 @@ async def authorize(
     session_id = provider.authorize(
         client=client,
         code_challenge=code_challenge,
-        code_challenge_method=code_challenge_method,
+        code_challenge_method=normalized_code_challenge_method,
         redirect_uri=redirect_uri,
         scopes=scopes,
         state=state,

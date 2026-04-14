@@ -26,7 +26,7 @@ class AuthorizationCode(BaseModel):
     redirect_uri_provided_explicitly: bool = False
     scopes: List[str] = []
     code_challenge: Optional[str] = None
-    code_challenge_method: Optional[str] = "S256"
+    code_challenge_method: Optional[str] = None
     resource: Optional[str] = None
     expires_at: int
     created_at: Optional[str] = None
