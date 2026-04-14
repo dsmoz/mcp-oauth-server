@@ -72,6 +72,20 @@ async def dashboard(request: Request, _: str = Depends(_require_admin)):
     active_clients = (
         db.table("oauth_clients").select("*", count="exact").eq("is_active", True).execute().count or 0
     )
+    total_users = db.table("users").select("*", count="exact").execute().count or 0
+    active_users = (
+        db.table("users").select("*", count="exact").eq("is_active", True).execute().count or 0
+    )
+    # Unclaimed DCR clients older than 24 hours — cleanup candidates
+    cutoff_24h = (datetime.datetime.utcnow() - datetime.timedelta(hours=24)).isoformat() + "Z"
+    unclaimed_stale = (
+        db.table("oauth_clients")
+        .select("*", count="exact")
+        .is_("user_id", "null")
+        .lt("created_at", cutoff_24h)
+        .execute()
+        .count or 0
+    )
     active_tokens = (
         db.table("oauth_access_tokens")
         .select("*", count="exact")
@@ -118,6 +132,9 @@ async def dashboard(request: Request, _: str = Depends(_require_admin)):
             "total_clients": total_clients,
             "active_clients": active_clients,
             "revoked_clients": total_clients - active_clients,
+            "total_users": total_users,
+            "active_users": active_users,
+            "unclaimed_stale": unclaimed_stale,
             "active_tokens": active_tokens,
             "pending_requests": pending_requests,
             "recent_clients": recent_result.data or [],
@@ -492,7 +509,20 @@ async def approve_registration(
         # Idempotent — already processed
         return RedirectResponse(url=f"/admin/registrations/{request_id}", status_code=303)
 
-    # Generate client credentials
+    # Create the user (tenant) first — reuse existing row if email already exists
+    from src.users import SupabaseUserProvider
+    users = SupabaseUserProvider()
+    existing = users.get_user_by_email(reg["contact_email"])
+    if existing:
+        user = existing
+    else:
+        user = users.create_user(
+            email=reg["contact_email"],
+            display_name=reg["company_name"],
+            is_active=False,  # flipped to True once password is set
+        )
+
+    # Generate per-device client credentials, bound to the user
     client_id = generate_client_id()
     raw_secret = generate_token(32)
     secret_hash = hash_secret(raw_secret)
@@ -510,7 +540,8 @@ async def approve_registration(
         "allowed_mcp_resources": [],
         "created_by": reg["contact_email"],
         "is_active": True,
-        "portal_username": reg["contact_email"],
+        "user_id": user.user_id,
+        "claimed_at": "now()",
     }).execute()
 
     db.table("oauth_registration_requests").update({
@@ -520,7 +551,7 @@ async def approve_registration(
     }).eq("id", request_id).execute()
 
     from src.portal.routes import create_setup_token
-    setup_token = create_setup_token(client_id)
+    setup_token = create_setup_token(user.user_id)
 
     import asyncio
     try:
@@ -528,8 +559,7 @@ async def approve_registration(
             contact_name=reg.get("contact_name", reg["contact_email"]),
             contact_email=reg["contact_email"],
             company_name=reg["company_name"],
-            client_id=client_id,
-            raw_secret=raw_secret,
+            user_id=user.user_id,
             issuer_url=get_settings().OAUTH_ISSUER_URL,
             setup_token=setup_token,
         ))
@@ -538,7 +568,7 @@ async def approve_registration(
         print(f"WARNING: approval email failed: {exc}", file=sys.stderr)
 
     return RedirectResponse(
-        url=f"/admin/clients/{client_id}?secret={raw_secret}",
+        url=f"/admin/users/{user.user_id}?secret={raw_secret}&client_id={client_id}",
         status_code=303,
     )
 
@@ -844,6 +874,133 @@ async def settings_page(request: Request, _: str = Depends(_require_admin), save
         name="settings.html",
         context={"grouped": grouped, "categories": sorted_cats, "saved": saved, "error": None},
     )
+
+
+# ── Users (tenants) ──────────────────────────────────────────────────────────
+
+
+@router.get("/users/", response_class=HTMLResponse)
+async def list_users(request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
+    result = (
+        db.table("users")
+        .select("*")
+        .order("created_at", desc=True)
+        .execute()
+    )
+    users = result.data or []
+    # Attach device count per user
+    for u in users:
+        u["device_count"] = (
+            db.table("oauth_clients").select("*", count="exact")
+            .eq("user_id", u["user_id"]).execute().count or 0
+        )
+    return templates.TemplateResponse(
+        request=request,
+        name="users_list.html",
+        context={"users": users},
+    )
+
+
+@router.get("/users/{user_id}", response_class=HTMLResponse)
+async def user_detail(
+    request: Request,
+    user_id: str,
+    secret: Optional[str] = None,
+    client_id: Optional[str] = None,
+    _: str = Depends(_require_admin),
+):
+    from src.users import SupabaseUserProvider
+    users = SupabaseUserProvider()
+    user = users.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    devices = users.list_user_clients(user_id)
+
+    db = get_db()
+    today_start = datetime.datetime.utcnow().strftime("%Y-%m-%dT00:00:00Z")
+    month_start = datetime.datetime.utcnow().strftime("%Y-%m-01T00:00:00Z")
+    usage_today = (
+        db.table("oauth_usage_logs").select("*", count="exact")
+        .eq("user_id", user_id).gte("called_at", today_start).execute().count or 0
+    )
+    usage_month = (
+        db.table("oauth_usage_logs").select("*", count="exact")
+        .eq("user_id", user_id).gte("called_at", month_start).execute().count or 0
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="user_detail.html",
+        context={
+            "user": user,
+            "devices": devices,
+            "secret": secret,
+            "new_client_id": client_id,
+            "usage_today": usage_today,
+            "usage_month": usage_month,
+        },
+    )
+
+
+@router.post("/users/{user_id}/add-credits", response_class=HTMLResponse)
+async def user_add_credits(
+    user_id: str,
+    amount: float = Form(...),
+    _: str = Depends(_require_admin),
+):
+    from src.users import SupabaseUserProvider
+    users = SupabaseUserProvider()
+    if users.get_user(user_id) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    users.add_credits(user_id, amount)
+    return RedirectResponse(url=f"/admin/users/{user_id}", status_code=303)
+
+
+@router.post("/users/{user_id}/revoke-device", response_class=HTMLResponse)
+async def user_revoke_device(
+    user_id: str,
+    client_id: str = Form(...),
+    _: str = Depends(_require_admin),
+):
+    db = get_db()
+    # Ensure the client belongs to this user before revoking
+    row = _get_client_row(db, client_id)
+    if row is None or row.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Device not found for this user")
+    db.table("oauth_clients").update({"is_active": False}).eq("client_id", client_id).execute()
+    provider = SupabaseOAuthProvider()
+    provider.revoke_client_tokens(client_id)
+    try:
+        from src.gateway.routes import evict_transport
+        evict_transport(client_id)
+    except Exception:
+        pass
+    return RedirectResponse(url=f"/admin/users/{user_id}", status_code=303)
+
+
+@router.post("/users/{user_id}/delete", response_class=HTMLResponse)
+async def delete_user(
+    user_id: str,
+    _: str = Depends(_require_admin),
+):
+    from src.users import SupabaseUserProvider
+    users = SupabaseUserProvider()
+    if users.get_user(user_id) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    users.delete_user(user_id)  # FK cascade removes devices + tokens
+    return RedirectResponse(url="/admin/users/", status_code=303)
+
+
+@router.post("/unclaimed/cleanup", response_class=HTMLResponse)
+async def cleanup_unclaimed(_: str = Depends(_require_admin)):
+    """Delete DCR clients older than 24h that nobody ever claimed."""
+    db = get_db()
+    cutoff_24h = (datetime.datetime.utcnow() - datetime.timedelta(hours=24)).isoformat() + "Z"
+    db.table("oauth_clients").delete().is_("user_id", "null").lt(
+        "created_at", cutoff_24h
+    ).execute()
+    return RedirectResponse(url="/admin/", status_code=303)
 
 
 @router.post("/settings", response_class=HTMLResponse)

@@ -1,8 +1,13 @@
 """
-Gateway — one MCP endpoint per client via Streamable HTTP transport.
+Gateway — one MCP endpoint per user (tenant) via Streamable HTTP transport.
 
-GET/POST/DELETE  /gateway/{client_id}       — primary endpoint
-GET/POST/DELETE  /gateway/{client_id}/mcp   — alias with /mcp suffix
+GET/POST/DELETE  /gateway/{user_id}       — primary endpoint
+GET/POST/DELETE  /gateway/{user_id}/mcp   — alias with /mcp suffix
+
+The path key is the user_id (tenant). Access tokens carry both user_id and
+client_id: the user_id must match the URL, and the client_id is forwarded
+upstream only as telemetry via X-Client-ID. Upstream MCPs namespace
+per-tenant state on X-User-ID.
 """
 from __future__ import annotations
 
@@ -36,13 +41,41 @@ async def start_cleanup_loop() -> None:
         await asyncio.sleep(3600)
 
 
-def _load_enabled_mcps(client_id: str) -> list[dict]:
-    """Return MCPs the client has added, filtered to only published ones."""
+def _resolve_user_id_for_token(at) -> str | None:
+    """Extract user_id from an access token row, falling back to the owning
+    oauth_client's user_id for legacy tokens that predate the users table."""
+    user_id = getattr(at, "user_id", None)
+    if user_id:
+        return user_id
+    try:
+        row = (
+            get_db()
+            .table("oauth_clients")
+            .select("user_id")
+            .eq("client_id", at.client_id)
+            .limit(1)
+            .execute()
+        )
+        if row.data and row.data[0].get("user_id"):
+            return row.data[0]["user_id"]
+    except Exception:
+        pass
+    return None
+
+
+def _load_enabled_mcps(user_id: str) -> list[dict]:
+    """Return MCPs the user has added, filtered to only published ones."""
     db = get_db()
-    client_row = db.table("oauth_clients").select("allowed_mcp_resources").eq("client_id", client_id).limit(1).execute()
-    if not client_row.data:
+    user_row = (
+        db.table("users")
+        .select("allowed_mcp_resources")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not user_row.data:
         return []
-    slugs = client_row.data[0].get("allowed_mcp_resources") or []
+    slugs = user_row.data[0].get("allowed_mcp_resources") or []
     if not slugs:
         return []
     return (
@@ -64,23 +97,26 @@ def _get_credit_cost(mcp_slug: str) -> float:
         return 0.0
 
 
-def _deduct_credits(client_id: str, amount: float) -> float:
-    """Atomically deduct credits via Supabase RPC. Returns new balance or -1 if insufficient."""
+def _deduct_credits(user_id: str, amount: float) -> float:
+    """Atomically deduct credits from a user via Supabase RPC. Returns new balance or -1 if insufficient."""
     try:
-        result = get_db().rpc("deduct_credits", {"p_client_id": client_id, "p_amount": amount}).execute()
+        result = get_db().rpc(
+            "deduct_credits_user", {"p_user_id": user_id, "p_amount": amount}
+        ).execute()
         return float(result.data) if result.data is not None else -1
     except Exception as exc:
-        print(f"WARNING: credit deduction failed for {client_id}: {exc}", file=sys.stderr)
+        print(f"WARNING: credit deduction failed for user {user_id}: {exc}", file=sys.stderr)
         return -1
 
 
 def _log_tool_call(
-    client_id: str, mcp_slug: str, tool_name: str,
+    user_id: str, client_id: str, mcp_slug: str, tool_name: str,
     credits_used: float = 0.0, duration_ms: int | None = None,
     response_bytes: int | None = None,
 ) -> None:
     try:
         row: dict = {
+            "user_id": user_id,
             "client_id": client_id,
             "endpoint": f"gateway/{mcp_slug}/{tool_name}",
             "credits_used": credits_used,
@@ -91,20 +127,20 @@ def _log_tool_call(
             row["response_bytes"] = response_bytes
         get_db().table("oauth_usage_logs").insert(row).execute()
     except Exception as exc:
-        print(f"WARNING: usage log failed for {client_id}: {exc}", file=sys.stderr)
+        print(f"WARNING: usage log failed for user {user_id}: {exc}", file=sys.stderr)
 
 
 def _get_all_published_mcps() -> list[dict]:
     return get_db().table("mcp_catalogue").select("*").eq("is_published", True).execute().data or []
 
 
-def _update_client_mcps(client_id: str, slugs: list[str]) -> None:
-    get_db().table("oauth_clients").update(
+def _update_user_mcps(user_id: str, slugs: list[str]) -> None:
+    get_db().table("users").update(
         {"allowed_mcp_resources": slugs}
-    ).eq("client_id", client_id).execute()
+    ).eq("user_id", user_id).execute()
 
 
-def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
+def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) -> Server:
     mcp_by_slug = {m["slug"]: m for m in enabled_mcps}
     _tool_cache: dict[str, list[dict]] = {}
 
@@ -211,7 +247,7 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                 text = json.dumps({"status": "already_enabled", "mcp": slug})
             else:
                 new_slugs = list(mcp_by_slug.keys()) + [slug]
-                _update_client_mcps(client_id, new_slugs)
+                _update_user_mcps(user_id, new_slugs)
                 mcp_by_slug[slug] = all_mcps[slug]
                 enabled_mcps.append(all_mcps[slug])
                 text = json.dumps({"status": "added", "mcp": slug, "name": all_mcps[slug]["name"]})
@@ -222,7 +258,7 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                 text = json.dumps({"error": f"MCP '{slug}' is not in your toolbox"})
             else:
                 new_slugs = [s for s in mcp_by_slug.keys() if s != slug]
-                _update_client_mcps(client_id, new_slugs)
+                _update_user_mcps(user_id, new_slugs)
                 del mcp_by_slug[slug]
                 enabled_mcps[:] = [m for m in enabled_mcps if m["slug"] != slug]
                 text = json.dumps({"status": "removed", "mcp": slug})
@@ -258,16 +294,23 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                 credit_cost = _get_credit_cost(slug)
                 # Atomic credit gate — deduct before calling upstream (refund not implemented)
                 if credit_cost > 0:
-                    new_balance = _deduct_credits(client_id, credit_cost)
+                    new_balance = _deduct_credits(user_id, credit_cost)
                     if new_balance < 0:
                         text = json.dumps({"error": "Insufficient credits. Visit your portal to buy more credits."})
                         return [types.TextContent(type="text", text=text)]
                 t0 = time.monotonic()
                 try:
-                    print(f"GATEWAY: call_upstream_tool {slug}/{tool_name} client_id={client_id!r} url={mcp['upstream_url']}", file=sys.stderr)
-                    text = await call_upstream_tool(mcp["upstream_url"], tool_name, tool_args,
-                                                    mcp.get("upstream_api_key", ""),
-                                                    client_id=client_id)
+                    print(
+                        f"GATEWAY: call_upstream_tool {slug}/{tool_name} "
+                        f"user_id={user_id!r} client_id={client_id!r} url={mcp['upstream_url']}",
+                        file=sys.stderr,
+                    )
+                    text = await call_upstream_tool(
+                        mcp["upstream_url"], tool_name, tool_args,
+                        mcp.get("upstream_api_key", ""),
+                        user_id=user_id,
+                        client_id=client_id,
+                    )
                 except RuntimeError as exc:
                     # RuntimeError from upstream.py signals a known issue (e.g. 401 auth)
                     print(f"GATEWAY: upstream auth/config error {slug}/{tool_name}: {exc}", file=sys.stderr)
@@ -297,8 +340,11 @@ def _build_mcp_server(client_id: str, enabled_mcps: list[dict]) -> Server:
                     text = json.dumps({"error": error_msg})
                 elapsed_ms = int((time.monotonic() - t0) * 1000)
                 resp_bytes = len(text.encode("utf-8")) if text else 0
-                _log_tool_call(client_id, slug, tool_name, credits_used=credit_cost,
-                               duration_ms=elapsed_ms, response_bytes=resp_bytes)
+                _log_tool_call(
+                    user_id, client_id, slug, tool_name,
+                    credits_used=credit_cost,
+                    duration_ms=elapsed_ms, response_bytes=resp_bytes,
+                )
 
         else:
             text = json.dumps({"error": f"Unknown tool: {name}"})
@@ -315,17 +361,17 @@ def _get_bearer(request: Request) -> str | None:
     return auth[7:]
 
 
-def _unauth_response(request: Request) -> JSONResponse:
+def _unauth_response(request: Request, detail: str = "Bearer token required") -> JSONResponse:
     """Return a 401 with OAuth discovery headers before the SSE transport starts."""
     issuer = get_settings().OAUTH_ISSUER_URL
     return JSONResponse(
-        content={"error": "unauthorized", "error_description": "Bearer token required"},
+        content={"error": "unauthorized", "error_description": detail},
         status_code=401,
         headers={
             "WWW-Authenticate": (
                 f'Bearer realm="{issuer}",'
                 f' error="invalid_token",'
-                f' error_description="Bearer token required"'
+                f' error_description="{detail}"'
             ),
             "Link": f'<{issuer}/.well-known/oauth-authorization-server>; rel="oauth-authorization-server"',
         },
@@ -341,9 +387,9 @@ async def _gateway_asgi(scope, receive, send):
     """
     request = Request(scope, receive, send)
     path = request.url.path
-    # Extract client_id from /gateway/{client_id} or /gateway/{client_id}/mcp
+    # Extract user_id from /gateway/{user_id} or /gateway/{user_id}/mcp
     parts = path.strip("/").split("/")
-    client_id = parts[1] if len(parts) >= 2 else ""
+    url_user_id = parts[1] if len(parts) >= 2 else ""
 
     token = _get_bearer(request)
     if not token:
@@ -362,15 +408,40 @@ async def _gateway_asgi(scope, receive, send):
 
     from src.crypto import now_unix
     if at.expires_at and at.expires_at < now_unix():
-        print(f"GATEWAY: expired token for {at.client_id} on {request.method} {path}", file=sys.stderr)
+        print(f"GATEWAY: expired token for client {at.client_id} on {request.method} {path}", file=sys.stderr)
         response = _unauth_response(request)
         await response(scope, receive, send)
         return
 
-    actual_client_id = at.client_id
-    print(f"GATEWAY: auth OK for {actual_client_id}, {request.method} {path}", file=sys.stderr)
-    enabled_mcps = _load_enabled_mcps(actual_client_id)
-    mcp_server = _build_mcp_server(actual_client_id, enabled_mcps)
+    token_user_id = _resolve_user_id_for_token(at)
+    if not token_user_id:
+        print(
+            f"GATEWAY: token for client {at.client_id} has no user binding — "
+            f"unclaimed client cannot access gateway",
+            file=sys.stderr,
+        )
+        response = _unauth_response(request, "Token is not bound to a user")
+        await response(scope, receive, send)
+        return
+
+    if token_user_id != url_user_id:
+        print(
+            f"GATEWAY: user mismatch — token user_id={token_user_id!r} "
+            f"vs URL user_id={url_user_id!r} on {request.method} {path}",
+            file=sys.stderr,
+        )
+        response = _unauth_response(request, "Token does not match gateway URL")
+        await response(scope, receive, send)
+        return
+
+    client_id = at.client_id
+    print(
+        f"GATEWAY: auth OK for user={token_user_id} client={client_id}, "
+        f"{request.method} {path}",
+        file=sys.stderr,
+    )
+    enabled_mcps = _load_enabled_mcps(token_user_id)
+    mcp_server = _build_mcp_server(token_user_id, client_id, enabled_mcps)
     transport = StreamableHTTPServerTransport(mcp_session_id=None)
 
     response_started = False

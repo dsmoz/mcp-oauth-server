@@ -423,10 +423,15 @@
           <i class="ph-light ph-squares-four"></i>
           <span class="nav-label">Dashboard</span>
         </a>
+        <a href="/admin/users/" class="nav-item {% if '/admin/users' in request.url.path %}active{% endif %}"
+           title="Users">
+          <i class="ph-light ph-users-three"></i>
+          <span class="nav-label">Users</span>
+        </a>
         <a href="/admin/clients/" class="nav-item {% if '/admin/clients' in request.url.path %}active{% endif %}"
-           title="Clients">
+           title="Devices">
           <i class="ph-light ph-identification-card"></i>
-          <span class="nav-label">Clients</span>
+          <span class="nav-label">Devices</span>
         </a>
         <a href="/admin/registrations" class="nav-item {% if '/admin/registrations' in request.url.path %}active{% endif %}"
            title="Registrations">

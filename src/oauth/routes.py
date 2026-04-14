@@ -15,6 +15,7 @@ from src.db import get_db
 from src import email as em
 from src.limiter import limiter
 from src.oauth.provider import SupabaseOAuthProvider
+from src.users.provider import SupabaseUserProvider
 from src import telegram as tg
 
 router = APIRouter()
@@ -242,7 +243,9 @@ async def introspect(
 
     # Log usage — fire and forget, never block the response
     try:
-        get_db().table("oauth_usage_logs").insert({"client_id": at.client_id}).execute()
+        get_db().table("oauth_usage_logs").insert(
+            {"client_id": at.client_id, "user_id": at.user_id}
+        ).execute()
     except Exception:
         pass
 
@@ -250,6 +253,7 @@ async def introspect(
         {
             "active": True,
             "client_id": at.client_id,
+            "user_id": at.user_id,
             "scope": " ".join(at.scopes) if at.scopes else "mcp",
             "exp": at.expires_at,
         }
@@ -338,18 +342,48 @@ async def register_submit(
 
     settings = get_settings()
     db = get_db()
+    users = SupabaseUserProvider()
 
     # Parse redirect URIs
     redirect_uris = [u.strip() for u in redirect_uris_raw.splitlines() if u.strip()]
 
-    # Create OAuth client immediately (no admin approval gate)
-    client_id = generate_client_id()
-    raw_secret = generate_token(32)
-    secret_hash = hash_secret(raw_secret)
-
     # Pre-populate toolbox with all published MCPs
     published = db.table("mcp_catalogue").select("slug").eq("is_published", True).execute()
     allowed_mcps = [r["slug"] for r in (published.data or [])]
+
+    # Create user row (the tenant). Inactive until password is set via email link.
+    try:
+        user = users.create_user(
+            email=contact_email,
+            display_name=contact_name,
+            credit_balance=0.0,
+            allowed_mcp_resources=allowed_mcps,
+            is_active=False,
+        )
+    except ValueError:
+        new_q, new_signed = _make_captcha()
+        return templates.TemplateResponse(
+            request=request,
+            name="register.html",
+            context={
+                "error": "An account with this email already exists. Please sign in via the portal.",
+                "captcha_question": new_q,
+                "captcha_signed": new_signed,
+                "company_name": company_name,
+                "contact_name": contact_name,
+                "contact_email": contact_email,
+                "use_case": use_case,
+                "redirect_uris_raw": redirect_uris_raw,
+            },
+            status_code=409,
+        )
+
+    # Create an OAuth client bound to the user (claimed on creation).
+    client_id = generate_client_id()
+    raw_secret = generate_token(32)
+    secret_hash = hash_secret(raw_secret)
+    from datetime import datetime, timezone
+    claimed_at = datetime.now(timezone.utc).isoformat()
 
     db.table("oauth_clients").insert({
         "client_id": client_id,
@@ -358,11 +392,10 @@ async def register_submit(
         "redirect_uris": redirect_uris,
         "grant_types": ["authorization_code"],
         "scope": "mcp",
-        "allowed_mcp_resources": allowed_mcps,
         "created_by": contact_email,
-        "is_active": False,  # activated when user completes setup-password
-        "portal_username": contact_email,
-        "credit_balance": 0,
+        "is_active": False,  # activated once the user completes setup-password
+        "user_id": user.user_id,
+        "claimed_at": claimed_at,
     }).execute()
 
     # Log registration request for admin visibility (status=approved immediately)
@@ -378,9 +411,9 @@ async def register_submit(
     }).execute()
     request_id = reg_result.data[0]["id"] if reg_result.data else "unknown"
 
-    # Generate portal setup token (one-time 24h link to set password)
+    # Generate portal setup token (one-time 24h link to set password). Keyed on user_id.
     from src.portal.routes import create_setup_token
-    setup_token = create_setup_token(client_id)
+    setup_token = create_setup_token(user.user_id)
 
     # Send credentials email
     try:
@@ -438,7 +471,10 @@ async def dynamic_client_registration(request: Request):
     db = get_db()
     fingerprint = compute_dcr_fingerprint(client_name, redirect_uris)
 
-    # --- Dedup: return existing client if fingerprint matches ---
+    # --- Dedup: return existing UNCLAIMED client if fingerprint matches ---
+    # Claimed clients are per-user devices. A new DCR call for the same fingerprint
+    # from a different device/session must mint a fresh unclaimed client so the
+    # next logged-in user can claim it, instead of hijacking someone else's device.
     existing = None
     if fingerprint:
         result = (
@@ -446,15 +482,15 @@ async def dynamic_client_registration(request: Request):
             .select("client_id, created_at")
             .eq("dcr_fingerprint", fingerprint)
             .eq("is_active", True)
+            .is_("user_id", "null")
             .limit(1)
             .execute()
         )
         existing = result.data[0] if result.data else None
 
     if existing:
-        # Client already registered — return client_id without rotating the secret.
-        # The caller must use the secret from its original registration.
-        print(f"DCR: dedup hit — returning {existing['client_id']} ({client_name}), secret unchanged", file=sys.stderr)
+        # Unclaimed client already pending — return it so the same session can resume.
+        print(f"DCR: dedup hit — returning unclaimed {existing['client_id']} ({client_name})", file=sys.stderr)
 
         response_body = {
             **body,
@@ -468,14 +504,12 @@ async def dynamic_client_registration(request: Request):
         }
         return JSONResponse(response_body, status_code=200)
 
-    # --- New client registration ---
+    # --- New unclaimed client registration ---
+    # user_id is NULL; populated atomically when the first authorising user logs in.
+    # Credit balance and allowed_mcp_resources live on the user row, not the client.
     client_id = generate_client_id()
     raw_secret = generate_token(32)
     secret_hash = hash_secret(raw_secret)
-
-    # Pre-populate toolbox with all published MCPs
-    published = db.table("mcp_catalogue").select("slug").eq("is_published", True).execute()
-    allowed_mcps = [r["slug"] for r in (published.data or [])]
 
     try:
         db.table("oauth_clients").insert({
@@ -485,10 +519,8 @@ async def dynamic_client_registration(request: Request):
             "redirect_uris": redirect_uris,
             "grant_types": grant_types,
             "scope": scope if isinstance(scope, str) else " ".join(scope),
-            "allowed_mcp_resources": allowed_mcps,
             "created_by": f"dynamic:{client_name}",
             "is_active": True,
-            "credit_balance": 0,
             "dcr_fingerprint": fingerprint,
         }).execute()
     except Exception as exc:
@@ -499,6 +531,7 @@ async def dynamic_client_registration(request: Request):
                 .select("client_id, created_at")
                 .eq("dcr_fingerprint", fingerprint)
                 .eq("is_active", True)
+                .is_("user_id", "null")
                 .limit(1)
                 .execute()
             )

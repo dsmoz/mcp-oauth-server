@@ -70,18 +70,18 @@ async def send_approval_email(
     contact_name: str,
     contact_email: str,
     company_name: str,
-    client_id: str,
+    user_id: str,
     issuer_url: str,
     setup_token: str = "",
 ) -> None:
-    """Send setup instructions to the newly approved client."""
+    """Send setup instructions to the newly approved user."""
     settings = get_settings()
     if not settings.BREVO_API_KEY or not settings.BREVO_SENDER_EMAIL:
         import sys
         print("WARNING: Brevo not configured — skipping approval email", file=sys.stderr)
         return
 
-    gateway_url = f"{issuer_url}/gateway/{client_id}"
+    gateway_url = f"{issuer_url}/gateway/{user_id}"
     setup_url = f"{issuer_url}/portal/setup-password?token={setup_token}" if setup_token else f"{issuer_url}/portal/login"
 
     html = _APPROVAL_HTML.format(
