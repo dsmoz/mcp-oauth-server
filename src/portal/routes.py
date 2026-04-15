@@ -686,7 +686,94 @@ async def portal_revoke_device(
     db.table("oauth_clients").update({"is_active": False}).eq("client_id", client_id).execute()
     db.table("oauth_access_tokens").update({"is_revoked": True}).eq("client_id", client_id).execute()
     db.table("oauth_refresh_tokens").update({"is_revoked": True}).eq("client_id", client_id).execute()
-    return RedirectResponse(url="/portal/setup", status_code=303)
+    try:
+        from src.gateway.routes import evict_transport
+        evict_transport(client_id)
+    except Exception:
+        pass
+    return RedirectResponse(url="/portal/devices", status_code=303)
+
+
+# ── Devices list page ─────────────────────────────────────────────────────────
+
+@router.get("/devices", response_class=HTMLResponse)
+async def portal_devices_get(
+    request: Request,
+    user_id: str = Depends(_require_portal_user),
+):
+    user = _users().get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    devices = _list_devices(user_id)
+    client_ctx = {
+        "client_id": user_id,
+        "client_name": user.display_name or user.email,
+    }
+    return templates.TemplateResponse(
+        request=request, name="portal_devices.html", context={
+            "client": client_ctx,
+            "user": user,
+            "devices": devices,
+            "active_nav": "devices",
+        },
+    )
+
+
+@router.post("/devices/revoke")
+async def portal_devices_revoke(
+    user_id: str = Depends(_require_portal_user),
+    client_id: str = Form(...),
+):
+    """Soft-delete a device — sets is_active=False and revokes its tokens."""
+    db = get_db()
+    owner = (
+        db.table("oauth_clients")
+        .select("client_id")
+        .eq("client_id", client_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not owner.data:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    db.table("oauth_clients").update({"is_active": False}).eq("client_id", client_id).execute()
+    db.table("oauth_access_tokens").update({"is_revoked": True}).eq("client_id", client_id).execute()
+    db.table("oauth_refresh_tokens").update({"is_revoked": True}).eq("client_id", client_id).execute()
+    try:
+        from src.gateway.routes import evict_transport
+        evict_transport(client_id)
+    except Exception:
+        pass
+    return RedirectResponse(url="/portal/devices", status_code=303)
+
+
+@router.post("/devices/delete")
+async def portal_devices_delete(
+    user_id: str = Depends(_require_portal_user),
+    client_id: str = Form(...),
+):
+    """Hard-delete a device. Cannot be undone."""
+    from src.oauth.provider import SupabaseOAuthProvider
+    db = get_db()
+    owner = (
+        db.table("oauth_clients")
+        .select("client_id")
+        .eq("client_id", client_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not owner.data:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    SupabaseOAuthProvider().delete_client(client_id)
+    try:
+        from src.gateway.routes import evict_transport
+        evict_transport(client_id)
+    except Exception:
+        pass
+    return RedirectResponse(url="/portal/devices", status_code=303)
 
 
 @router.get("/setup/download")

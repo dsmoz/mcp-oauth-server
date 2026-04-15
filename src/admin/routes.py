@@ -979,6 +979,27 @@ async def user_revoke_device(
     return RedirectResponse(url=f"/admin/users/{user_id}", status_code=303)
 
 
+@router.post("/users/{user_id}/delete-device", response_class=HTMLResponse)
+async def user_delete_device(
+    user_id: str,
+    client_id: str = Form(...),
+    _: str = Depends(_require_admin),
+):
+    db = get_db()
+    # Ensure the client belongs to this user before hard-deleting
+    row = _get_client_row(db, client_id)
+    if row is None or row.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Device not found for this user")
+    provider = SupabaseOAuthProvider()
+    provider.delete_client(client_id)
+    try:
+        from src.gateway.routes import evict_transport
+        evict_transport(client_id)
+    except Exception:
+        pass
+    return RedirectResponse(url=f"/admin/users/{user_id}", status_code=303)
+
+
 @router.post("/users/{user_id}/delete", response_class=HTMLResponse)
 async def delete_user(
     user_id: str,

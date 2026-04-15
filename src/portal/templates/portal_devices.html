@@ -1,0 +1,75 @@
+{% extends "portal_base.html" %}
+{% block title %}Devices — DS-MOZ Intelligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Devices</h1>
+</div>
+
+<div class="card">
+  <h2>Connected Devices ({{ devices|length }})</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.5">
+    Each AI client (Claude Desktop, Claude.ai, ChatGPT, etc.) that connects to your gateway becomes a device.
+    <strong style="color:var(--text-ui)">Revoke</strong> signs the device out but keeps it in this list.
+    <strong style="color:var(--text-ui)">Delete</strong> permanently removes it.
+  </p>
+
+  {% if devices %}
+  <table style="width:100%;border-collapse:collapse;font-size:0.8125rem">
+    <thead>
+      <tr style="text-align:left;border-bottom:1px solid var(--border)">
+        <th style="padding:0.5rem 0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:0.7rem;letter-spacing:0.06em">Name</th>
+        <th style="padding:0.5rem 0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:0.7rem;letter-spacing:0.06em">Device ID</th>
+        <th style="padding:0.5rem 0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:0.7rem;letter-spacing:0.06em">Status</th>
+        <th style="padding:0.5rem 0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:0.7rem;letter-spacing:0.06em">Claimed</th>
+        <th style="padding:0.5rem 0.75rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;font-size:0.7rem;letter-spacing:0.06em;text-align:right">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in devices %}
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:0.65rem 0.75rem;color:var(--text-b)">{{ d.client_name }}</td>
+        <td style="padding:0.65rem 0.75rem;font-family:monospace;font-size:0.75rem;color:var(--text-muted)">{{ d.client_id }}</td>
+        <td style="padding:0.65rem 0.75rem">
+          {% if d.is_active %}
+            <span style="display:inline-block;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.7rem;font-weight:700;background:var(--success-bg);color:var(--success)">Active</span>
+          {% else %}
+            <span style="display:inline-block;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.7rem;font-weight:700;background:var(--danger-bg);color:var(--danger-fg);border:1px solid var(--danger-border)">Revoked</span>
+          {% endif %}
+        </td>
+        <td style="padding:0.65rem 0.75rem;color:var(--text-muted);font-size:0.75rem">
+          {{ d.claimed_at[:10] if d.claimed_at else "—" }}
+        </td>
+        <td style="padding:0.65rem 0.75rem;text-align:right">
+          <div style="display:inline-flex;gap:0.4rem;justify-content:flex-end">
+            {% if d.is_active %}
+            <form method="post" action="/portal/devices/revoke" style="margin:0"
+                  onsubmit="return confirm('Revoke {{ d.client_name }}? The device will be signed out.')">
+              <input type="hidden" name="client_id" value="{{ d.client_id }}">
+              <button type="submit" class="btn"
+                      style="font-size:0.75rem;padding:0.3rem 0.7rem;background:var(--danger-bg);color:var(--danger-fg);border-color:var(--danger-border)">
+                <i class="ph-light ph-prohibit"></i> Revoke
+              </button>
+            </form>
+            {% endif %}
+            <form method="post" action="/portal/devices/delete" style="margin:0"
+                  onsubmit="return confirm('Permanently delete {{ d.client_name }}? This cannot be undone.')">
+              <input type="hidden" name="client_id" value="{{ d.client_id }}">
+              <button type="submit" class="btn"
+                      style="font-size:0.75rem;padding:0.3rem 0.7rem;background:var(--danger-bg);color:var(--danger-fg);border-color:var(--danger-border)">
+                <i class="ph-light ph-trash"></i> Delete
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--text-muted);font-size:0.875rem">
+    No devices yet. Follow the <a href="/portal/setup" style="color:var(--vivid)">Setup Guide</a> to connect an AI client.
+  </p>
+  {% endif %}
+</div>
+{% endblock %}
