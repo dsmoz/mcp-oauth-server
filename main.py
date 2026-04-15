@@ -20,6 +20,8 @@ if _sentry_dsn:
     print("✅ Sentry error tracking enabled", file=sys.stderr)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from src.limiter import limiter
@@ -91,6 +93,10 @@ app.include_router(oauth_router)
 app.include_router(admin_router)
 app.include_router(portal_router)
 app.include_router(rest_proxy_router)
+
+# Serve portal static assets (brand icon, etc.)
+_portal_static = Path(__file__).parent / "src" / "portal" / "static"
+app.mount("/portal/static", StaticFiles(directory=str(_portal_static)), name="portal-static")
 
 
 @app.get("/health")
