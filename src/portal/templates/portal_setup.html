@@ -132,6 +132,56 @@
 </div>
 
 <div class="card">
+  <h2>ChatGPT</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.5">
+    In ChatGPT, open <strong style="color:var(--text-ui)">Settings &rarr; Connectors &rarr; Create &rarr; New App</strong> (Developer mode / custom connectors must be enabled on your account). Fill in:
+  </p>
+  <div style="display:flex;flex-direction:column;gap:0.75rem">
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">Name</div>
+      <div style="font-size:0.875rem;color:var(--text-ui)">DS-MOZ Intelligence (or any label)</div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">MCP Server URL</div>
+      <div class="code-pill">
+        <span>{{ gateway_url }}</span>
+        <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">Authentication</div>
+      <div style="font-size:0.875rem;color:var(--text-ui)">OAuth</div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">OAuth Client ID <span style="font-weight:400;text-transform:none;letter-spacing:0">(under Advanced settings)</span></div>
+      <div class="code-pill">
+        <span>{{ client_id }}</span>
+        <button class="copy-btn" onclick="copyText('{{ client_id }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+    </div>
+    {% if new_secret %}
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">OAuth Client Secret <span style="font-weight:400;text-transform:none;letter-spacing:0">(under Advanced settings)</span></div>
+      <div class="code-pill" style="border-color:var(--vivid)">
+        <span>{{ new_secret }}</span>
+        <button class="copy-btn" onclick="copyText('{{ new_secret }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.5">
+    Tick <strong style="color:var(--text-ui)">&ldquo;I understand and want to continue&rdquo;</strong> to acknowledge the custom-connector risk notice, then click <strong style="color:var(--text-ui)">Create</strong>. ChatGPT will open a browser window to sign you in with your portal credentials.
+    {% if not new_secret %} Generate your secret in the Claude Desktop section above, then use it here too.{% else %} Use the same Client Secret shown above.{% endif %}
+  </p>
+</div>
+
+<div class="card">
   <h2>How the Gateway Works</h2>
   <p style="font-size:0.8125rem;color:var(--text-muted);line-height:1.6;margin-bottom:0.75rem">
     Your LLM connects to the gateway once and gets access to all your enabled MCP tools via four meta-tools:
