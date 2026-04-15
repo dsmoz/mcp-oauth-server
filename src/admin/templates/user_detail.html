@@ -21,7 +21,7 @@
 <div class="secret-box">
   <div class="label"><i class="ph-light ph-key"></i> New Device Credentials</div>
   <div class="detail-row">
-    <div class="detail-label">Client ID</div>
+    <div class="detail-label">Device ID</div>
     <div class="detail-value">{{ new_client_id }}</div>
   </div>
   <div class="detail-row">
@@ -117,7 +117,7 @@
     <thead>
       <tr>
         <th>Name</th>
-        <th>Client ID</th>
+        <th>Device ID</th>
         <th>Status</th>
         <th>Claimed</th>
         <th>Actions</th>
@@ -151,6 +151,13 @@
             </button>
           </form>
           {% endif %}
+          <form method="post" action="/admin/users/{{ user.user_id }}/delete-device"
+                onsubmit="return confirm('Permanently delete {{ d.client_name }}? This cannot be undone.')">
+            <input type="hidden" name="client_id" value="{{ d.client_id }}">
+            <button type="submit" class="btn btn-danger">
+              <i class="ph-light ph-trash"></i> Delete
+            </button>
+          </form>
         </td>
       </tr>
       {% endfor %}
