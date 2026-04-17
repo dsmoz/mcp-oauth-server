@@ -45,14 +45,35 @@
              placeholder="https://mcp-linguist-production.up.railway.app/sse">
     </div>
     <div class="form-group">
-      <label class="form-label">API Key <small style="color:var(--text-muted)">(leave blank if upstream requires no auth)</small></label>
-      <input type="text" name="upstream_api_key" class="form-input"
-             value="{{ entry.upstream_api_key if entry else '' }}"
-             placeholder="optional">
+      <label class="form-label">API Key
+        <small style="color:var(--text-muted)">
+          {% if entry and entry.upstream_api_key %}(key set — leave blank to keep existing){% else %}(leave blank if upstream requires no auth){% endif %}
+        </small>
+      </label>
+      <div style="display:flex;gap:0.5rem;align-items:center">
+        <input type="text" name="upstream_api_key" id="upstream_api_key" class="form-input"
+               value="" placeholder="{% if entry and entry.upstream_api_key %}••••••••••••••••{% else %}optional{% endif %}"
+               style="flex:1;font-family:monospace">
+        <button type="button" class="btn btn-secondary" onclick="generateApiKey()"
+                style="white-space:nowrap">
+          <i class="ph-light ph-arrows-clockwise"></i> Generate
+        </button>
+      </div>
     </div>
     <button type="submit" class="btn btn-primary">
       <i class="ph-light ph-floppy-disk"></i> Save
     </button>
   </form>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+function generateApiKey() {
+  const arr = new Uint8Array(32);
+  crypto.getRandomValues(arr);
+  const token = btoa(String.fromCharCode(...arr))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  document.getElementById('upstream_api_key').value = token;
+}
+</script>
 {% endblock %}
