@@ -690,6 +690,31 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
     # Build merged list: each Railway service + any DB-only entries not in Railway
     railway_slugs = {svc["slug"] for svc in railway_services}
 
+    # Auto-publish new Railway MCP services (slug prefix "mcp-") that aren't in the DB yet
+    for svc in railway_services:
+        slug = svc["slug"]
+        if slug in db_rows or not slug.startswith("mcp-"):
+            continue
+        upstream_url = svc["upstream_url"] or ""
+        if not upstream_url:
+            continue
+        try:
+            description = await _auto_describe_mcp(upstream_url, "", svc["name"]) or ""
+            inserted = db.table("mcp_catalogue").insert({
+                "slug": slug,
+                "name": svc["name"],
+                "description": description,
+                "category": "MCP Server",
+                "upstream_url": upstream_url,
+                "upstream_api_key": "",
+                "is_published": True,
+            }).execute()
+            if inserted.data:
+                db_rows[slug] = inserted.data[0]
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("auto-publish failed for %s: %s", slug, exc)
+
     entries = []
     for svc in railway_services:
         slug = svc["slug"]
