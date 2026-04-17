@@ -677,11 +677,12 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
     # Fetch Railway services if configured
     railway_services: list[dict] = []
     railway_error: str | None = None
-    if settings.RAILWAY_API_TOKEN and settings.RAILWAY_PROJECT_ID:
+    if settings.RAILWAY_API_TOKEN:
         try:
             from src.admin.railway import fetch_railway_services
             railway_services = await fetch_railway_services(
-                settings.RAILWAY_API_TOKEN, settings.RAILWAY_PROJECT_ID,
+                settings.RAILWAY_API_TOKEN,
+                project_id=settings.RAILWAY_PROJECT_ID,
                 project_ids=settings.RAILWAY_PROJECT_IDS,
             )
         except Exception as exc:
@@ -742,7 +743,7 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
     return templates.TemplateResponse(
         request=request, name="catalogue_list.html",
         context={"entries": entries, "railway_error": railway_error,
-                 "railway_configured": bool(settings.RAILWAY_API_TOKEN and settings.RAILWAY_PROJECT_ID)}
+                 "railway_configured": bool(settings.RAILWAY_API_TOKEN)}
     )
 
 
@@ -818,10 +819,11 @@ async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_
     if entry is None:
         # Railway service not yet in DB — fetch its details and upsert
         settings = get_settings()
-        if settings.RAILWAY_API_TOKEN and settings.RAILWAY_PROJECT_ID:
+        if settings.RAILWAY_API_TOKEN:
             from src.admin.railway import fetch_railway_services
             services = await fetch_railway_services(
-                settings.RAILWAY_API_TOKEN, settings.RAILWAY_PROJECT_ID,
+                settings.RAILWAY_API_TOKEN,
+                project_id=settings.RAILWAY_PROJECT_ID,
                 project_ids=settings.RAILWAY_PROJECT_IDS,
             )
             svc = next((s for s in services if s["slug"] == slug), None)

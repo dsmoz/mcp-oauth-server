@@ -11,6 +11,21 @@ import httpx
 
 _RAILWAY_GQL = "https://backboard.railway.app/graphql/v2"
 
+_WORKSPACE_PROJECTS_QUERY = """
+query WorkspaceProjects {
+  me {
+    projects {
+      edges {
+        node {
+          id
+          name
+        }
+      }
+    }
+  }
+}
+"""
+
 _SERVICES_QUERY = """
 query ProjectServices($projectId: String!) {
   project(id: $projectId) {
@@ -92,33 +107,75 @@ async def _fetch_project_services(client: httpx.AsyncClient, token: str, project
     return services
 
 
-async def fetch_railway_services(token: str, project_id: str, project_ids: str = "") -> list[dict]:
+async def _fetch_all_workspace_project_ids(client: httpx.AsyncClient, token: str) -> list[str]:
+    """Return every project ID accessible to the Railway token."""
+    resp = await client.post(
+        _RAILWAY_GQL,
+        json={"query": _WORKSPACE_PROJECTS_QUERY},
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if data.get("errors"):
+        raise ValueError(data["errors"][0].get("message", "GraphQL error"))
+
+    edges = (
+        data.get("data", {}).get("me", {}).get("projects", {}).get("edges", [])
+    )
+    return [edge["node"]["id"] for edge in edges if edge.get("node", {}).get("id")]
+
+
+async def fetch_railway_services(
+    token: str,
+    project_id: str = "",
+    project_ids: str = "",
+    service_prefix: str = "mcp-",
+) -> list[dict]:
     """Return list of {id, name, slug, domain, upstream_url} for every Railway service.
 
-    project_ids: comma-separated list of project IDs (overrides project_id when set).
-    project_id: single project ID (legacy, used when project_ids is empty).
+    Discovery modes:
+    1. `project_ids` (comma-separated) — explicit allow-list, overrides workspace
+       discovery. Use when you need to restrict the catalogue to specific projects.
+    2. Unset → workspace-wide auto-discovery (default): queries every project the
+       Railway token can see and returns services whose name starts with
+       `service_prefix` ("mcp-"). New MCP deploys appear in the catalogue
+       without any env var edit.
+
+    `project_id` is deprecated — Railway auto-injects this as the current
+    service's own project ID, so relying on it would always just list the
+    oauth-server's own services. Kept in the signature for backward compat
+    but ignored unless `project_ids` is empty AND the discovery query fails.
     """
     if not token:
         return []
 
-    # Build the list of project IDs to query
-    if project_ids:
-        ids = [p.strip() for p in project_ids.split(",") if p.strip()]
-    elif project_id:
-        ids = [project_id]
-    else:
-        return []
+    async with httpx.AsyncClient(timeout=15) as client:
+        if project_ids:
+            ids = [p.strip() for p in project_ids.split(",") if p.strip()]
+            filter_by_prefix = False
+        else:
+            try:
+                ids = await _fetch_all_workspace_project_ids(client, token)
+            except Exception:
+                # Fall back to the legacy single project ID if workspace query fails
+                ids = [project_id] if project_id else []
+            filter_by_prefix = True
 
-    all_services: list[dict] = []
-    seen_slugs: set[str] = set()
+        all_services: list[dict] = []
+        seen_slugs: set[str] = set()
 
-    async with httpx.AsyncClient(timeout=10) as client:
         for pid in ids:
-            services = await _fetch_project_services(client, token, pid)
+            try:
+                services = await _fetch_project_services(client, token, pid)
+            except Exception:
+                # One bad project shouldn't kill discovery for the rest
+                continue
             for svc in services:
-                # Deduplicate by slug — first project wins
-                if svc["slug"] not in seen_slugs:
-                    seen_slugs.add(svc["slug"])
-                    all_services.append(svc)
+                if filter_by_prefix and not svc["slug"].startswith(service_prefix):
+                    continue
+                if svc["slug"] in seen_slugs:
+                    continue
+                seen_slugs.add(svc["slug"])
+                all_services.append(svc)
 
     return all_services
