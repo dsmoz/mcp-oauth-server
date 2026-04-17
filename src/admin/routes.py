@@ -804,10 +804,13 @@ async def save_catalogue(
     db = get_db()
     if _get_catalogue_row(db, slug) is None:
         raise HTTPException(status_code=404, detail="Not found")
-    db.table("mcp_catalogue").update({
+    update: dict = {
         "name": name, "description": description, "category": category,
-        "upstream_url": upstream_url, "upstream_api_key": upstream_api_key,
-    }).eq("slug", slug).execute()
+        "upstream_url": upstream_url,
+    }
+    if upstream_api_key:
+        update["upstream_api_key"] = upstream_api_key
+    db.table("mcp_catalogue").update(update).eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
 
