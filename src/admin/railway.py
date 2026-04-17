@@ -11,6 +11,9 @@ import httpx
 
 _RAILWAY_GQL = "https://backboard.railway.app/graphql/v2"
 
+# Slugs to skip during workspace-wide discovery — the gateway itself, etc.
+_EXCLUDED_SLUGS = {"mcp-oauth-server"}
+
 _WORKSPACE_PROJECTS_QUERY = """
 query WorkspaceProjects {
   me {
@@ -172,6 +175,8 @@ async def fetch_railway_services(
                 continue
             for svc in services:
                 if filter_by_prefix and not svc["slug"].startswith(service_prefix):
+                    continue
+                if filter_by_prefix and svc["slug"] in _EXCLUDED_SLUGS:
                     continue
                 if svc["slug"] in seen_slugs:
                     continue
