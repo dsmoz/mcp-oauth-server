@@ -211,9 +211,19 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
         ]
 
     async def _get_tools(slug: str) -> list[dict]:
+        """Return tools for slug, raising RuntimeError if discovery fails."""
         if slug not in _tool_cache:
             mcp = mcp_by_slug.get(slug)
-            _tool_cache[slug] = await fetch_tool_list(mcp["upstream_url"], mcp.get("upstream_api_key", "")) if mcp else []
+            if not mcp:
+                return []
+            # May raise RuntimeError — don't cache failures so next call retries
+            tools = await fetch_tool_list(
+                mcp["upstream_url"],
+                mcp.get("upstream_api_key", ""),
+                user_id=user_id,
+                client_id=client_id,
+            )
+            _tool_cache[slug] = tools
         return _tool_cache[slug]
 
     @server.call_tool()
@@ -267,7 +277,15 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
             q = (arguments.get("query") or "").lower()
             results = []
             for mcp in enabled_mcps:
-                for t in await _get_tools(mcp["slug"]):
+                try:
+                    tools = await _get_tools(mcp["slug"])
+                except Exception as exc:
+                    print(
+                        f"GATEWAY: tool discovery failed for {mcp['slug']}, skipping in search: {exc}",
+                        file=sys.stderr,
+                    )
+                    continue
+                for t in tools:
                     if q in t["name"].lower() or q in t.get("description", "").lower():
                         results.append({
                             "mcp": mcp["slug"],
@@ -280,8 +298,17 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
 
         elif name == "list_tools":
             slug = arguments.get("mcp_slug", "")
-            text = json.dumps(await _get_tools(slug) if slug in mcp_by_slug
-                              else {"error": f"MCP '{slug}' not found"})
+            if slug not in mcp_by_slug:
+                text = json.dumps({"error": f"MCP '{slug}' not found"})
+            else:
+                try:
+                    text = json.dumps(await _get_tools(slug))
+                except Exception as exc:
+                    print(
+                        f"GATEWAY: tool discovery failed for {slug}: {exc}",
+                        file=sys.stderr,
+                    )
+                    text = json.dumps({"error": "tool_discovery_failed", "reason": str(exc)})
 
         elif name == "call_tool":
             slug = arguments.get("mcp_slug", "")

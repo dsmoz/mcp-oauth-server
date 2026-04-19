@@ -60,8 +60,19 @@ async def _list_tools_via_url(url: str, headers: dict) -> list[dict]:
     ]
 
 
-async def fetch_tool_list(upstream_url: str, api_key: str = "") -> list[dict]:
-    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+async def fetch_tool_list(
+    upstream_url: str,
+    api_key: str = "",
+    user_id: str = "",
+    client_id: str = "",
+) -> list[dict]:
+    headers: dict[str, str] = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    if user_id:
+        headers["X-User-ID"] = user_id
+    if client_id:
+        headers["X-Client-ID"] = client_id
     base = upstream_url.rstrip("/").removesuffix("/sse").removesuffix("/mcp")
 
     # Build candidate URLs — try both with and without trailing slash to handle
@@ -82,8 +93,9 @@ async def fetch_tool_list(upstream_url: str, api_key: str = "") -> list[dict]:
             last_exc = exc
             continue
 
-    logger.warning("fetch_tool_list failed for %s: %s", upstream_url, last_exc)
-    return []
+    raise RuntimeError(
+        f"Tool discovery failed for {upstream_url}: {last_exc}"
+    ) from last_exc
 
 
 def _is_auth_error(exc: Exception) -> bool:
