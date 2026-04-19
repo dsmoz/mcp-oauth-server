@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waiting for Approval — DS-MOZ MCP OAuth</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Avenir Next', 'Avenir', 'Segoe UI', Helvetica Neue, Arial, sans-serif;
+      background: #060E10;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 2.5rem;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 16px 56px rgba(0,0,0,0.6);
+      text-align: center;
+    }
+
+    .brand {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #FF5E00;
+      margin-bottom: 2rem;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid #D4E8EA;
+      border-top-color: #115E67;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin: 0 auto 1.75rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #0A1C20;
+      margin-bottom: 0.5rem;
+    }
+
+    .client-name {
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #E8500A;
+      margin-bottom: 0.75rem;
+    }
+
+    .subtitle {
+      font-size: 0.875rem;
+      color: #5A8A90;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+
+    .status-line {
+      font-size: 0.8125rem;
+      color: #91BCC1;
+      margin-top: 1.5rem;
+    }
+
+    .error-box {
+      display: none;
+      background: #FFF0F0;
+      border: 1px solid #FFBDBD;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      color: #C0392B;
+      font-size: 0.875rem;
+      margin-top: 1.5rem;
+      line-height: 1.5;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">DS-MOZ Intelligence</div>
+
+    <div class="spinner" id="spinner"></div>
+
+    <h1>Waiting for Approval</h1>
+    <div class="client-name">{{ client_name }}</div>
+    <p class="subtitle">
+      A Telegram message has been sent to the owner.<br>
+      This page will update automatically once a decision is made.
+    </p>
+
+    <div class="status-line" id="status-line">Checking every 2 seconds&hellip;</div>
+
+    <div class="error-box" id="error-box"></div>
+  </div>
+
+  <script>
+    const SESSION_ID = "{{ session_id }}";
+    let attempts = 0;
+    const MAX_ATTEMPTS = 150; // 5 min at 2-second intervals
+
+    async function poll() {
+      if (attempts >= MAX_ATTEMPTS) {
+        showError("Session expired. Please restart the authorization flow.");
+        return;
+      }
+      attempts++;
+
+      try {
+        const resp = await fetch(`/consent/status?session=${encodeURIComponent(SESSION_ID)}`);
+        if (!resp.ok) {
+          scheduleNext();
+          return;
+        }
+        const data = await resp.json();
+
+        if (data.status === "approved") {
+          document.getElementById("status-line").textContent = "Approved! Redirecting…";
+          if (data.redirect) {
+            window.location.href = data.redirect;
+          } else {
+            showError("Access was granted but no redirect URI was configured for this client.");
+          }
+          return;
+        }
+
+        if (data.status === "denied") {
+          showError("Access was denied.");
+          return;
+        }
+
+        if (data.status === "expired") {
+          showError("Session expired. Please restart the authorization flow.");
+          return;
+        }
+
+        // Still pending — keep polling
+        scheduleNext();
+      } catch (err) {
+        // Network error — keep retrying silently
+        scheduleNext();
+      }
+    }
+
+    function scheduleNext() {
+      setTimeout(poll, 2000);
+    }
+
+    function showError(msg) {
+      document.getElementById("spinner").style.display = "none";
+      const box = document.getElementById("error-box");
+      box.textContent = msg;
+      box.style.display = "block";
+      document.getElementById("status-line").textContent = "";
+    }
+
+    // Start polling
+    scheduleNext();
+  </script>
+</body>
+</html>

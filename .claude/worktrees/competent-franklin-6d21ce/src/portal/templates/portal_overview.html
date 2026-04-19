@@ -1,0 +1,84 @@
+{% extends "portal_base.html" %}
+{% block title %}Overview — DS-MOZ Intelligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Overview</h1>
+</div>
+
+{% if oauth_expired %}
+<div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:flex-start;gap:0.75rem">
+  <i class="ph-light ph-warning" style="font-size:1.25rem;color:#F59E0B;flex-shrink:0;margin-top:1px"></i>
+  <div>
+    <strong style="color:#92400E;font-size:0.9rem">Connection session expired</strong>
+    <p style="color:#92400E;font-size:0.85rem;margin:0.2rem 0 0">Your account is active. Go back to Claude Code or Cursor and click <strong>Connect</strong> again to authorise.</p>
+  </div>
+</div>
+{% endif %}
+
+<div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+  <div>
+    <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem">Credit Balance</div>
+    <div style="display:flex;align-items:baseline;gap:0.4rem">
+      <span style="font-size:2rem;font-weight:800;color:var(--vivid);line-height:1">{{ "%.2f"|format(credit_balance) }}</span>
+      <span style="font-size:0.85rem;color:var(--text-muted)">credits</span>
+    </div>
+  </div>
+  <a href="/portal/credits" class="btn btn-primary">
+    <i class="ph-light ph-plus-circle"></i> Buy Credits
+  </a>
+</div>
+
+<div class="card">
+  <h2>Usage</h2>
+  <div class="stat-grid">
+    <div class="stat-box">
+      <div class="stat-num">{{ usage_today }}</div>
+      <div class="stat-label">Today</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num">{{ usage_month }}</div>
+      <div class="stat-label">This Month</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" style="color:var(--text-ui)">{{ usage_total }}</div>
+      <div class="stat-label">All Time</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Your Gateway URL</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.5rem;line-height:1.5">
+    Connect Claude Desktop or ChatGPT to this single endpoint to access all your enabled MCP tools.
+  </p>
+  <div class="code-pill">
+    <span id="gateway-url">{{ gateway_url }}</span>
+    <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy URL">
+      <i class="ph-light ph-copy" style="font-size:14px"></i>
+    </button>
+  </div>
+  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem">
+    Use your OAuth access token as the Bearer token when connecting.
+    Visit <a href="/portal/setup" style="color:var(--vivid)">Setup Guide</a> for the full config.
+  </p>
+</div>
+
+<div class="card">
+  <h2>Account</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+    <div>
+      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">Organisation</div>
+      <div style="font-size:0.9rem;color:var(--text-h);font-weight:600">{{ client.client_name }}</div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">Status</div>
+      <div style="font-size:0.875rem;color:var(--success)">&#9679; Active</div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">Toolbox</div>
+      <div style="font-size:0.875rem;color:var(--text-h)">{{ (client.allowed_mcp_resources or []) | length }} tools</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

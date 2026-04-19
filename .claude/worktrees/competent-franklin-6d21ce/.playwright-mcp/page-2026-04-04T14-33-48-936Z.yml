@@ -1,0 +1,21 @@
+- generic [ref=e2]:
+  - generic [ref=e3]: DS-MOZ Intelligence
+  - heading "Client Portal" [level=1] [ref=e4]
+  - paragraph [ref=e5]: Sign in to authorise access to your MCP tools.
+  - generic [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]: Email
+      - textbox "Email" [active] [ref=e9]
+    - generic [ref=e10]:
+      - generic [ref=e11]: Password
+      - textbox "Password" [ref=e12]
+    - button " Sign In" [ref=e13] [cursor=pointer]:
+      - generic [ref=e14]: 
+      - text: Sign In
+  - generic [ref=e15]:
+    - link "Forgot your password?" [ref=e16] [cursor=pointer]:
+      - /url: /portal/forgot-password
+    - generic [ref=e17]:
+      - text: Don't have an account?
+      - link "Register here" [ref=e18] [cursor=pointer]:
+        - /url: /register

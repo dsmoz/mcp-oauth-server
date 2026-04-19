@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <a href="/admin/clients/new" class="btn btn-primary">
+    <i class="ph-light ph-plus"></i> New Client
+  </a>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-number">{{ total_users }}</div>
+    <div class="stat-label">Total Users</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number" style="color: var(--success-fg);">{{ active_users }}</div>
+    <div class="stat-label">Active Users</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number">{{ total_clients }}</div>
+    <div class="stat-label">Total Devices</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number" style="color: var(--success-fg);">{{ active_clients }}</div>
+    <div class="stat-label">Active Devices</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number" style="color: var(--info-fg);">{{ active_tokens }}</div>
+    <div class="stat-label">Active Tokens</div>
+  </div>
+  <div class="stat-card {% if unclaimed_stale > 0 %}stat-card-alert{% endif %}">
+    <div class="stat-number" style="{% if unclaimed_stale > 0 %}color: var(--amber);{% endif %}">{{ unclaimed_stale }}</div>
+    <div class="stat-label">
+      Stale Unclaimed (&gt;24h)
+      {% if unclaimed_stale > 0 %}
+        <form method="post" action="/admin/unclaimed/cleanup" style="display:inline; margin-left: 0.5rem;">
+          <button type="submit" style="background:none;border:none;color: var(--amber); font-size: 0.7rem; cursor:pointer; padding:0;">Clean up →</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  <div class="stat-card {% if pending_requests > 0 %}stat-card-alert{% endif %}">
+    <div class="stat-number" style="{% if pending_requests > 0 %}color: var(--amber);{% endif %}">
+      {{ pending_requests }}
+    </div>
+    <div class="stat-label">
+      Pending Requests
+      {% if pending_requests > 0 %}
+        <a href="/admin/registrations" style="color: var(--amber); margin-left: 0.5rem; font-size: 0.7rem;">Review →</a>
+      {% endif %}
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number" style="color: var(--accent-vivid);">{{ calls_today }}</div>
+    <div class="stat-label">Calls Today</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-number" style="color: var(--accent-vivid);">{{ calls_month }}</div>
+    <div class="stat-label">Calls This Month</div>
+  </div>
+</div>
+
+{% if perf_stats %}
+<div class="card">
+  <h2>Endpoint Performance <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 400;">(last 30 days)</span></h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Endpoint</th>
+        <th style="text-align: right;">Calls</th>
+        <th style="text-align: right;">Avg Duration</th>
+        <th style="text-align: right;">Max Duration</th>
+        <th style="text-align: right;">Total Response</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in perf_stats[:15] %}
+      <tr>
+        <td style="font-family: monospace; font-size: 0.8rem;">{{ row.endpoint or "—" }}</td>
+        <td style="text-align: right;">{{ row.call_count }}</td>
+        <td style="text-align: right;">
+          {% if row.avg_duration_ms is not none %}
+            <span style="{% if row.avg_duration_ms|int > 10000 %}color: var(--danger-fg);{% elif row.avg_duration_ms|int > 3000 %}color: var(--amber);{% else %}color: var(--success-fg);{% endif %}">
+              {{ row.avg_duration_ms|int }} ms
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        <td style="text-align: right;">
+          {% if row.max_duration_ms is not none %}
+            <span style="{% if row.max_duration_ms > 30000 %}color: var(--danger-fg);{% elif row.max_duration_ms > 10000 %}color: var(--amber);{% endif %}">
+              {{ row.max_duration_ms }} ms
+            </span>
+          {% else %}—{% endif %}
+        </td>
+        <td style="text-align: right; font-size: 0.8rem;">
+          {% if row.total_response_bytes %}
+            {% if row.total_response_bytes > 1048576 %}
+              {{ "%.1f"|format(row.total_response_bytes / 1048576) }} MB
+            {% elif row.total_response_bytes > 1024 %}
+              {{ "%.1f"|format(row.total_response_bytes / 1024) }} KB
+            {% else %}
+              {{ row.total_response_bytes }} B
+            {% endif %}
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Recent Clients</h2>
+  {% if recent_clients %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Device ID</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for client in recent_clients %}
+      <tr>
+        <td>{{ client.client_name }}</td>
+        <td style="font-family: monospace; font-size: 0.8rem;">{{ client.client_id }}</td>
+        <td>
+          {% if client.is_active %}
+            <span class="badge badge-active">Active</span>
+          {% else %}
+            <span class="badge badge-inactive">Revoked</span>
+          {% endif %}
+        </td>
+        <td style="color: var(--text-muted); font-size: 0.8rem;">
+          {{ client.created_at[:10] if client.created_at else "—" }}
+        </td>
+        <td>
+          <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">
+            <i class="ph-light ph-eye"></i> View
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color: var(--text-muted); font-size: 0.875rem;">No clients yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

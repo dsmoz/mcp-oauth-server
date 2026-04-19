@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Client Portal — DS-MOZ Intelligence</title>
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Avenir Next','Avenir','Segoe UI',Helvetica Neue,Arial,sans-serif;
+    background: #060E10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 1.5rem;
+  }
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 2.5rem;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 16px 56px rgba(0,0,0,0.6);
+  }
+  .brand {
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #FF5E00;
+    margin-bottom: 1.75rem;
+  }
+  h1 { font-size: 1.4rem; font-weight: 700; color: #0A1C20; margin-bottom: 0.35rem; }
+  .subtitle { font-size: 0.875rem; color: #5A8A90; margin-bottom: 2rem; line-height: 1.5; }
+  .form-group { margin-bottom: 1.25rem; }
+  label { display: block; margin-bottom: 0.4rem; font-size: 0.8125rem; font-weight: 600; color: #5A8A90; }
+  input[type="text"], input[type="password"] {
+    width: 100%;
+    padding: 0.65rem 0.875rem;
+    background: #F0F7F8;
+    border: 1px solid #D4E8EA;
+    border-radius: 6px;
+    color: #0A1C20;
+    font-size: 0.875rem;
+    font-family: inherit;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus { border-color: #115E67; }
+  .error-box {
+    background: #FFF0F0;
+    border: 1px solid #FFBDBD;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    color: #C0392B;
+    font-size: 0.875rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .btn-submit {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.75rem 1rem;
+    background: #E8500A;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    margin-top: 0.25rem;
+    transition: opacity 0.15s;
+  }
+  .btn-submit:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand">DS-MOZ Intelligence</div>
+  <h1>Client Portal</h1>
+  <p class="subtitle">{% if next_session %}Sign in to authorise access to your MCP tools.{% else %}Sign in to manage your MCP tools and download your configuration.{% endif %}</p>
+
+  {% if error %}
+  <div class="error-box">
+    <i class="ph-light ph-warning-circle" style="font-size:16px;flex-shrink:0;margin-top:1px"></i>
+    <span>{{ error }}</span>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/portal/login{% if next_session %}?next_session={{ next_session }}{% endif %}">
+    <div class="form-group">
+      <label for="username">Email</label>
+      <input type="email" id="username" name="username" required autocomplete="username" autofocus>
+    </div>
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" required autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn-submit">
+      <i class="ph-light ph-sign-in"></i> Sign In
+    </button>
+  </form>
+  <div style="margin-top:1.25rem;display:flex;flex-direction:column;align-items:center;gap:0.5rem;">
+    <a href="/portal/forgot-password" style="font-size:0.8125rem;color:#5A8A90;text-decoration:none">Forgot your password?</a>
+    <span style="font-size:0.8125rem;color:#91BCC1">Don't have an account? <a href="/register" style="color:#E8500A;text-decoration:none;font-weight:600">Register here</a></span>
+  </div>
+</div>
+</body>
+</html>

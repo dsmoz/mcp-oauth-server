@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Settings — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Settings</h1>
+</div>
+
+{% if saved %}
+<div class="card" style="border-color:var(--success-bg);background:var(--success-bg);margin-bottom:1rem">
+  <p style="color:var(--success-fg);font-size:0.875rem"><i class="ph-light ph-check-circle"></i> Settings saved.</p>
+</div>
+{% endif %}
+
+{% if error %}
+<div class="card" style="border-color:var(--danger-border);background:var(--danger-bg);margin-bottom:1rem">
+  <p style="color:var(--danger-fg);font-size:0.875rem">{{ error }}</p>
+</div>
+{% endif %}
+
+{% for cat_key, cat_meta in categories.items() %}
+{% if cat_key in grouped %}
+<div class="card" style="margin-bottom:1.25rem">
+  <h2 style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1.25rem">
+    <i class="ph-light {{ cat_meta.icon }}" style="font-size:20px;color:var(--accent-vivid)"></i>
+    {{ cat_meta.label }}
+  </h2>
+
+  <form method="post" action="/admin/settings">
+    <input type="hidden" name="category" value="{{ cat_key }}">
+
+    {% for s in grouped[cat_key] %}
+    <div class="form-group">
+      <label>
+        {{ s.label }}
+        {% if s.description %}
+        <small>{{ s.description }}</small>
+        {% endif %}
+      </label>
+
+      {% if s.value_type == 'select' and s.options %}
+        <select name="{{ s.key }}" style="width:100%;padding:0.6rem 0.875rem;background:var(--elevated);border:1px solid var(--border);border-radius:6px;color:var(--text-h);font-size:0.875rem;font-family:inherit">
+          {% for opt in s.options %}
+          <option value="{{ opt.value }}" {% if s.value == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+          {% endfor %}
+        </select>
+
+      {% elif s.value_type == 'secret' %}
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <input type="password" name="{{ s.key }}" class="toggle-secret"
+                 value="{{ s.value or '' }}"
+                 placeholder="••••••••"
+                 style="flex:1">
+          <button type="button" onclick="toggleSecret(this)" class="btn btn-secondary" style="padding:0.5rem 0.75rem">
+            <i class="ph-light ph-eye"></i>
+          </button>
+        </div>
+        {% if s.value %}
+        <small style="color:var(--success-fg)"><i class="ph-light ph-check"></i> Configured ({{ s.value|length }} chars)</small>
+        {% else %}
+        <small style="color:var(--warn-fg)"><i class="ph-light ph-warning"></i> Not set — using env var if available</small>
+        {% endif %}
+
+      {% elif s.value_type == 'int' %}
+        <input type="text" name="{{ s.key }}" value="{{ s.value or '' }}"
+               inputmode="numeric" pattern="[0-9]*"
+               style="max-width:200px">
+
+      {% elif s.value_type == 'bool' %}
+        <select name="{{ s.key }}" style="width:auto;padding:0.6rem 0.875rem;background:var(--elevated);border:1px solid var(--border);border-radius:6px;color:var(--text-h);font-size:0.875rem;font-family:inherit;max-width:200px">
+          <option value="true" {% if s.value == 'true' %}selected{% endif %}>Enabled</option>
+          <option value="false" {% if s.value != 'true' %}selected{% endif %}>Disabled</option>
+        </select>
+
+      {% else %}
+        <input type="text" name="{{ s.key }}" value="{{ s.value or '' }}">
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <button type="submit" class="btn btn-primary" style="margin-top:0.5rem">
+      <i class="ph-light ph-floppy-disk"></i> Save {{ cat_meta.label }}
+    </button>
+  </form>
+</div>
+{% endif %}
+{% endfor %}
+
+<script>
+function toggleSecret(btn) {
+  const input = btn.parentElement.querySelector('.toggle-secret');
+  const icon = btn.querySelector('i');
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.className = 'ph-light ph-eye-slash';
+  } else {
+    input.type = 'password';
+    icon.className = 'ph-light ph-eye';
+  }
+}
+</script>
+{% endblock %}

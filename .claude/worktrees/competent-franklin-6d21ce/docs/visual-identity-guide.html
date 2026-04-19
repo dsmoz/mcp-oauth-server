@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visual Identity Guide — DSMOZ Intelligence</title>
+<style>
+:root {
+  /* ── Brand accent — Orange family ── */
+  --c-brand:        #E8500A;
+  --c-brand-vivid:  #FF5E00;
+  --c-brand-deep:   #C4420A;
+  --c-brand-light:  #FFAE62;
+
+  /* ── Background surfaces — Teal family ── */
+  --bg-page:        #060E10;
+  --bg-card:        #0A1C20;
+  --bg-elevated:    #0D2A30;
+  --c-border:       #16464F;
+  --c-border-focus: #115E67;
+
+  /* ── Typography ── */
+  --c-heading:      #F0F7F8;
+  --c-body:         #D4E8EA;
+  --c-secondary:    #91BCC1;
+  --c-muted:        #5A8A90;
+  --c-placeholder:  #2E5A60;
+
+  /* ── Status ── */
+  --c-success:      #3DD68C;
+  --bg-success:     #073D20;
+  --c-danger:       #FF6B6B;
+  --bg-danger:      #3D0A0A;
+  --c-warning:      #FFAE62;
+  --bg-warning:     #3D2200;
+  --c-info:         #7BCFD8;
+  --bg-info:        #052830;
+
+  /* ── Secret/credential highlight ── */
+  --c-secret-text:  #FFAE62;
+  --c-secret-label: #FF5E00;
+  --bg-secret:      #1A0C00;
+  --c-secret-border:#7A3000;
+
+  /* ── Typography ── */
+  --font: 'Avenir Next', 'Avenir', 'Segoe UI', Helvetica Neue, Arial, sans-serif;
+
+  /* ── Layout ── */
+  --sidebar-w: 220px;
+  --radius: 8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg-page);
+  color: var(--c-body);
+  display: flex;
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ── Sidebar ── */
+nav#sidebar {
+  position: fixed;
+  top: 0; left: 0;
+  width: var(--sidebar-w);
+  height: 100vh;
+  background: var(--bg-card);
+  border-right: 1px solid var(--c-border);
+  display: flex;
+  flex-direction: column;
+  padding: 1.75rem 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.sidebar-brand {
+  padding: 0 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.sidebar-brand .product-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--c-heading);
+  letter-spacing: 0.01em;
+}
+
+.sidebar-brand .product-name span {
+  color: var(--c-brand-vivid);
+}
+
+.sidebar-brand .guide-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--c-muted);
+  margin-top: 0.25rem;
+}
+
+nav#sidebar a {
+  display: block;
+  padding: 0.55rem 1.25rem;
+  color: var(--c-secondary);
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: color 0.15s, background 0.15s;
+  border-left: 3px solid transparent;
+}
+
+nav#sidebar a:hover {
+  color: var(--c-brand-light);
+  background: rgba(232,80,10,0.06);
+  border-left-color: var(--c-brand);
+}
+
+.nav-section {
+  padding: 1rem 0 0.25rem;
+}
+
+.nav-label {
+  padding: 0 1.25rem;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--c-placeholder);
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+/* ── Main content ── */
+main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  padding: 3rem 3.5rem;
+  max-width: 1100px;
+}
+
+/* ── Page header ── */
+.guide-header {
+  border-bottom: 1px solid var(--c-border);
+  padding-bottom: 2rem;
+  margin-bottom: 3rem;
+}
+
+.guide-header .tag {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--c-brand);
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+}
+
+.guide-header h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--c-heading);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.guide-header h1 span { color: var(--c-brand-vivid); }
+
+.guide-header .meta {
+  font-size: 0.8125rem;
+  color: var(--c-muted);
+  margin-top: 0.5rem;
+}
+
+/* ── Sections ── */
+section {
+  margin-bottom: 5rem;
+}
+
+.section-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--c-brand);
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+section > h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--c-heading);
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+section > p.intro {
+  color: var(--c-secondary);
+  font-size: 0.875rem;
+  margin: 1rem 0 2rem;
+  line-height: 1.7;
+}
+
+h3.sub {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--c-muted);
+  font-weight: 700;
+  margin: 2rem 0 1rem;
+}
+
+/* ── Cards / boxes ── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+/* ── Font grid ── */
+.font-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.font-card {
+  background: var(--bg-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  position: relative;
+}
+
+.font-card.recommended {
+  border-color: var(--c-brand);
+  box-shadow: 0 0 0 1px var(--c-brand);
+}
+
+.font-card .font-badge {
+  position: absolute;
+  top: 0.75rem; right: 0.75rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.2em 0.6em;
+  border-radius: 99px;
+}
+
+.font-badge.rec { background: rgba(232,80,10,0.15); color: var(--c-brand-vivid); }
+.font-badge.alt { background: rgba(145,188,193,0.1); color: var(--c-secondary); }
+
+.font-card .font-name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--c-heading);
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.font-sample-title   { font-size: 1.75rem; font-weight: 700; color: var(--c-heading); line-height: 1.2; }
+.font-sample-sub     { font-size: 1rem; font-weight: 500; color: var(--c-secondary); margin-top: 0.25rem; }
+.font-sample-axis    { font-size: 0.8rem; color: var(--c-muted); margin-top: 0.25rem; }
+.font-sample-footnote{ font-size: 0.65rem; color: var(--c-placeholder); margin-top: 0.25rem; }
+.font-desc           { font-size: 0.7rem; color: var(--c-muted); margin-top: 0.75rem; font-style: italic; border-top: 1px solid var(--c-border); padding-top: 0.5rem; }
+
+/* ── Type scale table ── */
+.type-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.type-table th {
+  text-align: left; padding: 0.6rem 0.875rem;
+  background: var(--bg-elevated); color: var(--c-muted);
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--c-border);
+}
+.type-table td { padding: 0.6rem 0.875rem; border-bottom: 1px solid var(--bg-elevated); color: var(--c-secondary); }
+.type-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+/* ── Colour swatches ── */
+.swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.875rem;
+  margin-bottom: 2rem;
+}
+
+.swatch {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+}
+
+.swatch-block {
+  height: 64px;
+  width: 100%;
+}
+
+.swatch-info {
+  background: var(--bg-elevated);
+  padding: 0.6rem 0.75rem;
+}
+
+.swatch-hex {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--c-heading);
+}
+
+.swatch-label {
+  font-size: 0.65rem;
+  color: var(--c-muted);
+  margin-top: 0.15rem;
+}
+
+/* ── Heatmap ramp ── */
+.heatmap-ramp {
+  display: flex;
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--c-border);
+}
+
+.ramp-stop {
+  flex: 1;
+  height: 56px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 0.4rem;
+  font-size: 0.6rem;
+  font-family: monospace;
+  font-weight: 700;
+}
+
+/* ── Icon table ── */
+.icon-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.icon-table th {
+  text-align: left; padding: 0.6rem 0.875rem;
+  background: var(--bg-elevated); color: var(--c-muted);
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--c-border);
+}
+.icon-table td { padding: 0.6rem 0.875rem; border-bottom: 1px solid var(--bg-elevated); color: var(--c-secondary); vertical-align: middle; }
+.icon-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+.icon-ph {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  font-size: 1.1rem;
+}
+
+/* ── Specimen ── */
+.specimen-page {
+  background: #F7FAFA;
+  border-radius: var(--radius);
+  padding: 3rem 3.5rem;
+  border: 1px solid var(--c-border);
+  position: relative;
+}
+
+.spec-label {
+  position: absolute;
+  left: -14rem;
+  width: 13rem;
+  text-align: right;
+  font-size: 0.62rem;
+  color: #999;
+  font-family: monospace;
+  line-height: 1.4;
+}
+
+/* ── Status badges ── */
+.badge {
+  display: inline-block;
+  padding: 0.2em 0.65em;
+  border-radius: 99px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge-active   { background: var(--bg-success); color: var(--c-success); }
+.badge-danger   { background: var(--bg-danger);  color: var(--c-danger);  }
+.badge-warning  { background: var(--bg-warning); color: var(--c-warning); }
+.badge-info     { background: var(--bg-info);    color: var(--c-info);    }
+
+/* ── UI component previews ── */
+.ui-preview {
+  background: var(--bg-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  margin-bottom: 1.25rem;
+}
+
+.ui-preview label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--c-muted);
+  font-weight: 700;
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.btn-demo {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: default;
+  border: none;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-family: var(--font);
+}
+
+.btn-primary   { background: var(--c-brand); color: #fff; }
+.btn-secondary { background: var(--bg-elevated); color: var(--c-secondary); border: 1px solid var(--c-border); }
+.btn-danger    { background: var(--bg-danger); color: var(--c-danger); }
+.btn-ghost     { background: transparent; color: var(--c-brand-light); border: 1px solid var(--c-brand); }
+
+.input-demo {
+  width: 100%; max-width: 320px;
+  padding: 0.6rem 0.875rem;
+  background: var(--bg-page);
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  color: var(--c-body);
+  font-size: 0.875rem;
+  font-family: var(--font);
+  outline: none;
+  margin-bottom: 0.5rem;
+}
+
+.input-demo:focus { border-color: var(--c-brand); }
+
+/* ── Chart examples ── */
+.chart-bar-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.chart-bar-label { width: 120px; font-size: 0.75rem; color: var(--c-secondary); text-align: right; flex-shrink: 0; }
+.chart-bar-track { flex: 1; background: var(--bg-elevated); border-radius: 3px; height: 20px; overflow: hidden; }
+.chart-bar-fill  { height: 100%; border-radius: 3px; display: flex; align-items: center; padding-left: 8px; }
+.chart-bar-val   { font-size: 0.65rem; font-weight: 700; color: rgba(255,255,255,0.85); }
+
+.heatmap-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px;
+  margin-bottom: 0.5rem;
+}
+
+.heatmap-cell {
+  height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 700; border-radius: 3px;
+}
+
+/* ── Divider ── */
+hr.section-div {
+  border: none;
+  border-top: 1px solid var(--c-border);
+  margin: 2rem 0;
+}
+
+/* ── Pairing block ── */
+.pairing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.pairing-card {
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+}
+
+.pairing-role  { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--c-muted); margin-bottom: 0.3rem; }
+.pairing-font  { font-size: 0.875rem; font-weight: 700; color: var(--c-heading); }
+.pairing-spec  { font-size: 0.7rem; color: var(--c-secondary); margin-top: 0.2rem; font-family: monospace; }
+.pairing-color { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════ SIDEBAR ══════════════════════════ -->
+<nav id="sidebar">
+  <div class="sidebar-brand">
+    <div class="product-name">DSMOZ <span>Intelligence</span></div>
+    <div class="guide-label">Visual Identity Guide</div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Sections</div>
+    <a href="#s01">01 — Typography</a>
+    <a href="#s02">02 — Colour</a>
+    <a href="#s03">03 — Document Specimen</a>
+    <a href="#s04">04 — UI Components</a>
+    <a href="#s05">05 — Chart Examples</a>
+    <a href="#s06">06 — Icons</a>
+    <a href="#s07">07 — Photography</a>
+  </div>
+
+  <div class="nav-section" style="margin-top: auto; padding-top: 2rem; border-top: 1px solid var(--c-border);">
+    <div class="nav-label">Project</div>
+    <a href="#" style="font-size:0.7rem; color: var(--c-placeholder); cursor:default;">DSMOZ Intelligence</a>
+    <a href="#" style="font-size:0.7rem; color: var(--c-placeholder); cursor:default;">OAuth + Admin System</a>
+    <a href="#" style="font-size:0.7rem; color: var(--c-placeholder); cursor:default;">Generated 2026-04-03</a>
+  </div>
+</nav>
+
+<!-- ══════════════════════════ MAIN ══════════════════════════ -->
+<main>
+
+  <!-- Page header -->
+  <div class="guide-header">
+    <div class="tag">Visual Identity Guide</div>
+    <h1>DSMOZ <span>Intelligence</span></h1>
+    <div class="meta">DS-MOZ Consultancy Services · AI Solutions Platform · OAuth Server + Admin Panel · 2026</div>
+    <div class="meta" style="margin-top:0.25rem">Generated 2026-04-03 · Avenir Next · DS-MOZ Brand Palette (dark-adapted)</div>
+  </div>
+
+  <!-- ══════════════ 01 TYPOGRAPHY ══════════════ -->
+  <section id="s01">
+    <div class="section-label">01</div>
+    <h2>Typography</h2>
+    <p class="intro">
+      Avenir Next is the primary typeface — confirmed present on this machine. It is a geometric sans-serif that matches the DS-MOZ brand values of modernity, clarity, and confidence.
+      Helvetica Neue serves as the fallback for environments where Avenir Next is unavailable.
+      Raleway (DS-MOZ brand primary) requires a CDN and is not suitable for offline-first web — Avenir Next is the locally-available equivalent.
+    </p>
+
+    <h3 class="sub">Font Candidates</h3>
+    <div class="font-grid">
+
+      <div class="font-card recommended">
+        <span class="font-badge rec">Recommended</span>
+        <div class="font-name">Avenir Next</div>
+        <div class="font-sample-title" style="font-family:'Avenir Next',Avenir,sans-serif;font-weight:700;">DSMOZ Intelligence</div>
+        <div class="font-sample-sub"  style="font-family:'Avenir Next',Avenir,sans-serif;font-weight:500;">OAuth 2.0 Authorization Server</div>
+        <div class="font-sample-axis" style="font-family:'Avenir Next',Avenir,sans-serif;">Active clients · Token expiry</div>
+        <div class="font-sample-footnote" style="font-family:'Avenir Next',Avenir,sans-serif;">Generated 2026-04-03 · DS-MOZ Consultancy</div>
+        <div class="font-desc">Geometric, clean, 9 weights. Locally available. Best for SaaS interfaces and data-forward design.</div>
+      </div>
+
+      <div class="font-card">
+        <span class="font-badge alt">Alternative</span>
+        <div class="font-name">Helvetica Neue</div>
+        <div class="font-sample-title" style="font-family:'Helvetica Neue',Helvetica,sans-serif;font-weight:700;">DSMOZ Intelligence</div>
+        <div class="font-sample-sub"  style="font-family:'Helvetica Neue',Helvetica,sans-serif;font-weight:500;">OAuth 2.0 Authorization Server</div>
+        <div class="font-sample-axis" style="font-family:'Helvetica Neue',Helvetica,sans-serif;">Active clients · Token expiry</div>
+        <div class="font-sample-footnote" style="font-family:'Helvetica Neue',Helvetica,sans-serif;">Generated 2026-04-03 · DS-MOZ Consultancy</div>
+        <div class="font-desc">Universal fallback. Neutral, reliable. Use when Avenir Next unavailable.</div>
+      </div>
+
+      <div class="font-card">
+        <span class="font-badge alt">Alternative</span>
+        <div class="font-name">Gill Sans</div>
+        <div class="font-sample-title" style="font-family:'Gill Sans','Gill Sans MT',sans-serif;font-weight:700;">DSMOZ Intelligence</div>
+        <div class="font-sample-sub"  style="font-family:'Gill Sans','Gill Sans MT',sans-serif;font-weight:500;">OAuth 2.0 Authorization Server</div>
+        <div class="font-sample-axis" style="font-family:'Gill Sans','Gill Sans MT',sans-serif;">Active clients · Token expiry</div>
+        <div class="font-sample-footnote" style="font-family:'Gill Sans','Gill Sans MT',sans-serif;">Generated 2026-04-03 · DS-MOZ Consultancy</div>
+        <div class="font-desc">Humanist sans. Institutional feel. Less appropriate for dark-mode SaaS.</div>
+      </div>
+
+      <div class="font-card">
+        <span class="font-badge alt">Alternative</span>
+        <div class="font-name">Optima</div>
+        <div class="font-sample-title" style="font-family:Optima,sans-serif;font-weight:700;">DSMOZ Intelligence</div>
+        <div class="font-sample-sub"  style="font-family:Optima,sans-serif;font-weight:500;">OAuth 2.0 Authorization Server</div>
+        <div class="font-sample-axis" style="font-family:Optima,sans-serif;">Active clients · Token expiry</div>
+        <div class="font-sample-footnote" style="font-family:Optima,sans-serif;">Generated 2026-04-03 · DS-MOZ Consultancy</div>
+        <div class="font-desc">Elegant, serif-influenced strokes. Too refined for technical SaaS UI.</div>
+      </div>
+
+      <div class="font-card">
+        <span class="font-badge alt">Alternative</span>
+        <div class="font-name">Lato</div>
+        <div class="font-sample-title" style="font-family:Lato,sans-serif;font-weight:700;">DSMOZ Intelligence</div>
+        <div class="font-sample-sub"  style="font-family:Lato,sans-serif;font-weight:500;">OAuth 2.0 Authorization Server</div>
+        <div class="font-sample-axis" style="font-family:Lato,sans-serif;">Active clients · Token expiry</div>
+        <div class="font-sample-footnote" style="font-family:Lato,sans-serif;">Generated 2026-04-03 · DS-MOZ Consultancy</div>
+        <div class="font-desc">Neutral modern. Good legibility. Less geometric than Avenir Next.</div>
+      </div>
+
+      <div class="font-card">
+        <span class="font-badge alt">Monospace</span>
+        <div class="font-name">SF Mono / Consolas</div>
+        <div class="font-sample-title" style="font-family:'SFMono-Regular',Consolas,monospace;font-weight:700;font-size:1.2rem;">mc_a1b2c3d4e5f6</div>
+        <div class="font-sample-sub"  style="font-family:'SFMono-Regular',Consolas,monospace;font-weight:400;font-size:0.85rem;">sha256:7f83b165...</div>
+        <div class="font-sample-axis" style="font-family:'SFMono-Regular',Consolas,monospace;">expires_at: 1743724800</div>
+        <div class="font-sample-footnote" style="font-family:'SFMono-Regular',Consolas,monospace;">token_hash · client_id · code</div>
+        <div class="font-desc">Used exclusively for credentials, tokens, hashes, and code values.</div>
+      </div>
+
+    </div>
+
+    <h3 class="sub">Pairing Recommendation</h3>
+    <div class="pairing-grid">
+      <div class="pairing-card">
+        <div class="pairing-role">Page Title / H1</div>
+        <div class="pairing-font">Avenir Next Bold</div>
+        <div class="pairing-spec">700 · 2rem · <span class="pairing-color" style="background:#F0F7F8"></span>#F0F7F8</div>
+      </div>
+      <div class="pairing-card">
+        <div class="pairing-role">Section Heading / H2</div>
+        <div class="pairing-font">Avenir Next Demi Bold</div>
+        <div class="pairing-spec">600 · 1.375rem · <span class="pairing-color" style="background:#F0F7F8"></span>#F0F7F8</div>
+      </div>
+      <div class="pairing-card">
+        <div class="pairing-role">Subsection / H3</div>
+        <div class="pairing-font">Avenir Next Medium</div>
+        <div class="pairing-spec">500 · 1rem · <span class="pairing-color" style="background:#D4E8EA"></span>#D4E8EA</div>
+      </div>
+      <div class="pairing-card">
+        <div class="pairing-role">UI Labels / Nav</div>
+        <div class="pairing-font">Avenir Next Medium</div>
+        <div class="pairing-spec">500 · 0.8125rem · <span class="pairing-color" style="background:#91BCC1"></span>#91BCC1</div>
+      </div>
+      <div class="pairing-card">
+        <div class="pairing-role">Body Text</div>
+        <div class="pairing-font">Avenir Next Regular</div>
+        <div class="pairing-spec">400 · 0.875rem · <span class="pairing-color" style="background:#D4E8EA"></span>#D4E8EA</div>
+      </div>
+      <div class="pairing-card">
+        <div class="pairing-role">Caption / Meta</div>
+        <div class="pairing-font">Avenir Next Regular</div>
+        <div class="pairing-spec">400 · 0.75rem · <span class="pairing-color" style="background:#5A8A90"></span>#5A8A90</div>
+      </div>
+      <div class="pairing-card">
+        <div class="pairing-role">Credentials / Code</div>
+        <div class="pairing-font">SF Mono / Consolas</div>
+        <div class="pairing-spec">400 · 0.8125rem · <span class="pairing-color" style="background:#FFAE62"></span>#FFAE62</div>
+      </div>
+      <div class="pairing-card">
+        <div class="pairing-role">Tag / Badge Label</div>
+        <div class="pairing-font">Avenir Next Bold</div>
+        <div class="pairing-spec">700 · 0.65rem · uppercase · 0.06em</div>
+      </div>
+    </div>
+
+    <h3 class="sub">Type Scale — Full Reference</h3>
+    <div class="card" style="padding: 0; overflow: hidden;">
+      <table class="type-table">
+        <thead>
+          <tr>
+            <th>Role</th><th>Font</th><th>Weight</th><th>Size</th><th>Colour</th><th>Usage</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Product Wordmark</td><td>Avenir Next</td><td>800</td><td>1.5rem</td><td>#F0F7F8 + #FF5E00 accent</td><td>Nav brand, login page</td></tr>
+          <tr><td>Page Title / H1</td><td>Avenir Next</td><td>700</td><td>2rem</td><td>#F0F7F8</td><td>Admin dashboard, page headers</td></tr>
+          <tr><td>Section Heading / H2</td><td>Avenir Next</td><td>700</td><td>1.375rem</td><td>#F0F7F8</td><td>Card headers, section breaks</td></tr>
+          <tr><td>Sub-section / H3</td><td>Avenir Next</td><td>600</td><td>1.125rem</td><td>#CBD5E1 equiv → #D4E8EA</td><td>Feature groups, form sections</td></tr>
+          <tr><td>Component Label / H4</td><td>Avenir Next</td><td>700</td><td>0.75rem uppercase</td><td>#5A8A90</td><td>Table headers, badge groups</td></tr>
+          <tr><td>Lead / Hero Text</td><td>Avenir Next</td><td>300</td><td>1.1rem</td><td>#91BCC1</td><td>Public registration page subtitle</td></tr>
+          <tr><td>Body Text</td><td>Avenir Next</td><td>400</td><td>0.875rem</td><td>#D4E8EA</td><td>Descriptions, card body, form help</td></tr>
+          <tr><td>UI Label</td><td>Avenir Next</td><td>600</td><td>0.8125rem</td><td>#91BCC1</td><td>Form labels, nav links</td></tr>
+          <tr><td>Button Text</td><td>Avenir Next</td><td>600</td><td>0.875rem</td><td>#FFFFFF on brand / #91BCC1 on secondary</td><td>All CTAs</td></tr>
+          <tr><td>Table Cell</td><td>Avenir Next</td><td>400</td><td>0.875rem</td><td>#CBD5E1 equiv → #D4E8EA</td><td>Admin data tables</td></tr>
+          <tr><td>Caption / Meta</td><td>Avenir Next</td><td>400</td><td>0.75rem</td><td>#5A8A90</td><td>Timestamps, helper text</td></tr>
+          <tr><td>Placeholder</td><td>Avenir Next</td><td>400</td><td>0.875rem</td><td>#2E5A60</td><td>Input placeholders</td></tr>
+          <tr><td>Badge / Tag</td><td>Avenir Next</td><td>700</td><td>0.65rem uppercase</td><td>Status-specific</td><td>Active / Revoked / Pending</td></tr>
+          <tr><td>Credential / Hash</td><td>SF Mono / Consolas</td><td>400</td><td>0.8–0.9rem</td><td>#FFAE62</td><td>client_secret, token fingerprint</td></tr>
+          <tr><td>Footnote / Legal</td><td>Avenir Next</td><td>400</td><td>0.7rem</td><td>#2E5A60</td><td>Footer notes, terms references</td></tr>
+          <tr><td>Error Message</td><td>Avenir Next</td><td>400</td><td>0.8125rem</td><td>#FF6B6B</td><td>Form validation, alert boxes</td></tr>
+          <tr><td>Nav Brand</td><td>Avenir Next</td><td>700</td><td>1rem</td><td>#F0F7F8 + #FF5E00</td><td>Top navigation bar</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════ 02 COLOUR ══════════════ -->
+  <section id="s02">
+    <div class="section-label">02</div>
+    <h2>Colour</h2>
+    <p class="intro">
+      The palette is a dark-mode adaptation of the DS-MOZ brand. Teal family (#072B31 → #115E67) becomes the layered surface system.
+      The brand orange (#FF5E00) becomes the primary CTA accent, matte-shifted to #E8500A for screen. All text is teal-tinted white rather than cold grey.
+    </p>
+
+    <h3 class="sub">Brand Accent — Orange Family</h3>
+    <div class="swatch-grid">
+      <div class="swatch">
+        <div class="swatch-block" style="background:#E8500A"></div>
+        <div class="swatch-info"><div class="swatch-hex">#E8500A</div><div class="swatch-label">Matte orange — Primary CTA, active states</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#FF5E00"></div>
+        <div class="swatch-info"><div class="swatch-hex">#FF5E00</div><div class="swatch-label">Brand orange — Wordmark accent, hover glow</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#C4420A"></div>
+        <div class="swatch-info"><div class="swatch-hex">#C4420A</div><div class="swatch-label">Deep orange — Pressed / active button state</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#FFAE62"></div>
+        <div class="swatch-info"><div class="swatch-hex">#FFAE62</div><div class="swatch-label">Light amber — Highlight text, credential values</div></div>
+      </div>
+    </div>
+
+    <h3 class="sub">Background Surfaces — Teal Family</h3>
+    <div class="swatch-grid">
+      <div class="swatch">
+        <div class="swatch-block" style="background:#060E10;border-bottom:1px solid #16464F"></div>
+        <div class="swatch-info"><div class="swatch-hex">#060E10</div><div class="swatch-label">Page background — deepest teal-black</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#0A1C20"></div>
+        <div class="swatch-info"><div class="swatch-hex">#0A1C20</div><div class="swatch-label">Card / panel surface</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#0D2A30"></div>
+        <div class="swatch-info"><div class="swatch-hex">#0D2A30</div><div class="swatch-label">Elevated panel / table header</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#16464F"></div>
+        <div class="swatch-info"><div class="swatch-hex">#16464F</div><div class="swatch-label">Borders and dividers</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#115E67"></div>
+        <div class="swatch-info"><div class="swatch-hex">#115E67</div><div class="swatch-label">Focus ring / active border — brand medium teal</div></div>
+      </div>
+    </div>
+
+    <h3 class="sub">Typography Scale</h3>
+    <div class="swatch-grid">
+      <div class="swatch">
+        <div class="swatch-block" style="background:#F0F7F8"></div>
+        <div class="swatch-info"><div class="swatch-hex">#F0F7F8</div><div class="swatch-label">Headings / primary text</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#D4E8EA"></div>
+        <div class="swatch-info"><div class="swatch-hex">#D4E8EA</div><div class="swatch-label">Body text</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#91BCC1"></div>
+        <div class="swatch-info"><div class="swatch-hex">#91BCC1</div><div class="swatch-label">Secondary / UI labels</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#5A8A90"></div>
+        <div class="swatch-info"><div class="swatch-hex">#5A8A90</div><div class="swatch-label">Muted / form hints</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#2E5A60"></div>
+        <div class="swatch-info"><div class="swatch-hex">#2E5A60</div><div class="swatch-label">Placeholder / meta / footnote</div></div>
+      </div>
+    </div>
+
+    <h3 class="sub">Teal Depth Ramp</h3>
+    <div class="heatmap-ramp">
+      <div class="ramp-stop" style="background:#060E10;color:#2E5A60;">#060E10</div>
+      <div class="ramp-stop" style="background:#0A1C20;color:#2E5A60;">#0A1C20</div>
+      <div class="ramp-stop" style="background:#0D2A30;color:#5A8A90;">#0D2A30</div>
+      <div class="ramp-stop" style="background:#16464F;color:#91BCC1;">#16464F</div>
+      <div class="ramp-stop" style="background:#115E67;color:#D4E8EA;">#115E67</div>
+    </div>
+    <p style="font-size:0.7rem;color:var(--c-muted);margin-bottom:2rem;">Darkest surfaces use teal-tinted text (#2E5A60). Lighter surfaces use teal body text (#91BCC1 → #D4E8EA). White text only on brand orange buttons.</p>
+
+    <h3 class="sub">Status / Semantic Colours</h3>
+    <div class="swatch-grid">
+      <div class="swatch">
+        <div class="swatch-block" style="background:#073D20"></div>
+        <div class="swatch-info"><div class="swatch-hex">#3DD68C</div><div class="swatch-label">Active / Success — text on #073D20 bg</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#3D0A0A"></div>
+        <div class="swatch-info"><div class="swatch-hex">#FF6B6B</div><div class="swatch-label">Danger / Error — text on #3D0A0A bg</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#3D2200"></div>
+        <div class="swatch-info"><div class="swatch-hex">#FFAE62</div><div class="swatch-label">Warning / Pending — text on #3D2200 bg</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#052830"></div>
+        <div class="swatch-info"><div class="swatch-hex">#7BCFD8</div><div class="swatch-label">Info / Advisory — text on #052830 bg</div></div>
+      </div>
+    </div>
+
+    <h3 class="sub">Credential / Secret Highlight</h3>
+    <div class="swatch-grid">
+      <div class="swatch">
+        <div class="swatch-block" style="background:#1A0C00;border:1px solid #7A3000"></div>
+        <div class="swatch-info"><div class="swatch-hex">#1A0C00 / #7A3000</div><div class="swatch-label">Secret box bg / border</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#FFAE62"></div>
+        <div class="swatch-info"><div class="swatch-hex">#FFAE62</div><div class="swatch-label">Secret value text — light amber</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-block" style="background:#FF5E00"></div>
+        <div class="swatch-info"><div class="swatch-hex">#FF5E00</div><div class="swatch-label">Secret label accent — brand orange</div></div>
+      </div>
+    </div>
+
+    <h3 class="sub">Badge System</h3>
+    <div class="card" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+      <span class="badge badge-active">Active</span>
+      <span class="badge badge-danger">Revoked</span>
+      <span class="badge badge-warning">Pending</span>
+      <span class="badge badge-info">Info</span>
+      <span class="badge" style="background:var(--bg-elevated);color:var(--c-muted);">Expired</span>
+    </div>
+  </section>
+
+  <!-- ══════════════ 03 DOCUMENT SPECIMEN ══════════════ -->
+  <section id="s03">
+    <div class="section-label">03</div>
+    <h2>Document Specimen</h2>
+    <p class="intro">Every typographic role rendered at correct size and colour. Grey labels show role · size · weight · hex.</p>
+
+    <div style="position:relative;padding-left:15rem;">
+      <div class="specimen-page">
+
+        <div style="position:relative;margin-bottom:2.5rem;">
+          <div class="spec-label" style="top:0">Cover title · 2rem · 800 · #F0F7F8 + #FF5E00</div>
+          <div style="font-size:2rem;font-weight:800;color:#F0F7F8;letter-spacing:-0.02em;line-height:1.15;font-family:'Avenir Next',sans-serif;">
+            DSMOZ <span style="color:#FF5E00;">Intelligence</span>
+          </div>
+          <div style="font-size:0.875rem;color:#5A8A90;margin-top:0.25rem;font-family:'Avenir Next',sans-serif;">OAuth 2.0 Authorization Server · AI Solutions Platform · 2026</div>
+        </div>
+
+        <div style="border-top:2px solid #E8500A;margin-bottom:1.5rem;"></div>
+
+        <div style="position:relative;margin-bottom:1rem;">
+          <div class="spec-label">H1 · 1.375rem · 700 · #F0F7F8</div>
+          <div style="font-size:1.375rem;font-weight:700;color:#072B31;border-left:3px solid #E8500A;padding-left:0.75rem;font-family:'Avenir Next',sans-serif;">Client Management</div>
+        </div>
+
+        <div style="position:relative;margin-bottom:0.75rem;">
+          <div class="spec-label">H2 · 1.125rem · 600 · #115E67</div>
+          <div style="font-size:1.125rem;font-weight:600;color:#115E67;font-family:'Avenir Next',sans-serif;">Registration Requests</div>
+        </div>
+
+        <div style="position:relative;margin-bottom:0.75rem;">
+          <div class="spec-label">H3 · 1rem · 600 · #16464F</div>
+          <div style="font-size:1rem;font-weight:600;color:#16464F;font-family:'Avenir Next',sans-serif;">Pending Approvals</div>
+        </div>
+
+        <div style="position:relative;margin-bottom:0.75rem;">
+          <div class="spec-label">H4 · 0.75rem · 700 · uppercase · #5A8A90</div>
+          <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#5A8A90;font-family:'Avenir Next',sans-serif;">Access Scope · mcp · write</div>
+        </div>
+
+        <div style="position:relative;margin-bottom:1rem;">
+          <div class="spec-label">Lead · 1rem · 300 · #115E67</div>
+          <div style="font-size:1rem;font-weight:300;color:#115E67;font-family:'Avenir Next',sans-serif;line-height:1.6;">DSMOZ Intelligence provides secure OAuth 2.0 authorization for AI-powered MCP services, giving organizations controlled API access with full audit trails.</div>
+        </div>
+
+        <div style="position:relative;margin-bottom:1rem;">
+          <div class="spec-label">Body · 0.875rem · 400 · #072B31</div>
+          <div style="font-size:0.875rem;font-weight:400;color:#072B31;font-family:'Avenir Next',sans-serif;line-height:1.7;">To request access, complete the registration form with your organisation details and intended use case. Credentials are issued by the administrator after review. The client secret is shown once and must be stored securely.</div>
+        </div>
+
+        <div style="position:relative;margin-bottom:1rem;">
+          <div class="spec-label">Block quote · 0.9rem · 400 italic · #115E67</div>
+          <div style="border-left:3px solid #E8500A;padding-left:1rem;font-size:0.9rem;font-style:italic;color:#115E67;font-family:'Avenir Next',sans-serif;line-height:1.6;">"Access was approved within minutes — the Telegram notification meant no waiting at a browser."<br><span style="font-size:0.75rem;font-style:normal;color:#5A8A90;">— Integration Partner, April 2026</span></div>
+        </div>
+
+        <div style="position:relative;margin-bottom:1rem;text-align:center;">
+          <div class="spec-label">Pull quote · 1.1rem · 300 italic · #072B31</div>
+          <div style="font-size:1.1rem;font-style:italic;font-weight:300;color:#072B31;font-family:'Avenir Next',sans-serif;padding:1rem 2rem;">One tap on Telegram.<br>Full MCP access granted.</div>
+        </div>
+
+        <div style="position:relative;margin-bottom:1rem;">
+          <div class="spec-label">Bullet list · 0.875rem · 400 · #072B31</div>
+          <ul style="font-size:0.875rem;color:#072B31;font-family:'Avenir Next',sans-serif;padding-left:1.5rem;line-height:1.8;">
+            <li>OAuth 2.0 Authorization Code + PKCE flow</li>
+            <li>Telegram push notifications for consent approval</li>
+            <li>Token introspection endpoint for resource servers</li>
+          </ul>
+        </div>
+
+        <div style="position:relative;margin-bottom:1rem;">
+          <div class="spec-label">Numbered list · 0.875rem · 400 · #072B31</div>
+          <ol style="font-size:0.875rem;color:#072B31;font-family:'Avenir Next',sans-serif;padding-left:1.5rem;line-height:1.8;">
+            <li>Submit registration request at /register</li>
+            <li>Administrator approves via admin panel</li>
+            <li>Receive client_id and client_secret once</li>
+          </ol>
+        </div>
+
+        <div style="position:relative;margin-bottom:1rem;">
+          <div class="spec-label">Fig caption · 0.7rem · 400 · #5A8A90</div>
+          <div style="font-size:0.7rem;color:#5A8A90;font-family:'Avenir Next',sans-serif;font-style:italic;">Figure 1. OAuth authorization flow from registration request to token issuance. Source: DSMOZ Intelligence v1.4.0</div>
+        </div>
+
+        <div style="position:relative;margin-bottom:1rem;">
+          <div class="spec-label">Key finding · callout box</div>
+          <div style="border-left:4px solid #E8500A;background:#FFF5EE;padding:0.875rem 1.25rem;border-radius:0 6px 6px 0;">
+            <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#E8500A;font-family:'Avenir Next',sans-serif;margin-bottom:0.25rem;">Key Finding</div>
+            <div style="font-size:0.875rem;color:#072B31;font-family:'Avenir Next',sans-serif;">Telegram-based consent reduces approval latency from minutes to seconds, eliminating browser friction entirely.</div>
+          </div>
+        </div>
+
+        <div style="position:relative;margin-bottom:1rem;">
+          <div class="spec-label">Limitation box · warning accent</div>
+          <div style="border-left:4px solid #FFAE62;background:#FFF8F0;padding:0.875rem 1.25rem;border-radius:0 6px 6px 0;">
+            <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#C4420A;font-family:'Avenir Next',sans-serif;margin-bottom:0.25rem;">Limitation</div>
+            <div style="font-size:0.875rem;color:#072B31;font-family:'Avenir Next',sans-serif;">Telegram fallback not available in environments with restricted outbound connections. Password form is used when Telegram is unconfigured.</div>
+          </div>
+        </div>
+
+        <div style="position:relative;margin-bottom:1rem;">
+          <div class="spec-label">Credential box · secret highlight</div>
+          <div style="border:1px solid #7A3000;background:#1A0C00;padding:1rem 1.25rem;border-radius:6px;">
+            <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#FF5E00;font-family:'Avenir Next',sans-serif;margin-bottom:0.5rem;">Client Secret — Save This Now</div>
+            <div style="font-family:'SFMono-Regular',Consolas,monospace;font-size:0.875rem;color:#FFAE62;word-break:break-all;">a8f3d92e1b4c67890fedc321a8b5e4f1d2c3e9ab0f7621de</div>
+            <div style="font-size:0.75rem;color:#FFAE62;margin-top:0.5rem;opacity:0.7;">This secret will never be shown again. Copy it now.</div>
+          </div>
+        </div>
+
+        <div style="position:relative;">
+          <div class="spec-label">Footnote · 0.7rem · 400 · #2E5A60</div>
+          <div style="font-size:0.7rem;color:#2E5A60;font-family:'Avenir Next',sans-serif;border-top:1px solid #e0e0e0;padding-top:0.5rem;">¹ Tokens are stored as SHA-256 hashes. Raw values are never persisted to the database. · DSMOZ Intelligence v1.4.0 · DS-MOZ Consultancy Services</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════ 04 UI COMPONENTS ══════════════ -->
+  <section id="s04">
+    <div class="section-label">04</div>
+    <h2>UI Components</h2>
+    <p class="intro">Live component reference showing every interactive element in the correct palette. All components use CSS variables — swap values in :root to retheme instantly.</p>
+
+    <h3 class="sub">Buttons</h3>
+    <div class="ui-preview">
+      <label>Button States</label>
+      <button class="btn-demo btn-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256" fill="currentColor" style="flex-shrink:0"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>
+        Approve Request
+      </button>
+      <button class="btn-demo btn-secondary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256" fill="currentColor" style="flex-shrink:0"><path d="M224,128a96,96,0,1,1-96-96A96.11,96.11,0,0,1,224,128Zm-96,40a8,8,0,0,0-8,8v8a8,8,0,0,0,16,0v-8A8,8,0,0,0,128,168Zm0-112a32,32,0,0,0-32,32,8,8,0,0,0,16,0,16,16,0,0,1,32,0c0,16-24,24-24,24v8a8,8,0,0,0,16,0v-4.51C149,110.43,160,98.27,160,88A32,32,0,0,0,128,56Z"/></svg>
+        View Details
+      </button>
+      <button class="btn-demo btn-ghost">Rotate Secret</button>
+      <button class="btn-demo btn-danger">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256" fill="currentColor" style="flex-shrink:0"><path d="M216,48H176V40a24,24,0,0,0-24-24H104A24,24,0,0,0,80,40v8H40a8,8,0,0,0,0,16h8V208a16,16,0,0,0,16,16H192a16,16,0,0,0,16-16V64h8a8,8,0,0,0,0-16ZM96,40a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Zm96,168H64V64H192ZM112,104v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm48,0v64a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Z"/></svg>
+        Delete Client
+      </button>
+    </div>
+
+    <h3 class="sub">Form Elements</h3>
+    <div class="ui-preview">
+      <label>Inputs &amp; Fields</label>
+      <div style="display:flex;flex-direction:column;gap:0.75rem;max-width:400px;">
+        <div>
+          <div style="font-size:0.8rem;font-weight:600;color:var(--c-secondary);margin-bottom:0.3rem;">Organisation Name *</div>
+          <input class="input-demo" type="text" value="LAMBDA Association" readonly>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;font-weight:600;color:var(--c-secondary);margin-bottom:0.3rem;">Contact Email *</div>
+          <input class="input-demo" type="text" placeholder="you@organisation.org" readonly>
+        </div>
+        <div>
+          <div style="font-size:0.8rem;font-weight:600;color:var(--c-secondary);margin-bottom:0.3rem;">Redirect URIs</div>
+          <textarea class="input-demo" rows="3" style="resize:vertical;" readonly placeholder="https://myapp.example.com/callback"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="sub">Cards &amp; Panels</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:1.5rem;">
+      <div style="background:var(--bg-card);border:1px solid var(--c-border);border-radius:var(--radius);padding:1.25rem;">
+        <div style="font-size:2rem;font-weight:800;color:var(--c-heading);line-height:1;">12</div>
+        <div style="font-size:0.8125rem;color:var(--c-muted);font-weight:600;margin-top:0.3rem;">Total Clients</div>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--c-border);border-radius:var(--radius);padding:1.25rem;">
+        <div style="font-size:2rem;font-weight:800;color:#3DD68C;line-height:1;">9</div>
+        <div style="font-size:0.8125rem;color:var(--c-muted);font-weight:600;margin-top:0.3rem;">Active Clients</div>
+      </div>
+      <div style="background:var(--bg-card);border:1px solid var(--c-border);border-radius:var(--radius);padding:1.25rem;">
+        <div style="font-size:2rem;font-weight:800;color:var(--c-brand-light);line-height:1;">34</div>
+        <div style="font-size:0.8125rem;color:var(--c-muted);font-weight:600;margin-top:0.3rem;">Active Tokens</div>
+      </div>
+      <div style="background:#1C160A;border:1px solid #78350f;border-radius:var(--radius);padding:1.25rem;">
+        <div style="font-size:2rem;font-weight:800;color:#FBBF24;line-height:1;">3</div>
+        <div style="font-size:0.8125rem;color:var(--c-muted);font-weight:600;margin-top:0.3rem;">Pending Requests</div>
+      </div>
+    </div>
+
+    <h3 class="sub">Navigation Bar</h3>
+    <div style="background:var(--bg-card);border:1px solid var(--c-border);border-radius:var(--radius);padding:0 1.5rem;display:flex;align-items:center;height:56px;gap:2rem;margin-bottom:1.5rem;">
+      <span style="font-size:1rem;font-weight:700;color:var(--c-heading);">DSMOZ <span style="color:#FF5E00;">Intelligence</span></span>
+      <span style="font-size:0.875rem;color:var(--c-brand-light);border-bottom:2px solid var(--c-brand);padding-bottom:2px;">Dashboard</span>
+      <span style="font-size:0.875rem;color:var(--c-secondary);">Clients</span>
+      <span style="font-size:0.875rem;color:var(--c-secondary);">Registrations</span>
+      <span style="font-size:0.875rem;color:var(--c-secondary);">Discovery</span>
+    </div>
+  </section>
+
+  <!-- ══════════════ 05 CHART EXAMPLES ══════════════ -->
+  <section id="s05">
+    <div class="section-label">05</div>
+    <h2>Chart Examples</h2>
+    <p class="intro">Data visualisation patterns using the DSMOZ Intelligence palette. Use for admin dashboards, usage reports, and analytics pages.</p>
+
+    <h3 class="sub">Horizontal Bar — Client Token Activity</h3>
+    <div class="card">
+      <div style="font-size:0.75rem;font-weight:700;color:var(--c-heading);margin-bottom:1.25rem;">Active Tokens by Client (last 30 days)</div>
+      <div class="chart-bar-row">
+        <div class="chart-bar-label">Claude Desktop</div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width:88%;background:#E8500A;"><span class="chart-bar-val">88</span></div></div>
+      </div>
+      <div class="chart-bar-row">
+        <div class="chart-bar-label">LAMBDA App</div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width:64%;background:#115E67;"><span class="chart-bar-val">64</span></div></div>
+      </div>
+      <div class="chart-bar-row">
+        <div class="chart-bar-label">Kwaedja Portal</div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width:41%;background:#115E67;"><span class="chart-bar-val">41</span></div></div>
+      </div>
+      <div class="chart-bar-row">
+        <div class="chart-bar-label">DS-MOZ Internal</div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width:27%;background:#16464F;"><span class="chart-bar-val">27</span></div></div>
+      </div>
+      <div class="chart-bar-row">
+        <div class="chart-bar-label">Test Client</div>
+        <div class="chart-bar-track"><div class="chart-bar-fill" style="width:8%;background:#16464F;"><span class="chart-bar-val">8</span></div></div>
+      </div>
+      <div style="font-size:0.65rem;color:var(--c-muted);margin-top:1rem;">Primary series: #E8500A (brand). Secondary series: #115E67, #16464F (teal depth). Gridlines: var(--bg-elevated). No border radius on bars above 10px width.</div>
+    </div>
+
+    <h3 class="sub">Heatmap — Token Status Grid</h3>
+    <div class="card">
+      <div style="font-size:0.75rem;font-weight:700;color:var(--c-heading);margin-bottom:1rem;">Token Health by Client × Week</div>
+      <div class="heatmap-grid">
+        <div class="heatmap-cell" style="background:#060E10;color:#2E5A60;">0</div>
+        <div class="heatmap-cell" style="background:#0A1C20;color:#5A8A90;">3</div>
+        <div class="heatmap-cell" style="background:#0D2A30;color:#91BCC1;">8</div>
+        <div class="heatmap-cell" style="background:#16464F;color:#D4E8EA;">15</div>
+        <div class="heatmap-cell" style="background:#115E67;color:#F0F7F8;">24</div>
+        <div class="heatmap-cell" style="background:#0A1C20;color:#5A8A90;">4</div>
+        <div class="heatmap-cell" style="background:#16464F;color:#D4E8EA;">12</div>
+        <div class="heatmap-cell" style="background:#115E67;color:#F0F7F8;">21</div>
+        <div class="heatmap-cell" style="background:#E8500A;color:#fff;">38</div>
+        <div class="heatmap-cell" style="background:#FF5E00;color:#fff;">47</div>
+        <div class="heatmap-cell" style="background:#0D2A30;color:#91BCC1;">7</div>
+        <div class="heatmap-cell" style="background:#0A1C20;color:#5A8A90;">2</div>
+        <div class="heatmap-cell" style="background:#16464F;color:#D4E8EA;">14</div>
+        <div class="heatmap-cell" style="background:#115E67;color:#F0F7F8;">19</div>
+        <div class="heatmap-cell" style="background:#E8500A;color:#fff;">33</div>
+      </div>
+      <div style="font-size:0.65rem;color:var(--c-muted);margin-top:0.5rem;">Dark text (#2E5A60) on stops 1–2. Light text (#91BCC1→#F0F7F8) on stops 3–5. White text on brand orange stops. 5-stop ramp anchored at teal-depth family, climaxing at brand orange for hotspots.</div>
+    </div>
+
+    <h3 class="sub">Status Donut — Client Health</h3>
+    <div class="card" style="display:flex;align-items:center;gap:2rem;flex-wrap:wrap;">
+      <svg width="120" height="120" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="50" fill="none" stroke="#073D20" stroke-width="20"/>
+        <circle cx="60" cy="60" r="50" fill="none" stroke="#3DD68C" stroke-width="20" stroke-dasharray="251 314" stroke-dashoffset="79" transform="rotate(-90 60 60)"/>
+        <circle cx="60" cy="60" r="50" fill="none" stroke="#3D0A0A" stroke-width="20" stroke-dasharray="50 314" stroke-dashoffset="-172" transform="rotate(-90 60 60)"/>
+        <circle cx="60" cy="60" r="50" fill="none" stroke="#3D2200" stroke-width="20" stroke-dasharray="13 314" stroke-dashoffset="-222" transform="rotate(-90 60 60)"/>
+        <text x="60" y="55" text-anchor="middle" fill="#F0F7F8" font-size="18" font-weight="700" font-family="Avenir Next,sans-serif">12</text>
+        <text x="60" y="70" text-anchor="middle" fill="#5A8A90" font-size="9" font-family="Avenir Next,sans-serif">clients</text>
+      </svg>
+      <div style="display:flex;flex-direction:column;gap:0.5rem;">
+        <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:var(--c-secondary);">
+          <span style="display:inline-block;width:12px;height:12px;background:#3DD68C;border-radius:2px"></span> Active (9)
+        </div>
+        <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:var(--c-secondary);">
+          <span style="display:inline-block;width:12px;height:12px;background:#FF6B6B;border-radius:2px"></span> Revoked (2)
+        </div>
+        <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:var(--c-secondary);">
+          <span style="display:inline-block;width:12px;height:12px;background:#FFAE62;border-radius:2px"></span> Pending (1)
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════ 06 ICONS ══════════════ -->
+  <section id="s06">
+    <div class="section-label">06</div>
+    <h2>Icons — Phosphor Set</h2>
+    <p class="intro">
+      All icons use <strong style="color:var(--c-heading)">Phosphor Icons</strong> (phosphoricons.com) — Light variant, 1.5px stroke, 24×24px default.
+      Import via <code style="font-family:monospace;font-size:0.8em;color:var(--c-brand-light);">https://unpkg.com/@phosphor-icons/web</code> or embed SVG inline.
+      Apply brand colours using <code style="font-family:monospace;font-size:0.8em;color:var(--c-brand-light);">fill="currentColor"</code> with CSS colour inheritance.
+    </p>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table class="icon-table">
+        <thead>
+          <tr>
+            <th>Icon</th><th>Concept</th><th>Phosphor Name</th><th>Colour</th><th>Size</th><th>Usage in DSMOZ Intelligence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="icon-ph" style="color:#E8500A;">🔐</div></td>
+            <td>Authentication</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">LockKey</code></td>
+            <td>#E8500A</td><td>24px</td>
+            <td>Consent page header, auth flow indicators</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#3DD68C;">✓</div></td>
+            <td>Approved / Active</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">CheckCircle</code></td>
+            <td>#3DD68C</td><td>20px</td>
+            <td>Active status badges, approval confirmation</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#FF6B6B;">✕</div></td>
+            <td>Revoked / Denied</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">XCircle</code></td>
+            <td>#FF6B6B</td><td>20px</td>
+            <td>Revoked clients, denied access, danger zone</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#FFAE62;">⚠</div></td>
+            <td>Pending / Warning</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">WarningCircle</code></td>
+            <td>#FFAE62</td><td>20px</td>
+            <td>Pending registrations, expiry warnings</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#91BCC1;">👤</div></td>
+            <td>Client / User</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">UserCircle</code></td>
+            <td>#91BCC1</td><td>24px</td>
+            <td>Client list, registration form, contact fields</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#7BCFD8;">🔑</div></td>
+            <td>Secret / Credentials</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">Key</code></td>
+            <td>#7BCFD8</td><td>24px</td>
+            <td>Secret reveal box, re-key button, token section</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#91BCC1;">📋</div></td>
+            <td>Registration</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">ClipboardText</code></td>
+            <td>#91BCC1</td><td>24px</td>
+            <td>Registration requests nav, submission form</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#E8500A;">⚡</div></td>
+            <td>Token / Access</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">Lightning</code></td>
+            <td>#E8500A</td><td>24px</td>
+            <td>Active token indicator, token inspector header</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#91BCC1;">🏠</div></td>
+            <td>Dashboard</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">House</code></td>
+            <td>#91BCC1</td><td>24px</td>
+            <td>Nav: Dashboard link</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#FF6B6B;">🗑</div></td>
+            <td>Delete</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">Trash</code></td>
+            <td>#FF6B6B</td><td>20px</td>
+            <td>Hard delete client, danger zone</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#91BCC1;">✏</div></td>
+            <td>Edit</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">PencilSimple</code></td>
+            <td>#91BCC1</td><td>20px</td>
+            <td>Edit client button, form header</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#7BCFD8;">↺</div></td>
+            <td>Rotate / Re-key</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">ArrowsClockwise</code></td>
+            <td>#7BCFD8</td><td>20px</td>
+            <td>Rotate secret button</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#FFAE62;">⏱</div></td>
+            <td>Expiry / Time</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">Timer</code></td>
+            <td>#FFAE62</td><td>20px</td>
+            <td>Token expiry column, session timeout indicator</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#3DD68C;">📡</div></td>
+            <td>Webhook / Live</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">WifiHigh</code></td>
+            <td>#3DD68C</td><td>24px</td>
+            <td>Telegram webhook status, server health</td>
+          </tr>
+          <tr>
+            <td><div class="icon-ph" style="color:#91BCC1;">📊</div></td>
+            <td>Analytics / Stats</td>
+            <td><code style="font-size:0.75em;color:var(--c-brand-light);">ChartBar</code></td>
+            <td>#91BCC1</td><td>24px</td>
+            <td>Dashboard stat cards, token usage charts</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:1rem;">
+      <h3 class="sub" style="margin-top:0;">Icon Usage Rules</h3>
+      <ul style="font-size:0.8125rem;color:var(--c-secondary);line-height:2;padding-left:1.25rem;">
+        <li>Use <strong style="color:var(--c-heading)">Light variant</strong> (1.5px stroke) throughout — never Bold or Fill</li>
+        <li>Size: <strong style="color:var(--c-heading)">24px</strong> for nav/section headers · <strong style="color:var(--c-heading)">20px</strong> for table actions · <strong style="color:var(--c-heading)">16px</strong> inside buttons</li>
+        <li>Colour: always inherit from CSS <code style="font-size:0.8em;color:var(--c-brand-light);">color</code> property — never hardcode in SVG fill attribute</li>
+        <li>Never mix Phosphor with other icon sets on the same page</li>
+        <li>No representational icons for organisations or populations — use abstract symbols only</li>
+        <li>Telegram-specific: use <code style="font-size:0.8em;color:var(--c-brand-light);">PaperPlaneTilt</code> for notification send, <code style="font-size:0.8em;color:var(--c-brand-light);">ChatTeardropDots</code> for bot interaction</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ══════════════ 07 PHOTOGRAPHY ══════════════ -->
+  <section id="s07">
+    <div class="section-label">07</div>
+    <h2>Photography &amp; Illustration</h2>
+    <p class="intro">Visual guidance for imagery used in marketing materials, landing pages, and documentation for DSMOZ Intelligence.</p>
+
+    <h3 class="sub">Appropriate Imagery</h3>
+    <div class="card">
+      <ul style="font-size:0.875rem;color:var(--c-secondary);line-height:2;padding-left:1.25rem;">
+        <li>Abstract technology — circuit patterns, data flows, network nodes — teal/dark-toned</li>
+        <li>Professional workspace: laptops, terminals, minimal desk setups — no clutter</li>
+        <li>Mozambique/Southern Africa context: authentic urban professional settings when human subjects are shown</li>
+        <li>Security metaphors: locks, keys, shields — rendered abstractly, not cartoonishly</li>
+        <li>Dark-mode screenshots of the product itself — most powerful asset</li>
+        <li>Composition: wide cinematic crops (16:9), subject off-centre, generous negative space</li>
+      </ul>
+    </div>
+
+    <h3 class="sub">Avoid</h3>
+    <div class="card" style="border-color:var(--bg-danger);">
+      <ul style="font-size:0.875rem;color:var(--c-secondary);line-height:2;padding-left:1.25rem;">
+        <li>Stock photo clichés: handshakes, people pointing at whiteboards, staged "diversity" photos</li>
+        <li>Bright white backgrounds — breaks the dark-mode product aesthetic</li>
+        <li>Blue/purple colour palettes from competing SaaS brands (Stripe, Linear, Vercel tones)</li>
+        <li>Generic "AI" imagery: glowing brain outlines, robotic hands, blue particle fields</li>
+        <li>Imagery that positions Africa/Mozambique as underdeveloped or aid-receiving</li>
+        <li>Faces without consent documentation</li>
+      </ul>
+    </div>
+
+    <h3 class="sub">AI Illustration Rules</h3>
+    <div class="card">
+      <p style="font-size:0.875rem;color:var(--c-secondary);line-height:1.7;margin-bottom:1rem;">
+        Use <strong style="color:var(--c-heading)">DS-MOZ SaaS Vector style</strong> (Recraft style ID: <code style="font-size:0.8em;color:var(--c-brand-light);">d353d61e</code>) for product marketing assets.
+        Colours in prompts: describe as "dark teal background, warm orange accents, clean white lines" — never paste hex codes.
+      </p>
+      <ul style="font-size:0.875rem;color:var(--c-secondary);line-height:2;padding-left:1.25rem;">
+        <li><strong style="color:var(--c-heading)">Use for:</strong> hero section backgrounds, feature illustrations, onboarding empty states</li>
+        <li><strong style="color:var(--c-danger)">Do not generate:</strong> realistic photographs of people, logos of any organisation, UI mockups (do these in HTML/CSS)</li>
+        <li>Output directory: <code style="font-size:0.8em;color:var(--c-brand-light);">~/Desktop/design-engine-output/dsmoz-intelligence/</code></li>
+        <li>Always upload generated assets to Cloudinary (account: dq2ajrfxl) before use</li>
+      </ul>
+    </div>
+
+    <h3 class="sub">Logo Usage on Dark Backgrounds</h3>
+    <div class="card">
+      <p style="font-size:0.875rem;color:var(--c-secondary);line-height:1.7;">
+        Use <strong style="color:var(--c-heading)">DSMC-White.svg</strong> on all dark surfaces (the product's native environment).
+        Cloudinary URL: <code style="font-size:0.75em;font-family:monospace;color:var(--c-brand-light);">https://res.cloudinary.com/dq2ajrfxl/image/upload/v1742962914/white_dt1cfp.png</code><br>
+        Minimum size: 80px width digital. Clear space: equal to icon height on all sides. Never place on backgrounds where orange-on-teal creates insufficient contrast.
+      </p>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Request API Access — DS-MOZ MCP OAuth</title>
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Avenir Next', 'Avenir', 'Segoe UI', Helvetica Neue, Arial, sans-serif;
+      background: #060E10;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 3rem 1.5rem;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 14px;
+      padding: 2.5rem;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 16px 56px rgba(0,0,0,0.6);
+    }
+
+    .brand {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #FF5E00;
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #0A1C20;
+      margin-bottom: 0.4rem;
+    }
+
+    .subtitle {
+      font-size: 0.875rem;
+      color: #5A8A90;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+
+    .form-group { margin-bottom: 1.25rem; }
+
+    label {
+      display: block;
+      margin-bottom: 0.4rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #5A8A90;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    textarea {
+      width: 100%;
+      padding: 0.65rem 0.875rem;
+      background: #F0F7F8;
+      border: 1px solid #D4E8EA;
+      border-radius: 6px;
+      color: #0A1C20;
+      font-size: 0.875rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus, textarea:focus { border-color: #115E67; }
+
+    textarea { resize: vertical; min-height: 80px; }
+
+    .hint {
+      font-size: 0.75rem;
+      color: #91BCC1;
+      margin-top: 0.3rem;
+      display: block;
+    }
+
+    .error-box {
+      background: #FFF0F0;
+      border: 1px solid #FFBDBD;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      color: #C0392B;
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .btn-submit {
+      width: 100%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      padding: 0.75rem 1rem;
+      background: #E8500A;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: opacity 0.15s;
+    }
+
+    .btn-submit:hover { opacity: 0.85; }
+    .btn-submit i { font-size: 17px; }
+
+    .footer-note {
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: #91BCC1;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">DS-MOZ Intelligence</div>
+
+    <h1>Request API Access</h1>
+    <p class="subtitle">
+      Fill in the form below to request access to our MCP services.
+      You will receive your credentials by email once the request is reviewed.
+    </p>
+
+    {% if error %}
+    <div class="error-box">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/register/submit" id="reg-form">
+      <!-- Anti-bot: honeypot — must stay empty -->
+      <div style="display:none" aria-hidden="true">
+        <input type="text" name="website" tabindex="-1" autocomplete="off">
+      </div>
+      <input type="hidden" name="form_loaded_at" id="form_loaded_at">
+      <input type="hidden" name="captcha_signed" value="{{ captcha_signed }}">
+
+      <div class="form-group">
+        <label for="company_name">Organisation / Company Name *</label>
+        <input type="text" id="company_name" name="company_name" required
+               placeholder="e.g. LAMBDA Association" value="{{ company_name or '' }}">
+      </div>
+
+      <div class="form-group">
+        <label for="contact_name">Contact Name *</label>
+        <input type="text" id="contact_name" name="contact_name" required
+               placeholder="Your full name" value="{{ contact_name or '' }}">
+      </div>
+
+      <div class="form-group">
+        <label for="contact_email">Contact Email *</label>
+        <input type="email" id="contact_email" name="contact_email" required
+               placeholder="you@organisation.org" value="{{ contact_email or '' }}">
+      </div>
+
+      <div class="form-group">
+        <label for="use_case">Intended Use *</label>
+        <textarea id="use_case" name="use_case" required
+                  placeholder="Briefly describe how you plan to use the MCP API">{{ use_case or '' }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="redirect_uris_raw">Redirect URIs</label>
+        <textarea id="redirect_uris_raw" name="redirect_uris_raw"
+                  placeholder="One URI per line&#10;e.g. https://myapp.example.com/callback">{{ redirect_uris_raw or '' }}</textarea>
+        <span class="hint">Leave empty if you don't know yet — you can update this later.</span>
+      </div>
+
+      <div class="form-group">
+        <label for="captcha_answer">{{ captcha_question }}</label>
+        <input type="text" id="captcha_answer" name="captcha_answer" required
+               autocomplete="off" inputmode="numeric" placeholder="Enter the answer">
+      </div>
+
+      <button type="submit" class="btn-submit">
+        <i class="ph-light ph-paper-plane-tilt"></i> Submit Request
+      </button>
+    </form>
+
+    <p class="footer-note">
+      You will receive your credentials and setup instructions by email.
+    </p>
+  </div>
+  <script>
+    document.getElementById('form_loaded_at').value = Date.now();
+  </script>
+</body>
+</html>

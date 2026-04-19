@@ -1,0 +1,224 @@
+{% extends "portal_base.html" %}
+{% block title %}Setup Guide — DS-MOZ Intelligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Setup Guide</h1>
+</div>
+
+<div class="card">
+  <h2>Your Gateway URL</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.5rem">
+    This is your single MCP endpoint. Connect your LLM client to this URL.
+  </p>
+  <div class="code-pill">
+    <span>{{ gateway_url }}</span>
+    <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy">
+      <i class="ph-light ph-copy" style="font-size:14px"></i>
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Claude Desktop</h2>
+
+  <div style="margin-bottom:1.25rem">
+    <h3 style="font-size:0.875rem;color:var(--text-h);margin-bottom:0.5rem">Option A: Custom Connector (recommended)</h3>
+    <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.5">
+      Open Claude Desktop &rarr; <strong style="color:var(--text-ui)">Settings &rarr; Connectors &rarr; Add custom connector</strong> and fill in:
+    </p>
+
+    <div style="display:flex;flex-direction:column;gap:0.75rem">
+      <div>
+        <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">Name</div>
+        <div style="font-size:0.875rem;color:var(--text-ui)">DS-MOZ Intelligence (or any label)</div>
+      </div>
+      <div>
+        <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">Remote MCP Server URL</div>
+        <div class="code-pill">
+          <span>{{ gateway_url }}</span>
+          <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy">
+            <i class="ph-light ph-copy" style="font-size:14px"></i>
+          </button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">OAuth Client ID <span style="font-weight:400;text-transform:none;letter-spacing:0">(under Advanced settings)</span></div>
+        <div class="code-pill">
+          <span>{{ client_id }}</span>
+          <button class="copy-btn" onclick="copyText('{{ client_id }}', this)" title="Copy">
+            <i class="ph-light ph-copy" style="font-size:14px"></i>
+          </button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">OAuth Client Secret <span style="font-weight:400;text-transform:none;letter-spacing:0">(under Advanced settings)</span></div>
+        {% if new_secret %}
+        <div class="code-pill" style="border-color:var(--vivid)">
+          <span>{{ new_secret }}</span>
+          <button class="copy-btn" onclick="copyText('{{ new_secret }}', this)" title="Copy">
+            <i class="ph-light ph-copy" style="font-size:14px"></i>
+          </button>
+        </div>
+        <p style="font-size:0.75rem;color:var(--vivid);margin-top:0.4rem">&#9888; Copy this now — it will not be shown again.</p>
+        {% else %}
+        <form method="post" action="/portal/setup/rotate-secret" style="margin:0">
+          <button type="submit" class="btn" style="font-size:0.8rem;padding:0.4rem 0.9rem"
+            onclick="return confirm('This will invalidate your current secret. Continue?')">
+            <i class="ph-light ph-arrows-clockwise"></i> Generate new secret
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.5">
+      Click <strong>Add</strong> — Claude Desktop will open a browser to sign you in with your portal credentials. Tokens refresh automatically.
+    </p>
+  </div>
+
+  <div style="border-top:1px solid var(--border);padding-top:1rem">
+    <h3 style="font-size:0.875rem;color:var(--text-h);margin-bottom:0.5rem">Option B: Config file (JSON)</h3>
+    <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.5">
+      Download the config and merge it into your <code style="font-size:0.75rem;background:var(--elevated);padding:0.15em 0.4em;border-radius:3px">claude_desktop_config.json</code>. Uses <code style="font-size:0.75rem;background:var(--elevated);padding:0.15em 0.4em;border-radius:3px">mcp-remote</code> to handle OAuth automatically.
+    </p>
+    <a href="/portal/setup/download" class="btn" style="font-size:0.8rem;padding:0.4rem 0.9rem">
+      <i class="ph-light ph-download-simple"></i> Download config
+    </a>
+    <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.5">
+      Requires <a href="https://nodejs.org" style="color:var(--vivid)" target="_blank">Node.js</a> installed. On first connection, a browser will open for sign-in.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Claude.ai (Web)</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.5">
+    Go to <strong style="color:var(--text-ui)">Claude.ai → Settings → Connectors → Add custom connector</strong> and fill in:
+  </p>
+  <div style="display:flex;flex-direction:column;gap:0.75rem">
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">Remote MCP URL</div>
+      <div class="code-pill">
+        <span>{{ gateway_url }}</span>
+        <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">OAuth Client ID <span style="font-weight:400;text-transform:none;letter-spacing:0">(click Advanced settings)</span></div>
+      <div class="code-pill">
+        <span>{{ client_id }}</span>
+        <button class="copy-btn" onclick="copyText('{{ client_id }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+    </div>
+    {% if new_secret %}
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">OAuth Client Secret <span style="font-weight:400;text-transform:none;letter-spacing:0">(click Advanced settings)</span></div>
+      <div class="code-pill" style="border-color:var(--vivid)">
+        <span>{{ new_secret }}</span>
+        <button class="copy-btn" onclick="copyText('{{ new_secret }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.5">
+    {% if not new_secret %}Generate your secret in the Claude Desktop section above, then use it here too.{% else %}Use the same Client Secret shown above.{% endif %}
+  </p>
+  <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+    <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.4rem">Icon (optional)</div>
+    <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;line-height:1.5">
+      Claude.ai lets you upload a custom icon for the connector. Download the DS-MOZ brand icon (128×128 PNG, transparent):
+    </p>
+    <a href="/portal/static/dsmoz-icon-128.png" download="dsmoz-icon.png" class="btn" style="font-size:0.8rem;padding:0.4rem 0.9rem">
+      <i class="ph-light ph-download-simple"></i> Download icon
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>ChatGPT</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.5">
+    In ChatGPT, open <strong style="color:var(--text-ui)">Settings &rarr; Connectors &rarr; Create &rarr; New App</strong> (Developer mode / custom connectors must be enabled on your account). Fill in:
+  </p>
+  <div style="display:flex;flex-direction:column;gap:0.75rem">
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">Name</div>
+      <div style="font-size:0.875rem;color:var(--text-ui)">DS-MOZ Intelligence (or any label)</div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">MCP Server URL</div>
+      <div class="code-pill">
+        <span>{{ gateway_url }}</span>
+        <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">Authentication</div>
+      <div style="font-size:0.875rem;color:var(--text-ui)">OAuth</div>
+    </div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">OAuth Client ID <span style="font-weight:400;text-transform:none;letter-spacing:0">(under Advanced settings)</span></div>
+      <div class="code-pill">
+        <span>{{ client_id }}</span>
+        <button class="copy-btn" onclick="copyText('{{ client_id }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+    </div>
+    {% if new_secret %}
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.3rem">OAuth Client Secret <span style="font-weight:400;text-transform:none;letter-spacing:0">(under Advanced settings)</span></div>
+      <div class="code-pill" style="border-color:var(--vivid)">
+        <span>{{ new_secret }}</span>
+        <button class="copy-btn" onclick="copyText('{{ new_secret }}', this)" title="Copy">
+          <i class="ph-light ph-copy" style="font-size:14px"></i>
+        </button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.5">
+    Tick <strong style="color:var(--text-ui)">&ldquo;I understand and want to continue&rdquo;</strong> to acknowledge the custom-connector risk notice, then click <strong style="color:var(--text-ui)">Create</strong>. ChatGPT will open a browser window to sign you in with your portal credentials.
+    {% if not new_secret %} Generate your secret in the Claude Desktop section above, then use it here too.{% else %} Use the same Client Secret shown above.{% endif %}
+  </p>
+  <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border)">
+    <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.4rem">Icon (optional)</div>
+    <p style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;line-height:1.5">
+      ChatGPT lets you upload a custom icon for the connector. Download the DS-MOZ brand icon (128×128 PNG, transparent):
+    </p>
+    <a href="/portal/static/dsmoz-icon-128.png" download="dsmoz-icon.png" class="btn" style="font-size:0.8rem;padding:0.4rem 0.9rem">
+      <i class="ph-light ph-download-simple"></i> Download icon
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>How the Gateway Works</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);line-height:1.6;margin-bottom:0.75rem">
+    Your LLM connects to the gateway once and gets access to all your enabled MCP tools via four meta-tools:
+  </p>
+  <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:0.5rem">
+    {% for tool, desc in [
+      ("search_tools(query)", "Find tools by keyword across all your enabled MCPs"),
+      ("list_mcps()", "See which MCPs you have enabled"),
+      ("list_tools(mcp_slug)", "List all tools for a specific MCP"),
+      ("call_tool(mcp_slug, tool_name, arguments)", "Execute a tool on the upstream MCP server")
+    ] %}
+    <li style="display:flex;align-items:flex-start;gap:0.75rem">
+      <code style="background:var(--elevated);border:1px solid var(--border);border-radius:4px;padding:0.2em 0.5em;font-size:0.75rem;color:var(--amber);flex-shrink:0">{{ tool }}</code>
+      <span style="font-size:0.8rem;color:var(--text-muted);padding-top:0.1rem">{{ desc }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem;line-height:1.5">
+    Enable or disable MCPs at any time from <a href="/portal/mcps" style="color:var(--vivid)">My MCPs</a>. Changes take effect immediately.
+  </p>
+</div>
+{% endblock %}
