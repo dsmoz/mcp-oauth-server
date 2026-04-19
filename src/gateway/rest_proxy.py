@@ -69,16 +69,20 @@ def _validate_token(token: str) -> Optional[Tuple[str, str]]:
 
 def _get_scholar_config() -> Optional[dict]:
     """Look up mcp-scholar upstream_url and upstream_api_key from mcp_catalogue."""
-    db = get_db()
-    result = (
-        db.table("mcp_catalogue")
-        .select("upstream_url, upstream_api_key")
-        .eq("slug", _MCP_SCHOLAR_SLUG)
-        .eq("is_published", True)
-        .limit(1)
-        .execute()
-    )
-    return result.data[0] if result.data else None
+    try:
+        db = get_db()
+        result = (
+            db.table("mcp_catalogue")
+            .select("upstream_url, upstream_api_key")
+            .eq("slug", _MCP_SCHOLAR_SLUG)
+            .eq("is_published", True)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+    except Exception as exc:
+        print(f"WARNING: _get_scholar_config failed: {exc}", file=sys.stderr)
+        return None
 
 
 def _log_rest_call(
