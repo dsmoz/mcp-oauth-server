@@ -142,34 +142,46 @@ def _is_timeout_error(exc: Exception) -> bool:
     return False
 
 
-async def _do_upstream_call(
-    upstream_url: str,
+def _candidate_urls(upstream_url: str) -> list[str]:
+    """Build ordered URL candidates so a misregistered catalogue entry
+    (e.g. `/sse` when the server only serves `/mcp`) does not hang calls.
+
+    The registered URL is always tried first; alternates are tried only
+    if it fails with a transient connect/timeout error.
+    """
+    normalised = upstream_url.rstrip("/")
+    base = normalised.removesuffix("/sse").removesuffix("/mcp")
+    if normalised.endswith("/sse"):
+        alternates = [f"{base}/mcp/", f"{base}/mcp"]
+    elif normalised.endswith("/mcp"):
+        alternates = [f"{base}/mcp/", f"{base}/sse"]
+    else:
+        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
+    seen = set()
+    ordered: list[str] = []
+    for u in [normalised, *alternates]:
+        if u not in seen:
+            seen.add(u)
+            ordered.append(u)
+    return ordered
+
+
+async def _call_via_url(
+    url: str,
     tool_name: str,
     arguments: dict[str, Any],
     headers: dict[str, str],
+    timeout: int | None = None,
 ) -> str:
-    """Execute a single upstream tool call attempt.
-
-    Args:
-        upstream_url: The upstream MCP server URL.
-        tool_name: Name of the tool to call.
-        arguments: Tool arguments dict.
-        headers: HTTP headers including auth.
-
-    Returns:
-        The concatenated text result from the upstream tool.
-
-    Raises:
-        Exception: Any error from the upstream call (timeout, auth, network).
-    """
-    with anyio.fail_after(TOOL_CALL_TIMEOUT):
-        if _is_sse(upstream_url):
-            async with sse_client(upstream_url, headers=headers) as (read, write):
+    """Execute a single upstream tool call attempt against one URL."""
+    with anyio.fail_after(timeout if timeout is not None else TOOL_CALL_TIMEOUT):
+        if _is_sse(url):
+            async with sse_client(url, headers=headers) as (read, write):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     result = await session.call_tool(tool_name, arguments=arguments)
         else:
-            async with streamablehttp_client(upstream_url, headers=headers) as (read, write, _):
+            async with streamablehttp_client(url, headers=headers) as (read, write, _):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     result = await session.call_tool(tool_name, arguments=arguments)
@@ -185,6 +197,39 @@ async def _do_upstream_call(
                 parts.append(str(block))
         return "\n".join(parts)
     return json.dumps({"result": None})
+
+
+async def _do_upstream_call(
+    upstream_url: str,
+    tool_name: str,
+    arguments: dict[str, Any],
+    headers: dict[str, str],
+) -> str:
+    """Execute an upstream tool call, falling back across URL variants
+    on transient connect/timeout failures. Auth failures abort immediately.
+    """
+    candidates = _candidate_urls(upstream_url)
+    last_exc: Exception | None = None
+    for idx, url in enumerate(candidates):
+        # Only the registered URL gets the full timeout budget. Alternates are
+        # probes — capped at TOOL_LIST_TIMEOUT so a fully-wrong catalogue
+        # entry cannot burn 3 × TOOL_CALL_TIMEOUT.
+        timeout = TOOL_CALL_TIMEOUT if idx == 0 else TOOL_LIST_TIMEOUT
+        try:
+            return await _call_via_url(url, tool_name, arguments, headers, timeout=timeout)
+        except Exception as exc:
+            if _is_auth_error(exc):
+                raise
+            last_exc = exc
+            if idx < len(candidates) - 1 and _is_timeout_error(exc):
+                logger.warning(
+                    "Upstream call to %s timed out (budget=%ds); trying next candidate %s",
+                    url, timeout, candidates[idx + 1],
+                )
+                continue
+            raise
+    assert last_exc is not None
+    raise last_exc
 
 
 async def call_upstream_tool(
