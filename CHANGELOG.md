@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [1.10.0] - 2026-04-22
+
+### Added
+- Server-level `instructions` on the gateway MCP server — walks the agent through the `browse_mcps → add_mcp → search_tools → invoke_mcp_tool` lifecycle, credit semantics, and toolbox persistence
+- `outputSchema` declared on every meta-tool (list_mcps, browse_mcps, add_mcp, remove_mcp, search_tools, list_mcp_tools, invoke_mcp_tool) so clients can consume structured results without re-parsing
+- `credit_cost_per_call` now included in the payloads returned by `list_mcps` and `browse_mcps` so the agent can budget before calling
+- Rich, prompt-quality descriptions on all 7 meta-tools: when-to-use, contrast with sibling tools, failure modes, worked examples; `description` added to every input parameter
+
+### Changed
+- Renamed `list_tools` → `list_mcp_tools` and `call_tool` → `invoke_mcp_tool` to avoid shadowing the MCP protocol methods `tools/list` and `tools/call`
+- Tool input schemas now set `additionalProperties: false` to catch agent typos early
+
+### Deprecated
+- Legacy tool names `list_tools` and `call_tool` are still dispatched (with a stderr warning) for backward compatibility with in-flight agent sessions. They will be removed in 1.11.0 — migrate to `list_mcp_tools` / `invoke_mcp_tool`.
+
 ## [1.9.0] - 2026-04-04
 
 ### Added
