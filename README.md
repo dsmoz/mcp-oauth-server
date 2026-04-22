@@ -123,13 +123,21 @@ The gateway exposes these tools to the LLM on every connection:
 
 | Tool | Description |
 |------|-------------|
-| `list_mcps` | List MCP servers currently in the client's toolbox |
-| `browse_mcps` | Browse all published MCPs with enabled status |
+| `list_mcps` | List MCPs currently enabled in the toolbox (with credit cost per call) |
+| `browse_mcps` | Browse all published MCPs with `enabled` flag + credit cost per call |
 | `add_mcp` | Add an MCP to the toolbox (persists to DB) |
 | `remove_mcp` | Remove an MCP from the toolbox |
-| `search_tools` | Keyword search across all enabled MCP tools |
-| `list_tools` | List tools for a specific MCP |
-| `call_tool` | Proxy a tool call to an upstream MCP (credit-gated) |
+| `search_tools` | Keyword search across tools of all enabled MCPs |
+| `list_mcp_tools` | List tools for a specific enabled MCP (replaces `list_tools`) |
+| `invoke_mcp_tool` | Proxy a tool call to an upstream MCP — credit-gated (replaces `call_tool`) |
+
+The gateway also exposes a server-level `instructions` string to the client
+on `initialize`, walking through the `browse → add → search → invoke`
+lifecycle and credit semantics.
+
+> **Deprecated names**: `list_tools` and `call_tool` remain accepted for one
+> release as aliases (logged to stderr). Clients should migrate to
+> `list_mcp_tools` and `invoke_mcp_tool`.
 
 ---
 
@@ -173,6 +181,7 @@ Deployed on Railway via `Dockerfile`. Push to `main` → auto-deploy.
 
 | Version | Date | Summary |
 |---------|------|---------|
+| 1.10.0 | 2026-04-22 | Gateway meta-tools agent-ready: server-level instructions, rich tool descriptions with examples, `outputSchema` on all tools, `credit_cost_per_call` surfaced in listings, renamed `list_tools`→`list_mcp_tools` and `call_tool`→`invoke_mcp_tool` (legacy names kept for one release) |
 | 1.9.0 | 2026-04-04 | RFC 7591 dynamic client registration, ASGI gateway middleware, Claude Desktop connector support |
 | 1.8.0 | 2026-04-04 | Instant registration, credit system, Buy Credits portal page, toolbox rename |
 | 1.7.0 | 2026-04-04 | Admin MCP catalogue with Railway auto-discovery |
