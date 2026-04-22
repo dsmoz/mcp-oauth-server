@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Registrations — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Registration Requests</h1>
+</div>
+
+{% if registrations %}
+<table>
+  <thead>
+    <tr>
+      <th>Company</th>
+      <th>Contact</th>
+      <th>Email</th>
+      <th>Submitted</th>
+      <th>Status</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for reg in registrations %}
+    <tr>
+      <td>{{ reg.company_name }}</td>
+      <td>{{ reg.contact_name }}</td>
+      <td style="font-size: 0.8rem; color: var(--text-ui);">{{ reg.contact_email }}</td>
+      <td style="color: var(--text-muted); font-size: 0.8rem;">
+        {{ reg.created_at[:10] if reg.created_at else "—" }}
+      </td>
+      <td>
+        {% if reg.status == "pending" %}
+          <span class="badge badge-pending">Pending</span>
+        {% elif reg.status == "approved" %}
+          <span class="badge badge-active">Approved</span>
+        {% else %}
+          <span class="badge badge-inactive">Rejected</span>
+        {% endif %}
+      </td>
+      <td>
+        <a href="/admin/registrations/{{ reg.id }}" class="btn btn-secondary">
+          <i class="ph-light ph-eye"></i> Review
+        </a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+  <p>No registration requests yet.</p>
+</div>
+{% endif %}
+{% endblock %}

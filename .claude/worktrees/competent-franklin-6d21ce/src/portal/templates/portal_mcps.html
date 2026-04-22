@@ -1,0 +1,47 @@
+{% extends "portal_base.html" %}
+{% block title %}My Toolbox — DS-MOZ Intelligence{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>My Toolbox</h1>
+</div>
+
+<form method="post" action="/portal/mcps">
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;margin-bottom:1.5rem">
+    {% for mcp in catalogue %}
+    {% set is_on = mcp.slug in enabled %}
+    <label style="cursor:pointer;display:block">
+      <div class="card" style="margin-bottom:0;border-color:{% if is_on %}var(--vivid){% else %}var(--border){% endif %};transition:border-color 0.15s">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.75rem">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+              <span style="font-size:0.875rem;font-weight:700;color:var(--text-h)">{{ mcp.name }}</span>
+              <span style="font-size:0.6rem;padding:0.1em 0.5em;border-radius:999px;border:1px solid;
+                {% if mcp.category == 'Research' %}border-color:#7BCFD8;color:#7BCFD8
+                {% elif mcp.category == 'Writing' %}border-color:var(--success);color:var(--success)
+                {% elif mcp.category == 'Data' %}border-color:var(--vivid);color:var(--vivid)
+                {% else %}border-color:var(--amber);color:var(--amber){% endif %}
+              ">{{ mcp.category }}</span>
+            </div>
+            <p style="font-size:0.8rem;color:var(--text-muted);line-height:1.5">{{ mcp.description }}</p>
+          </div>
+          <div style="flex-shrink:0;padding-top:2px">
+            <input type="checkbox" name="mcps" value="{{ mcp.slug }}"
+                   {% if is_on %}checked{% endif %}
+                   style="width:18px;height:18px;accent-color:var(--vivid);cursor:pointer">
+          </div>
+        </div>
+      </div>
+    </label>
+    {% else %}
+    <div class="card" style="grid-column:1/-1;text-align:center;color:var(--text-muted)">
+      No MCP tools are published yet. Check back soon.
+    </div>
+    {% endfor %}
+  </div>
+
+  <button type="submit" class="btn btn-primary">
+    <i class="ph-light ph-floppy-disk"></i> Save Selection
+  </button>
+</form>
+{% endblock %}

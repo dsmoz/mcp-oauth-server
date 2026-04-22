@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}{{ user.display_name or user.email }} — User — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ user.display_name or user.email }}</h1>
+  <div class="actions">
+    <a href="/admin/users/" class="btn btn-secondary">
+      <i class="ph-light ph-arrow-left"></i> Back
+    </a>
+    <form method="post" action="/admin/users/{{ user.user_id }}/delete"
+          onsubmit="return confirm('Delete this user? All devices and tokens will be removed. This cannot be undone.')">
+      <button type="submit" class="btn btn-danger">
+        <i class="ph-light ph-trash"></i> Delete User
+      </button>
+    </form>
+  </div>
+</div>
+
+{% if secret and new_client_id %}
+<div class="secret-box">
+  <div class="label"><i class="ph-light ph-key"></i> New Device Credentials</div>
+  <div class="detail-row">
+    <div class="detail-label">Device ID</div>
+    <div class="detail-value">{{ new_client_id }}</div>
+  </div>
+  <div class="detail-row">
+    <div class="detail-label">Client Secret</div>
+    <div class="secret-value">{{ secret }}</div>
+  </div>
+  <div class="warning"><i class="ph-light ph-warning"></i> Copy this secret now — it will not be shown again.</div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>User Info</h2>
+  <div class="detail-row">
+    <div class="detail-label">User ID</div>
+    <div class="detail-value">{{ user.user_id }}</div>
+  </div>
+  <div class="detail-row">
+    <div class="detail-label">Email</div>
+    <div class="detail-value">{{ user.email }}</div>
+  </div>
+  <div class="detail-row">
+    <div class="detail-label">Display Name</div>
+    <div class="detail-value">{{ user.display_name or "—" }}</div>
+  </div>
+  <div class="detail-row">
+    <div class="detail-label">Status</div>
+    <div class="detail-value">
+      {% if user.is_active %}
+        <span class="badge badge-active">Active</span>
+      {% elif not user.password_hash %}
+        <span class="badge badge-pending">Pending setup</span>
+      {% else %}
+        <span class="badge badge-inactive">Inactive</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="detail-row">
+    <div class="detail-label">Credits</div>
+    <div class="detail-value">{{ "%.2f"|format(user.credit_balance or 0) }}</div>
+  </div>
+  <div class="detail-row">
+    <div class="detail-label">Allowed MCPs</div>
+    <div class="detail-value">
+      {% if user.allowed_mcp_resources %}
+        {{ user.allowed_mcp_resources|join(", ") }}
+      {% else %}
+        <span style="color: var(--text-muted);">None</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="detail-row">
+    <div class="detail-label">Created</div>
+    <div class="detail-value">{{ user.created_at }}</div>
+  </div>
+  <div class="detail-row">
+    <div class="detail-label">Gateway URL</div>
+    <div class="detail-value">/gateway/{{ user.user_id }}</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Usage</h2>
+  <div style="display:flex;gap:2rem;">
+    <div>
+      <div style="font-size:1.75rem;font-weight:800;color:var(--accent-vivid);">{{ usage_today }}</div>
+      <div style="font-size:0.8rem;color:var(--text-muted);">Calls today</div>
+    </div>
+    <div>
+      <div style="font-size:1.75rem;font-weight:800;color:var(--accent-vivid);">{{ usage_month }}</div>
+      <div style="font-size:0.8rem;color:var(--text-muted);">Calls this month</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Add Credits</h2>
+  <form method="post" action="/admin/users/{{ user.user_id }}/add-credits"
+        style="display:flex;gap:0.75rem;align-items:flex-end;">
+    <div class="form-group" style="margin:0;flex:1;max-width:240px;">
+      <label for="amount">Amount</label>
+      <input type="text" name="amount" id="amount" placeholder="e.g. 100" required>
+    </div>
+    <button type="submit" class="btn btn-primary">
+      <i class="ph-light ph-plus"></i> Add
+    </button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Devices ({{ devices|length }})</h2>
+  {% if devices %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Device ID</th>
+        <th>Status</th>
+        <th>Claimed</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in devices %}
+      <tr>
+        <td>{{ d.client_name }}</td>
+        <td style="font-family: monospace; font-size: 0.8rem;">{{ d.client_id }}</td>
+        <td>
+          {% if d.is_active %}
+            <span class="badge badge-active">Active</span>
+          {% else %}
+            <span class="badge badge-inactive">Revoked</span>
+          {% endif %}
+        </td>
+        <td style="color: var(--text-muted); font-size: 0.8rem;">
+          {{ d.claimed_at[:10] if d.claimed_at else "—" }}
+        </td>
+        <td class="actions">
+          <a href="/admin/clients/{{ d.client_id }}" class="btn btn-secondary">
+            <i class="ph-light ph-eye"></i> View
+          </a>
+          {% if d.is_active %}
+          <form method="post" action="/admin/users/{{ user.user_id }}/revoke-device"
+                onsubmit="return confirm('Revoke {{ d.client_name }}? The device will be signed out.')">
+            <input type="hidden" name="client_id" value="{{ d.client_id }}">
+            <button type="submit" class="btn btn-danger">
+              <i class="ph-light ph-prohibit"></i> Revoke
+            </button>
+          </form>
+          {% endif %}
+          <form method="post" action="/admin/users/{{ user.user_id }}/delete-device"
+                onsubmit="return confirm('Permanently delete {{ d.client_name }}? This cannot be undone.')">
+            <input type="hidden" name="client_id" value="{{ d.client_id }}">
+            <button type="submit" class="btn btn-danger">
+              <i class="ph-light ph-trash"></i> Delete
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color: var(--text-muted); font-size: 0.875rem;">No devices yet. The user will create one when they first connect an AI client.</p>
+  {% endif %}
+</div>
+{% endblock %}

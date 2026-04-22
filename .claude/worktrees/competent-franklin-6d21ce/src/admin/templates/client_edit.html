@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ client.client_name }} — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Edit Client</h1>
+  <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">
+    <i class="ph-light ph-arrow-left"></i> Cancel
+  </a>
+</div>
+
+<div class="card">
+  <form method="post" action="/admin/clients/{{ client.client_id }}/edit">
+    <div class="form-group">
+      <label for="client_name">Client Name *</label>
+      <input type="text" id="client_name" name="client_name" required
+             value="{{ client.client_name }}">
+    </div>
+
+    <div class="form-group">
+      <label for="redirect_uris_raw">Redirect URIs</label>
+      <textarea id="redirect_uris_raw" name="redirect_uris_raw"
+                placeholder="One URI per line">{{ (client.redirect_uris or []) | join('\n') }}</textarea>
+      <small>Leave empty to allow any redirect URI.</small>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+      <button type="submit" class="btn btn-primary">
+        <i class="ph-light ph-floppy-disk"></i> Save Changes
+      </button>
+      <a href="/admin/clients/{{ client.client_id }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
