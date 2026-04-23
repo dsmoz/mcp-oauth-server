@@ -19,6 +19,7 @@ import httpx
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamablehttp_client
+from mcp.shared.exceptions import McpError
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,45 @@ async def fetch_tool_list(
     ) from last_exc
 
 
+def _walk_exceptions(exc: BaseException):
+    """Yield exc and every nested cause/context/sub-exception (incl. groups)."""
+    seen: set[int] = set()
+    stack: list[BaseException] = [exc]
+    while stack:
+        cur = stack.pop()
+        if id(cur) in seen or cur is None:
+            continue
+        seen.add(id(cur))
+        yield cur
+        if isinstance(cur, BaseExceptionGroup):
+            stack.extend(cur.exceptions)
+        cause = getattr(cur, "__cause__", None)
+        ctx = getattr(cur, "__context__", None)
+        if cause is not None:
+            stack.append(cause)
+        if ctx is not None:
+            stack.append(ctx)
+
+
+def _is_session_terminated_error(exc: Exception) -> bool:
+    """Detect upstream 'session terminated' / 404 errors from the streamable
+    HTTP transport. These mean the upstream restarted or evicted the session;
+    retrying at the same URL is pointless, but a fresh connection (e.g. via
+    URL fallback) may succeed.
+    """
+    for e in _walk_exceptions(exc):
+        if isinstance(e, McpError):
+            msg = str(getattr(e, "args", [""])[0] if e.args else "").lower()
+            if "session terminated" in msg or "session not found" in msg:
+                return True
+        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
+            return True
+        msg = str(e).lower()
+        if "session terminated" in msg or "session not found" in msg:
+            return True
+    return False
+
+
 def _is_auth_error(exc: Exception) -> bool:
     """Check whether an exception indicates a 401 Unauthorized from upstream.
 
@@ -173,17 +213,28 @@ async def _call_via_url(
     headers: dict[str, str],
     timeout: int | None = None,
 ) -> str:
-    """Execute a single upstream tool call attempt against one URL."""
-    with anyio.fail_after(timeout if timeout is not None else TOOL_CALL_TIMEOUT):
-        if _is_sse(url):
-            async with sse_client(url, headers=headers) as (read, write):
-                async with ClientSession(read, write) as session:
+    """Execute a single upstream tool call attempt against one URL.
+
+    Splits the timeout budget: session.initialize() gets a short window
+    (TOOL_LIST_TIMEOUT) so a hung handshake fails fast and we can fall
+    back to the next URL candidate. session.call_tool() gets the full
+    per-call budget for the actual work.
+    """
+    call_timeout = timeout if timeout is not None else TOOL_CALL_TIMEOUT
+    init_timeout = min(TOOL_LIST_TIMEOUT, call_timeout)
+    if _is_sse(url):
+        async with sse_client(url, headers=headers) as (read, write):
+            async with ClientSession(read, write) as session:
+                with anyio.fail_after(init_timeout):
                     await session.initialize()
+                with anyio.fail_after(call_timeout):
                     result = await session.call_tool(tool_name, arguments=arguments)
-        else:
-            async with streamablehttp_client(url, headers=headers) as (read, write, _):
-                async with ClientSession(read, write) as session:
+    else:
+        async with streamablehttp_client(url, headers=headers) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                with anyio.fail_after(init_timeout):
                     await session.initialize()
+                with anyio.fail_after(call_timeout):
                     result = await session.call_tool(tool_name, arguments=arguments)
 
     if result.content:
@@ -221,7 +272,8 @@ async def _do_upstream_call(
             if _is_auth_error(exc):
                 raise
             last_exc = exc
-            if idx < len(candidates) - 1 and _is_timeout_error(exc):
+            transient = _is_timeout_error(exc) or _is_session_terminated_error(exc)
+            if idx < len(candidates) - 1 and transient:
                 logger.warning(
                     "Upstream call to %s timed out (budget=%ds); trying next candidate %s",
                     url, timeout, candidates[idx + 1],
@@ -285,6 +337,18 @@ async def call_upstream_tool(
 
         except Exception as exc:
             last_exc = exc
+
+            # Upstream session evicted / 404 — connection-level fault, not a
+            # timeout. Surface a clear error rather than retrying or letting
+            # an opaque ExceptionGroup bubble up.
+            if _is_session_terminated_error(exc):
+                msg = (
+                    f"Upstream MCP server at {upstream_url} terminated the "
+                    f"session (likely restarted or evicted state). "
+                    f"Tool call '{tool_name}' could not be completed."
+                )
+                logger.warning(msg)
+                raise RuntimeError(msg) from exc
 
             # 401 — no point retrying, the token is bad
             if _is_auth_error(exc):
