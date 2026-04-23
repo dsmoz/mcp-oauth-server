@@ -147,16 +147,9 @@ def _is_auth_error(exc: Exception) -> bool:
     Returns:
         True if the exception wraps an HTTP 401 response.
     """
-    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 401:
-        return True
-    # The MCP SDK may wrap httpx errors — walk the cause chain
-    cause = exc.__cause__ or exc.__context__
-    while cause is not None:
-        if isinstance(cause, httpx.HTTPStatusError) and cause.response.status_code == 401:
+    for e in _walk_exceptions(exc):
+        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 401:
             return True
-        cause = getattr(cause, "__cause__", None) or getattr(cause, "__context__", None)
-    # Also check the string representation as a last resort (some transports
-    # surface status codes only in the message)
     msg = str(exc).lower()
     return "401" in msg and ("unauthorized" in msg or "authentication" in msg)
 
