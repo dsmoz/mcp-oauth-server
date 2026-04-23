@@ -227,7 +227,11 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                     "Credit cost: free."
                 ),
                 inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
-                outputSchema={"type": "array", "items": _MCP_ENTRY_SCHEMA},
+                outputSchema={
+                    "type": "object",
+                    "properties": {"items": {"type": "array", "items": _MCP_ENTRY_SCHEMA}},
+                    "required": ["items"],
+                },
             ),
             types.Tool(
                 name="browse_mcps",
@@ -244,13 +248,19 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                 ),
                 inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
                 outputSchema={
-                    "type": "array",
-                    "items": {
-                        "allOf": [
-                            _MCP_ENTRY_SCHEMA,
-                            {"type": "object", "properties": {"enabled": {"type": "boolean"}}},
-                        ]
+                    "type": "object",
+                    "properties": {
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "allOf": [
+                                    _MCP_ENTRY_SCHEMA,
+                                    {"type": "object", "properties": {"enabled": {"type": "boolean"}}},
+                                ]
+                            },
+                        }
                     },
+                    "required": ["items"],
                 },
             ),
             types.Tool(
@@ -329,17 +339,23 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                     "additionalProperties": False,
                 },
                 outputSchema={
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "mcp": {"type": "string"},
-                            "mcp_name": {"type": "string"},
-                            "tool": {"type": "string"},
-                            "description": {"type": "string"},
-                            "inputSchema": {"type": "object"},
-                        },
+                    "type": "object",
+                    "properties": {
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "mcp": {"type": "string"},
+                                    "mcp_name": {"type": "string"},
+                                    "tool": {"type": "string"},
+                                    "description": {"type": "string"},
+                                    "inputSchema": {"type": "object"},
+                                },
+                            },
+                        }
                     },
+                    "required": ["items"],
                 },
             ),
             types.Tool(
@@ -367,7 +383,11 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                     "required": ["mcp_slug"],
                     "additionalProperties": False,
                 },
-                outputSchema={"type": "array", "items": _UPSTREAM_TOOL_SCHEMA},
+                outputSchema={
+                    "type": "object",
+                    "properties": {"items": {"type": "array", "items": _UPSTREAM_TOOL_SCHEMA}},
+                    "required": ["items"],
+                },
             ),
             types.Tool(
                 name="invoke_mcp_tool",
@@ -434,7 +454,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
         return _tool_cache[slug]
 
     @server.call_tool()
-    async def call_tool_handler(name: str, arguments: dict) -> list[types.TextContent]:
+    async def call_tool_handler(name: str, arguments: dict):
         # Deprecated-name compatibility shim (remove after one release cycle).
         _legacy_aliases = {"list_tools": "list_mcp_tools", "call_tool": "invoke_mcp_tool"}
         if name in _legacy_aliases:
@@ -446,8 +466,13 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
             )
             name = new_name
 
+        # Build a structured dict per tool. The MCP SDK requires structuredContent
+        # whenever a tool declares outputSchema; array-returning tools are wrapped
+        # in {"items": [...]} since StructuredContent is dict-typed.
+        structured: dict = {}
+
         if name == "list_mcps":
-            text = json.dumps([
+            structured = {"items": [
                 {
                     "slug": m["slug"],
                     "name": m["name"],
@@ -456,12 +481,12 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                     "credit_cost_per_call": float(m.get("credit_cost_per_call") or 0),
                 }
                 for m in enabled_mcps
-            ])
+            ]}
 
         elif name == "browse_mcps":
             all_mcps = _get_all_published_mcps()
             enabled_slugs = set(mcp_by_slug.keys())
-            text = json.dumps([
+            structured = {"items": [
                 {
                     "slug": m["slug"],
                     "name": m["name"],
@@ -471,32 +496,32 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                     "enabled": m["slug"] in enabled_slugs,
                 }
                 for m in all_mcps
-            ])
+            ]}
 
         elif name == "add_mcp":
             slug = arguments.get("mcp_slug", "")
             all_mcps = {m["slug"]: m for m in _get_all_published_mcps()}
             if slug not in all_mcps:
-                text = json.dumps({"error": f"MCP '{slug}' not found or not published"})
+                structured = {"error": f"MCP '{slug}' not found or not published"}
             elif slug in mcp_by_slug:
-                text = json.dumps({"status": "already_enabled", "mcp": slug})
+                structured = {"status": "already_enabled", "mcp": slug}
             else:
                 new_slugs = list(mcp_by_slug.keys()) + [slug]
                 _update_user_mcps(user_id, new_slugs)
                 mcp_by_slug[slug] = all_mcps[slug]
                 enabled_mcps.append(all_mcps[slug])
-                text = json.dumps({"status": "added", "mcp": slug, "name": all_mcps[slug]["name"]})
+                structured = {"status": "added", "mcp": slug, "name": all_mcps[slug]["name"]}
 
         elif name == "remove_mcp":
             slug = arguments.get("mcp_slug", "")
             if slug not in mcp_by_slug:
-                text = json.dumps({"error": f"MCP '{slug}' is not in your toolbox"})
+                structured = {"error": f"MCP '{slug}' is not in your toolbox"}
             else:
                 new_slugs = [s for s in mcp_by_slug.keys() if s != slug]
                 _update_user_mcps(user_id, new_slugs)
                 del mcp_by_slug[slug]
                 enabled_mcps[:] = [m for m in enabled_mcps if m["slug"] != slug]
-                text = json.dumps({"status": "removed", "mcp": slug})
+                structured = {"status": "removed", "mcp": slug}
 
         elif name == "search_tools":
             q = (arguments.get("query") or "").lower()
@@ -519,28 +544,28 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                             "description": t.get("description", ""),
                             "inputSchema": t.get("inputSchema", {}),
                         })
-            text = json.dumps(results)
+            structured = {"items": results}
 
         elif name == "list_mcp_tools":
             slug = arguments.get("mcp_slug", "")
             if slug not in mcp_by_slug:
-                text = json.dumps({"error": f"MCP '{slug}' not found"})
+                structured = {"error": f"MCP '{slug}' not found"}
             else:
                 try:
-                    text = json.dumps(await _get_tools(slug))
+                    structured = {"items": await _get_tools(slug)}
                 except Exception as exc:
                     print(
                         f"GATEWAY: tool discovery failed for {slug}: {exc}",
                         file=sys.stderr,
                     )
-                    text = json.dumps({"error": "tool_discovery_failed", "reason": str(exc)})
+                    structured = {"error": "tool_discovery_failed", "reason": str(exc)}
 
         elif name == "invoke_mcp_tool":
             slug = arguments.get("mcp_slug", "")
             tool_name = arguments.get("tool_name", "")
             tool_args = arguments.get("arguments", {})
             if slug not in mcp_by_slug:
-                text = json.dumps({"error": f"MCP '{slug}' not found"})
+                structured = {"error": f"MCP '{slug}' not found"}
             else:
                 mcp = mcp_by_slug[slug]
                 credit_cost = _get_credit_cost(slug)
@@ -548,30 +573,31 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                 if credit_cost > 0:
                     new_balance = _deduct_credits(user_id, credit_cost)
                     if new_balance < 0:
-                        text = json.dumps({"error": "Insufficient credits. Visit your portal to buy more credits."})
-                        return [types.TextContent(type="text", text=text)]
+                        structured = {"error": "Insufficient credits. Visit your portal to buy more credits."}
+                        text = json.dumps(structured)
+                        return [types.TextContent(type="text", text=text)], structured
                 t0 = time.monotonic()
+                upstream_text: str | None = None
                 try:
                     print(
                         f"GATEWAY: call_upstream_tool {slug}/{tool_name} "
                         f"user_id={user_id!r} client_id={client_id!r} url={mcp['upstream_url']}",
                         file=sys.stderr,
                     )
-                    text = await call_upstream_tool(
+                    upstream_text = await call_upstream_tool(
                         mcp["upstream_url"], tool_name, tool_args,
                         mcp.get("upstream_api_key", ""),
                         user_id=user_id,
                         client_id=client_id,
                     )
                 except RuntimeError as exc:
-                    # RuntimeError from upstream.py signals a known issue (e.g. 401 auth)
                     print(f"GATEWAY: upstream auth/config error {slug}/{tool_name}: {exc}", file=sys.stderr)
                     try:
                         import sentry_sdk
                         sentry_sdk.capture_exception(exc)
                     except Exception:
                         pass
-                    text = json.dumps({"error": str(exc)})
+                    structured = {"error": str(exc)}
                 except (TimeoutError, Exception) as exc:
                     is_timeout = isinstance(exc, TimeoutError) or "timeout" in str(exc).lower()
                     if is_timeout:
@@ -589,19 +615,34 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         sentry_sdk.capture_exception(exc)
                     except Exception:
                         pass
-                    text = json.dumps({"error": error_msg})
+                    structured = {"error": error_msg}
+                else:
+                    # Parse upstream JSON; wrap non-dict results so structured stays object-typed.
+                    try:
+                        parsed = json.loads(upstream_text) if upstream_text else None
+                    except (TypeError, ValueError):
+                        parsed = None
+                    if isinstance(parsed, dict):
+                        structured = parsed
+                    else:
+                        structured = {"result": parsed if parsed is not None else upstream_text}
                 elapsed_ms = int((time.monotonic() - t0) * 1000)
-                resp_bytes = len(text.encode("utf-8")) if text else 0
+                text_for_log = upstream_text if upstream_text is not None else json.dumps(structured)
+                resp_bytes = len(text_for_log.encode("utf-8")) if text_for_log else 0
                 _log_tool_call(
                     user_id, client_id, slug, tool_name,
                     credits_used=credit_cost,
                     duration_ms=elapsed_ms, response_bytes=resp_bytes,
                 )
+                # Prefer raw upstream text for the human-readable block when available.
+                text = upstream_text if upstream_text is not None else json.dumps(structured)
+                return [types.TextContent(type="text", text=text)], structured
 
         else:
-            text = json.dumps({"error": f"Unknown tool: {name}"})
+            structured = {"error": f"Unknown tool: {name}"}
 
-        return [types.TextContent(type="text", text=text)]
+        text = json.dumps(structured)
+        return [types.TextContent(type="text", text=text)], structured
 
     return server
 
