@@ -76,15 +76,23 @@ async def fetch_tool_list(
         headers["X-Client-ID"] = client_id
     base = upstream_url.rstrip("/").removesuffix("/sse").removesuffix("/mcp")
 
-    # Build candidate URLs — try both with and without trailing slash to handle
-    # servers that redirect /mcp → /mcp/, as well as SSE vs streamable-http variants
+    # Build candidate URLs. The registered URL is tried first VERBATIM —
+    # never strip its trailing slash, because some upstreams (uvicorn behind
+    # Railway) respond 307 to /mcp and the SDK's SSE GET listener loses its
+    # Authorization header on the redirect, surfacing as a spurious 401.
     normalised = upstream_url.rstrip("/")
     if normalised.endswith("/sse"):
-        candidates = [normalised, f"{base}/mcp/", f"{base}/mcp"]
+        alternates = [f"{base}/mcp/", f"{base}/mcp"]
     elif normalised.endswith("/mcp"):
-        candidates = [normalised, f"{base}/mcp/", f"{base}/sse"]
+        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
     else:
-        candidates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
+        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
+    seen: set[str] = set()
+    candidates: list[str] = []
+    for u in [upstream_url, *alternates]:
+        if u not in seen:
+            seen.add(u)
+            candidates.append(u)
 
     last_exc: Exception | None = None
     for url in candidates:
@@ -187,12 +195,15 @@ def _candidate_urls(upstream_url: str) -> list[str]:
     if normalised.endswith("/sse"):
         alternates = [f"{base}/mcp/", f"{base}/mcp"]
     elif normalised.endswith("/mcp"):
-        alternates = [f"{base}/mcp/", f"{base}/sse"]
+        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
     else:
         alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
+    # Use the registered URL VERBATIM as the first candidate — preserving its
+    # trailing slash avoids a 307 redirect chain that drops the Authorization
+    # header on the SDK's SSE GET listener (manifests as a spurious 401).
     seen = set()
     ordered: list[str] = []
-    for u in [normalised, *alternates]:
+    for u in [upstream_url, *alternates]:
         if u not in seen:
             seen.add(u)
             ordered.append(u)
