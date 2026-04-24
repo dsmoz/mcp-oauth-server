@@ -492,7 +492,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         name=promoted_name,
                         description=t.get("description", ""),
                         inputSchema=t.get("inputSchema") or {"type": "object", "properties": {}},
-                        meta=t.get("_meta") or None,
+                        _meta=t.get("_meta") or None,
                     )
                 )
         return promoted
