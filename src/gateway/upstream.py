@@ -19,6 +19,7 @@ import httpx
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.streamable_http import streamablehttp_client
+from mcp.shared.exceptions import McpError
 
 logger = logging.getLogger(__name__)
 
@@ -94,15 +95,23 @@ async def fetch_tool_list(
         headers["X-Client-ID"] = client_id
     base = upstream_url.rstrip("/").removesuffix("/sse").removesuffix("/mcp")
 
-    # Build candidate URLs — try both with and without trailing slash to handle
-    # servers that redirect /mcp → /mcp/, as well as SSE vs streamable-http variants
+    # Build candidate URLs. The registered URL is tried first VERBATIM —
+    # never strip its trailing slash, because some upstreams (uvicorn behind
+    # Railway) respond 307 to /mcp and the SDK's SSE GET listener loses its
+    # Authorization header on the redirect, surfacing as a spurious 401.
     normalised = upstream_url.rstrip("/")
     if normalised.endswith("/sse"):
-        candidates = [normalised, f"{base}/mcp/", f"{base}/mcp"]
+        alternates = [f"{base}/mcp/", f"{base}/mcp"]
     elif normalised.endswith("/mcp"):
-        candidates = [normalised, f"{base}/mcp/", f"{base}/sse"]
+        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
     else:
-        candidates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
+        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
+    seen: set[str] = set()
+    candidates: list[str] = []
+    for u in [upstream_url, *alternates]:
+        if u not in seen:
+            seen.add(u)
+            candidates.append(u)
 
     last_exc: Exception | None = None
     for url in candidates:
@@ -115,6 +124,43 @@ async def fetch_tool_list(
     raise RuntimeError(
         f"Tool discovery failed for {upstream_url}: {last_exc}"
     ) from last_exc
+def _walk_exceptions(exc: BaseException):
+    """Yield exc and every nested cause/context/sub-exception (incl. groups)."""
+    seen: set[int] = set()
+    stack: list[BaseException] = [exc]
+    while stack:
+        cur = stack.pop()
+        if id(cur) in seen or cur is None:
+            continue
+        seen.add(id(cur))
+        yield cur
+        if isinstance(cur, BaseExceptionGroup):
+            stack.extend(cur.exceptions)
+        cause = getattr(cur, "__cause__", None)
+        ctx = getattr(cur, "__context__", None)
+        if cause is not None:
+            stack.append(cause)
+        if ctx is not None:
+            stack.append(ctx)
+
+
+def _is_session_terminated_error(exc: Exception) -> bool:
+    """Detect upstream 'session terminated' / 404 errors from the streamable
+    HTTP transport. These mean the upstream restarted or evicted the session;
+    retrying at the same URL is pointless, but a fresh connection (e.g. via
+    URL fallback) may succeed.
+    """
+    for e in _walk_exceptions(exc):
+        if isinstance(e, McpError):
+            msg = str(getattr(e, "args", [""])[0] if e.args else "").lower()
+            if "session terminated" in msg or "session not found" in msg:
+                return True
+        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
+            return True
+        msg = str(e).lower()
+        if "session terminated" in msg or "session not found" in msg:
+            return True
+    return False
 
 
 def _is_auth_error(exc: Exception) -> bool:
@@ -126,16 +172,9 @@ def _is_auth_error(exc: Exception) -> bool:
     Returns:
         True if the exception wraps an HTTP 401 response.
     """
-    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 401:
-        return True
-    # The MCP SDK may wrap httpx errors — walk the cause chain
-    cause = exc.__cause__ or exc.__context__
-    while cause is not None:
-        if isinstance(cause, httpx.HTTPStatusError) and cause.response.status_code == 401:
+    for e in _walk_exceptions(exc):
+        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 401:
             return True
-        cause = getattr(cause, "__cause__", None) or getattr(cause, "__context__", None)
-    # Also check the string representation as a last resort (some transports
-    # surface status codes only in the message)
     msg = str(exc).lower()
     return "401" in msg and ("unauthorized" in msg or "authentication" in msg)
 
@@ -173,12 +212,15 @@ def _candidate_urls(upstream_url: str) -> list[str]:
     if normalised.endswith("/sse"):
         alternates = [f"{base}/mcp/", f"{base}/mcp"]
     elif normalised.endswith("/mcp"):
-        alternates = [f"{base}/mcp/", f"{base}/sse"]
+        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
     else:
         alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
+    # Use the registered URL VERBATIM as the first candidate — preserving its
+    # trailing slash avoids a 307 redirect chain that drops the Authorization
+    # header on the SDK's SSE GET listener (manifests as a spurious 401).
     seen = set()
     ordered: list[str] = []
-    for u in [normalised, *alternates]:
+    for u in [upstream_url, *alternates]:
         if u not in seen:
             seen.add(u)
             ordered.append(u)
@@ -192,17 +234,28 @@ async def _call_via_url(
     headers: dict[str, str],
     timeout: int | None = None,
 ) -> str:
-    """Execute a single upstream tool call attempt against one URL."""
-    with anyio.fail_after(timeout if timeout is not None else TOOL_CALL_TIMEOUT):
-        if _is_sse(url):
-            async with sse_client(url, headers=headers) as (read, write):
-                async with ClientSession(read, write) as session:
+    """Execute a single upstream tool call attempt against one URL.
+
+    Splits the timeout budget: session.initialize() gets a short window
+    (TOOL_LIST_TIMEOUT) so a hung handshake fails fast and we can fall
+    back to the next URL candidate. session.call_tool() gets the full
+    per-call budget for the actual work.
+    """
+    call_timeout = timeout if timeout is not None else TOOL_CALL_TIMEOUT
+    init_timeout = min(TOOL_LIST_TIMEOUT, call_timeout)
+    if _is_sse(url):
+        async with sse_client(url, headers=headers) as (read, write):
+            async with ClientSession(read, write) as session:
+                with anyio.fail_after(init_timeout):
                     await session.initialize()
+                with anyio.fail_after(call_timeout):
                     result = await session.call_tool(tool_name, arguments=arguments)
-        else:
-            async with streamablehttp_client(url, headers=headers) as (read, write, _):
-                async with ClientSession(read, write) as session:
+    else:
+        async with streamablehttp_client(url, headers=headers) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                with anyio.fail_after(init_timeout):
                     await session.initialize()
+                with anyio.fail_after(call_timeout):
                     result = await session.call_tool(tool_name, arguments=arguments)
 
     if result.content:
@@ -240,7 +293,8 @@ async def _do_upstream_call(
             if _is_auth_error(exc):
                 raise
             last_exc = exc
-            if idx < len(candidates) - 1 and _is_timeout_error(exc):
+            transient = _is_timeout_error(exc) or _is_session_terminated_error(exc)
+            if idx < len(candidates) - 1 and transient:
                 logger.warning(
                     "Upstream call to %s timed out (budget=%ds); trying next candidate %s",
                     url, timeout, candidates[idx + 1],
@@ -304,6 +358,18 @@ async def call_upstream_tool(
 
         except Exception as exc:
             last_exc = exc
+
+            # Upstream session evicted / 404 — connection-level fault, not a
+            # timeout. Surface a clear error rather than retrying or letting
+            # an opaque ExceptionGroup bubble up.
+            if _is_session_terminated_error(exc):
+                msg = (
+                    f"Upstream MCP server at {upstream_url} terminated the "
+                    f"session (likely restarted or evicted state). "
+                    f"Tool call '{tool_name}' could not be completed."
+                )
+                logger.warning(msg)
+                raise RuntimeError(msg) from exc
 
             # 401 — no point retrying, the token is bad
             if _is_auth_error(exc):

@@ -37,6 +37,34 @@ from src.gateway.upstream import (
 from src.oauth.provider import SupabaseOAuthProvider
 
 
+GATEWAY_INSTRUCTIONS = """\
+DS-MOZ Intelligence Gateway — a multi-tenant proxy in front of many upstream
+MCP servers. Each authenticated user has a persistent "toolbox" of enabled
+MCPs. You, the assistant, discover, enable, search and invoke tools from
+those upstream MCPs through the seven meta-tools exposed here.
+
+Typical lifecycle:
+  1. browse_mcps              → see the full catalogue (with enabled flag + cost)
+  2. add_mcp(mcp_slug=...)    → persist an MCP into the user's toolbox
+  3. search_tools(query=...)  → keyword search across all enabled MCPs
+     (or list_mcp_tools if you already know which MCP you want)
+  4. invoke_mcp_tool(...)     → run a real tool on an upstream MCP
+
+The toolbox persists across sessions — on later calls you usually start at
+search_tools/list_mcps without re-adding anything.
+
+Credits:
+  • All six meta-tools (list/browse/add/remove/search/list_mcp_tools) are FREE.
+  • invoke_mcp_tool is CREDIT-GATED — each call deducts credit_cost_per_call
+    (see browse_mcps / list_mcps). On insufficient balance the call returns
+    {"error": "Insufficient credits..."} without hitting the upstream.
+  • If the user runs out, direct them to /portal/credits to top up.
+
+Return shape: all tools return a single TextContent whose .text is a JSON
+string. Parse it as JSON. Errors come back as {"error": "..."}.
+"""
+
+
 def evict_transport(client_id: str) -> None:
     """No-op — kept for call-site compatibility. Streamable HTTP is stateless."""
     pass
@@ -162,6 +190,37 @@ def _tool_has_ui(tool: dict) -> bool:
     return False
 
 
+_MCP_ENTRY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "slug": {"type": "string", "description": "Stable identifier for the MCP (use this as mcp_slug everywhere)."},
+        "name": {"type": "string", "description": "Human-readable MCP name."},
+        "description": {"type": "string", "description": "What the MCP does."},
+        "category": {"type": "string", "description": "Catalogue category (research, productivity, ...)."},
+        "credit_cost_per_call": {"type": "number", "description": "Credits deducted per invoke_mcp_tool call against this MCP."},
+    },
+}
+
+_UPSTREAM_TOOL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "inputSchema": {"type": "object"},
+    },
+}
+
+_MUTATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "status": {"type": "string", "enum": ["added", "removed", "already_enabled"]},
+        "mcp": {"type": "string"},
+        "name": {"type": "string"},
+        "error": {"type": "string"},
+    },
+}
+
+
 def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) -> Server:
     mcp_by_slug = {m["slug"]: m for m in enabled_mcps}
     _tool_cache: dict[str, list[dict]] = {}
@@ -170,69 +229,237 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
     # Resource origins: uri -> slug (populated lazily by list_resources_handler)
     _resource_origin: dict[str, str] = {}
 
-    server = Server("DS-MOZ Intelligence Gateway")
+    server = Server(
+        "DS-MOZ Intelligence Gateway",
+        instructions=GATEWAY_INSTRUCTIONS,
+    )
 
     @server.list_tools()
     async def list_tools_handler() -> list[types.Tool]:
+        # Note: outputSchema is passed through Tool's `extra="allow"` pydantic config.
+        # Deprecated aliases (list_tools, call_tool) are intentionally not advertised
+        # here — they remain dispatchable in call_tool_handler for one release cycle.
         return [
             types.Tool(
                 name="list_mcps",
-                description="List all MCP servers currently in your toolbox.",
-                inputSchema={"type": "object", "properties": {}},
+                description=(
+                    "List MCPs currently enabled in the caller's toolbox.\n\n"
+                    "When to use: you need to know which upstream MCPs are active "
+                    "right now before calling their tools. Contrast with `browse_mcps`, "
+                    "which also shows MCPs the user hasn't enabled yet.\n\n"
+                    "Returns: JSON array of {slug, name, description, category, "
+                    "credit_cost_per_call}. Empty array means the toolbox is empty "
+                    "— call `browse_mcps` then `add_mcp` to populate it.\n\n"
+                    "Credit cost: free."
+                ),
+                inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
+                outputSchema={
+                    "type": "object",
+                    "properties": {"items": {"type": "array", "items": _MCP_ENTRY_SCHEMA}},
+                    "required": ["items"],
+                },
             ),
             types.Tool(
                 name="browse_mcps",
-                description="Browse all available MCP servers you can add to your toolbox.",
-                inputSchema={"type": "object", "properties": {}},
+                description=(
+                    "Browse the full published catalogue of MCPs, including ones "
+                    "the user has not yet enabled.\n\n"
+                    "When to use: the caller asks 'what can I do here?' or you need "
+                    "to find an MCP by capability before enabling it. Each entry "
+                    "carries an `enabled` flag and its `credit_cost_per_call` so you "
+                    "can budget before invoking.\n\n"
+                    "Returns: JSON array of {slug, name, description, category, "
+                    "enabled, credit_cost_per_call}.\n\n"
+                    "Credit cost: free."
+                ),
+                inputSchema={"type": "object", "properties": {}, "additionalProperties": False},
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "allOf": [
+                                    _MCP_ENTRY_SCHEMA,
+                                    {"type": "object", "properties": {"enabled": {"type": "boolean"}}},
+                                ]
+                            },
+                        }
+                    },
+                    "required": ["items"],
+                },
             ),
             types.Tool(
                 name="add_mcp",
-                description="Add an MCP server to your toolbox by slug. Use browse_mcps to discover available MCPs.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {"mcp_slug": {"type": "string"}},
-                    "required": ["mcp_slug"],
-                },
-            ),
-            types.Tool(
-                name="remove_mcp",
-                description="Remove an MCP server from your toolbox by slug.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {"mcp_slug": {"type": "string"}},
-                    "required": ["mcp_slug"],
-                },
-            ),
-            types.Tool(
-                name="search_tools",
-                description="Search for tools by keyword across all your enabled MCPs.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {"query": {"type": "string"}},
-                    "required": ["query"],
-                },
-            ),
-            types.Tool(
-                name="list_tools",
-                description="List all tools for a specific MCP (by slug).",
-                inputSchema={
-                    "type": "object",
-                    "properties": {"mcp_slug": {"type": "string"}},
-                    "required": ["mcp_slug"],
-                },
-            ),
-            types.Tool(
-                name="call_tool",
-                description="Call a tool on an upstream MCP server.",
+                description=(
+                    "Enable an MCP in the caller's toolbox so its tools become "
+                    "reachable via `search_tools` / `list_mcp_tools` / `invoke_mcp_tool`. "
+                    "Persists across sessions.\n\n"
+                    "When to use: after `browse_mcps` surfaces an MCP the caller "
+                    "wants to use. Idempotent — returns status='already_enabled' if "
+                    "the slug is already in the toolbox.\n\n"
+                    "Returns: {status: 'added'|'already_enabled', mcp, name} or "
+                    "{error: '...'} if the slug is unknown/unpublished.\n\n"
+                    "Credit cost: free."
+                ),
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "mcp_slug": {"type": "string"},
-                        "tool_name": {"type": "string"},
-                        "arguments": {"type": "object"},
+                        "mcp_slug": {
+                            "type": "string",
+                            "description": "Slug from `browse_mcps` (e.g. 'dsmoz-intel'). Case-sensitive.",
+                        }
+                    },
+                    "required": ["mcp_slug"],
+                    "additionalProperties": False,
+                },
+                outputSchema=_MUTATION_SCHEMA,
+            ),
+            types.Tool(
+                name="remove_mcp",
+                description=(
+                    "Disable an MCP from the caller's toolbox. Persists. Does not "
+                    "delete anything upstream — just hides it from this user.\n\n"
+                    "When to use: caller asks to drop an MCP, or you detect the "
+                    "user no longer needs it.\n\n"
+                    "Returns: {status: 'removed', mcp} or {error: '...'} if the "
+                    "slug is not currently enabled.\n\n"
+                    "Credit cost: free."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "mcp_slug": {
+                            "type": "string",
+                            "description": "Slug currently in the toolbox (see `list_mcps`).",
+                        }
+                    },
+                    "required": ["mcp_slug"],
+                    "additionalProperties": False,
+                },
+                outputSchema=_MUTATION_SCHEMA,
+            ),
+            types.Tool(
+                name="search_tools",
+                description=(
+                    "Keyword search across tool names and descriptions of every "
+                    "*enabled* MCP in the toolbox.\n\n"
+                    "When to use: you want to find a capability but don't know "
+                    "which MCP provides it. Cheaper than enumerating each MCP "
+                    "with `list_mcp_tools`. Failed upstream discoveries are "
+                    "silently skipped.\n\n"
+                    "Returns: JSON array of {mcp, mcp_name, tool, description, "
+                    "inputSchema}. Empty array means no matches — try broader "
+                    "keywords or `browse_mcps` to enable more MCPs.\n\n"
+                    "Credit cost: free."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Case-insensitive substring matched against tool name and description.",
+                        }
+                    },
+                    "required": ["query"],
+                    "additionalProperties": False,
+                },
+                outputSchema={
+                    "type": "object",
+                    "properties": {
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "mcp": {"type": "string"},
+                                    "mcp_name": {"type": "string"},
+                                    "tool": {"type": "string"},
+                                    "description": {"type": "string"},
+                                    "inputSchema": {"type": "object"},
+                                },
+                            },
+                        }
+                    },
+                    "required": ["items"],
+                },
+            ),
+            types.Tool(
+                name="list_mcp_tools",
+                description=(
+                    "List every tool exposed by a single enabled MCP, with its "
+                    "JSON Schema.\n\n"
+                    "When to use: you already know which MCP you need and want "
+                    "its full tool surface (e.g. before `invoke_mcp_tool`). For "
+                    "cross-MCP discovery, prefer `search_tools`.\n\n"
+                    "Returns: JSON array of {name, description, inputSchema} or "
+                    "{error, reason} if upstream discovery fails.\n\n"
+                    "Credit cost: free. "
+                    "Note: replaces the legacy tool name `list_tools`, which also "
+                    "still works for one release."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "mcp_slug": {
+                            "type": "string",
+                            "description": "Slug of an enabled MCP (see `list_mcps`).",
+                        }
+                    },
+                    "required": ["mcp_slug"],
+                    "additionalProperties": False,
+                },
+                outputSchema={
+                    "type": "object",
+                    "properties": {"items": {"type": "array", "items": _UPSTREAM_TOOL_SCHEMA}},
+                    "required": ["items"],
+                },
+            ),
+            types.Tool(
+                name="invoke_mcp_tool",
+                description=(
+                    "Proxy a tool call to an upstream MCP. This is the only tool "
+                    "that actually performs work on behalf of the user.\n\n"
+                    "**CREDIT-GATED**: each call deducts `credit_cost_per_call` "
+                    "credits from the user (see `browse_mcps` / `list_mcps`). If "
+                    "the balance is insufficient the call returns "
+                    "{\"error\": \"Insufficient credits...\"} without hitting the "
+                    "upstream. Direct the user to /portal/credits to top up.\n\n"
+                    "When to use: after you have identified the right MCP and tool "
+                    "via `search_tools` or `list_mcp_tools`. Call `list_mcp_tools` "
+                    "first if you are unsure of the exact `tool_name` or of the "
+                    "shape that `arguments` should take.\n\n"
+                    "Example:\n"
+                    "  invoke_mcp_tool(\n"
+                    "    mcp_slug=\"mcp-zotero-qdrant\",\n"
+                    "    tool_name=\"search\",\n"
+                    "    arguments={\"query\": \"HIV prevention Mozambique\", \"limit\": 5}\n"
+                    "  )\n\n"
+                    "Returns: the upstream tool's JSON-encoded result, or "
+                    "{\"error\": \"...\"} on upstream failure / timeout. "
+                    "Note: replaces the legacy tool name `call_tool`, which also "
+                    "still works for one release."
+                ),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "mcp_slug": {
+                            "type": "string",
+                            "description": "Slug of an enabled MCP (must appear in `list_mcps`).",
+                        },
+                        "tool_name": {
+                            "type": "string",
+                            "description": "Exact tool name as returned by `list_mcp_tools` or `search_tools`.",
+                        },
+                        "arguments": {
+                            "type": "object",
+                            "description": "Arguments conforming to the upstream tool's inputSchema. Pass {} if the tool takes no arguments.",
+                        },
                     },
                     "required": ["mcp_slug", "tool_name", "arguments"],
+                    "additionalProperties": False,
                 },
+                outputSchema={"type": "object"},
             ),
         ] + await _promoted_ui_tools()
 
@@ -377,50 +604,73 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                     isError=bool(raw.get("isError", False)),
                 )
 
-        if name == "list_mcps":
-            text = json.dumps([
-                {"slug": m["slug"], "name": m["name"], "description": m["description"], "category": m["category"]}
-                for m in enabled_mcps
-            ])
+        # Deprecated-name compatibility shim (remove after one release cycle).
+        _legacy_aliases = {"list_tools": "list_mcp_tools", "call_tool": "invoke_mcp_tool"}
+        if name in _legacy_aliases:
+            new_name = _legacy_aliases[name]
+            print(
+                f"GATEWAY: deprecated tool name '{name}' used by client={client_id}, "
+                f"routing to '{new_name}' — update your client to use the new name.",
+                file=sys.stderr,
+            )
+            name = new_name
 
-        elif name == "browse_mcps":
-            all_mcps = _get_all_published_mcps()
-            enabled_slugs = set(mcp_by_slug.keys())
-            text = json.dumps([
+        # Build a structured dict per tool. The MCP SDK requires structuredContent
+        # whenever a tool declares outputSchema; array-returning tools are wrapped
+        # in {"items": [...]} since StructuredContent is dict-typed.
+        structured: dict = {}
+
+        if name == "list_mcps":
+            structured = {"items": [
                 {
                     "slug": m["slug"],
                     "name": m["name"],
                     "description": m["description"],
                     "category": m["category"],
+                    "credit_cost_per_call": float(m.get("credit_cost_per_call") or 0),
+                }
+                for m in enabled_mcps
+            ]}
+
+        elif name == "browse_mcps":
+            all_mcps = _get_all_published_mcps()
+            enabled_slugs = set(mcp_by_slug.keys())
+            structured = {"items": [
+                {
+                    "slug": m["slug"],
+                    "name": m["name"],
+                    "description": m["description"],
+                    "category": m["category"],
+                    "credit_cost_per_call": float(m.get("credit_cost_per_call") or 0),
                     "enabled": m["slug"] in enabled_slugs,
                 }
                 for m in all_mcps
-            ])
+            ]}
 
         elif name == "add_mcp":
             slug = arguments.get("mcp_slug", "")
             all_mcps = {m["slug"]: m for m in _get_all_published_mcps()}
             if slug not in all_mcps:
-                text = json.dumps({"error": f"MCP '{slug}' not found or not published"})
+                structured = {"error": f"MCP '{slug}' not found or not published"}
             elif slug in mcp_by_slug:
-                text = json.dumps({"status": "already_enabled", "mcp": slug})
+                structured = {"status": "already_enabled", "mcp": slug}
             else:
                 new_slugs = list(mcp_by_slug.keys()) + [slug]
                 _update_user_mcps(user_id, new_slugs)
                 mcp_by_slug[slug] = all_mcps[slug]
                 enabled_mcps.append(all_mcps[slug])
-                text = json.dumps({"status": "added", "mcp": slug, "name": all_mcps[slug]["name"]})
+                structured = {"status": "added", "mcp": slug, "name": all_mcps[slug]["name"]}
 
         elif name == "remove_mcp":
             slug = arguments.get("mcp_slug", "")
             if slug not in mcp_by_slug:
-                text = json.dumps({"error": f"MCP '{slug}' is not in your toolbox"})
+                structured = {"error": f"MCP '{slug}' is not in your toolbox"}
             else:
                 new_slugs = [s for s in mcp_by_slug.keys() if s != slug]
                 _update_user_mcps(user_id, new_slugs)
                 del mcp_by_slug[slug]
                 enabled_mcps[:] = [m for m in enabled_mcps if m["slug"] != slug]
-                text = json.dumps({"status": "removed", "mcp": slug})
+                structured = {"status": "removed", "mcp": slug}
 
         elif name == "search_tools":
             q = (arguments.get("query") or "").lower()
@@ -443,28 +693,28 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                             "description": t.get("description", ""),
                             "inputSchema": t.get("inputSchema", {}),
                         })
-            text = json.dumps(results)
+            structured = {"items": results}
 
-        elif name == "list_tools":
+        elif name == "list_mcp_tools":
             slug = arguments.get("mcp_slug", "")
             if slug not in mcp_by_slug:
-                text = json.dumps({"error": f"MCP '{slug}' not found"})
+                structured = {"error": f"MCP '{slug}' not found"}
             else:
                 try:
-                    text = json.dumps(await _get_tools(slug))
+                    structured = {"items": await _get_tools(slug)}
                 except Exception as exc:
                     print(
                         f"GATEWAY: tool discovery failed for {slug}: {exc}",
                         file=sys.stderr,
                     )
-                    text = json.dumps({"error": "tool_discovery_failed", "reason": str(exc)})
+                    structured = {"error": "tool_discovery_failed", "reason": str(exc)}
 
-        elif name == "call_tool":
+        elif name == "invoke_mcp_tool":
             slug = arguments.get("mcp_slug", "")
             tool_name = arguments.get("tool_name", "")
             tool_args = arguments.get("arguments", {})
             if slug not in mcp_by_slug:
-                text = json.dumps({"error": f"MCP '{slug}' not found"})
+                structured = {"error": f"MCP '{slug}' not found"}
             else:
                 mcp = mcp_by_slug[slug]
                 credit_cost = _get_credit_cost(slug)
@@ -472,30 +722,31 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                 if credit_cost > 0:
                     new_balance = _deduct_credits(user_id, credit_cost)
                     if new_balance < 0:
-                        text = json.dumps({"error": "Insufficient credits. Visit your portal to buy more credits."})
-                        return [types.TextContent(type="text", text=text)]
+                        structured = {"error": "Insufficient credits. Visit your portal to buy more credits."}
+                        text = json.dumps(structured)
+                        return [types.TextContent(type="text", text=text)], structured
                 t0 = time.monotonic()
+                upstream_text: str | None = None
                 try:
                     print(
                         f"GATEWAY: call_upstream_tool {slug}/{tool_name} "
                         f"user_id={user_id!r} client_id={client_id!r} url={mcp['upstream_url']}",
                         file=sys.stderr,
                     )
-                    text = await call_upstream_tool(
+                    upstream_text = await call_upstream_tool(
                         mcp["upstream_url"], tool_name, tool_args,
                         mcp.get("upstream_api_key", ""),
                         user_id=user_id,
                         client_id=client_id,
                     )
                 except RuntimeError as exc:
-                    # RuntimeError from upstream.py signals a known issue (e.g. 401 auth)
                     print(f"GATEWAY: upstream auth/config error {slug}/{tool_name}: {exc}", file=sys.stderr)
                     try:
                         import sentry_sdk
                         sentry_sdk.capture_exception(exc)
                     except Exception:
                         pass
-                    text = json.dumps({"error": str(exc)})
+                    structured = {"error": str(exc)}
                 except (TimeoutError, Exception) as exc:
                     is_timeout = isinstance(exc, TimeoutError) or "timeout" in str(exc).lower()
                     if is_timeout:
@@ -513,19 +764,34 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         sentry_sdk.capture_exception(exc)
                     except Exception:
                         pass
-                    text = json.dumps({"error": error_msg})
+                    structured = {"error": error_msg}
+                else:
+                    # Parse upstream JSON; wrap non-dict results so structured stays object-typed.
+                    try:
+                        parsed = json.loads(upstream_text) if upstream_text else None
+                    except (TypeError, ValueError):
+                        parsed = None
+                    if isinstance(parsed, dict):
+                        structured = parsed
+                    else:
+                        structured = {"result": parsed if parsed is not None else upstream_text}
                 elapsed_ms = int((time.monotonic() - t0) * 1000)
-                resp_bytes = len(text.encode("utf-8")) if text else 0
+                text_for_log = upstream_text if upstream_text is not None else json.dumps(structured)
+                resp_bytes = len(text_for_log.encode("utf-8")) if text_for_log else 0
                 _log_tool_call(
                     user_id, client_id, slug, tool_name,
                     credits_used=credit_cost,
                     duration_ms=elapsed_ms, response_bytes=resp_bytes,
                 )
+                # Prefer raw upstream text for the human-readable block when available.
+                text = upstream_text if upstream_text is not None else json.dumps(structured)
+                return [types.TextContent(type="text", text=text)], structured
 
         else:
-            text = json.dumps({"error": f"Unknown tool: {name}"})
+            structured = {"error": f"Unknown tool: {name}"}
 
-        return [types.TextContent(type="text", text=text)]
+        text = json.dumps(structured)
+        return [types.TextContent(type="text", text=text)], structured
 
     @server.list_resources()
     async def list_resources_handler() -> list[types.Resource]:
