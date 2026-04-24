@@ -600,7 +600,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                 return types.CallToolResult(
                     content=blocks,
                     structuredContent=raw.get("structuredContent"),
-                    meta=raw.get("_meta"),
+                    _meta=raw.get("_meta"),
                     isError=bool(raw.get("isError", False)),
                 )
 
@@ -832,7 +832,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         description=it.get("description"),
                         mimeType=it.get("mimeType"),
                         title=it.get("title"),
-                        meta=it.get("_meta") or None,
+                        _meta=it.get("_meta") or None,
                     )
                 )
         return resources
