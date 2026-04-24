@@ -26,7 +26,14 @@ from mcp import types
 
 from src.config import get_settings
 from src.db import get_db
-from src.gateway.upstream import call_upstream_tool, fetch_tool_list, TOOL_CALL_TIMEOUT
+from src.gateway.upstream import (
+    call_upstream_tool,
+    call_upstream_tool_structured,
+    fetch_tool_list,
+    list_upstream_resources,
+    read_upstream_resource,
+    TOOL_CALL_TIMEOUT,
+)
 from src.oauth.provider import SupabaseOAuthProvider
 
 
@@ -168,6 +175,21 @@ def _update_user_mcps(user_id: str, slugs: list[str]) -> None:
     ).eq("user_id", user_id).execute()
 
 
+def _tool_has_ui(tool: dict) -> bool:
+    """Detect whether a tool descriptor carries an MCP Apps UI pointer."""
+    meta = tool.get("_meta") or {}
+    if not isinstance(meta, dict):
+        return False
+    ui = meta.get("ui")
+    if isinstance(ui, dict) and ui.get("resourceUri"):
+        return True
+    # OpenAI-style hint some servers emit
+    openai = meta.get("openai")
+    if isinstance(openai, dict) and openai.get("outputTemplate"):
+        return True
+    return False
+
+
 _MCP_ENTRY_SCHEMA = {
     "type": "object",
     "properties": {
@@ -202,6 +224,10 @@ _MUTATION_SCHEMA = {
 def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) -> Server:
     mcp_by_slug = {m["slug"]: m for m in enabled_mcps}
     _tool_cache: dict[str, list[dict]] = {}
+    # Promoted UI tools: promoted_name -> {slug, upstream_name, descriptor}
+    _ui_tools: dict[str, dict] = {}
+    # Resource origins: uri -> slug (populated lazily by list_resources_handler)
+    _resource_origin: dict[str, str] = {}
 
     server = Server(
         "DS-MOZ Intelligence Gateway",
@@ -435,7 +461,41 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                 },
                 outputSchema={"type": "object"},
             ),
-        ]
+        ] + await _promoted_ui_tools()
+
+    async def _promoted_ui_tools() -> list[types.Tool]:
+        """Discover UI-bearing upstream tools and expose them as first-class
+        gateway tools named `{slug}__{tool_name}`. Preserves `_meta` so
+        MCP Apps hosts (Claude.ai, ChatGPT) can render their UI resource."""
+        promoted: list[types.Tool] = []
+        for mcp in enabled_mcps:
+            slug = mcp["slug"]
+            try:
+                tools = await _get_tools(slug)
+            except Exception as exc:
+                print(
+                    f"GATEWAY: UI-tool discovery failed for {slug}, skipping: {exc}",
+                    file=sys.stderr,
+                )
+                continue
+            for t in tools:
+                if not _tool_has_ui(t):
+                    continue
+                promoted_name = f"{slug}__{t['name']}"
+                _ui_tools[promoted_name] = {
+                    "slug": slug,
+                    "upstream_name": t["name"],
+                    "descriptor": t,
+                }
+                promoted.append(
+                    types.Tool(
+                        name=promoted_name,
+                        description=t.get("description", ""),
+                        inputSchema=t.get("inputSchema") or {"type": "object", "properties": {}},
+                        meta=t.get("_meta") or None,
+                    )
+                )
+        return promoted
 
     async def _get_tools(slug: str) -> list[dict]:
         """Return tools for slug, raising RuntimeError if discovery fails."""
@@ -455,6 +515,95 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
 
     @server.call_tool()
     async def call_tool_handler(name: str, arguments: dict):
+        # Promoted UI tool dispatch: `{slug}__{tool_name}` → forward upstream
+        # preserving structuredContent and _meta so MCP Apps hosts can render.
+        if name in _ui_tools or "__" in name:
+            info = _ui_tools.get(name)
+            if info is None and "__" in name:
+                slug, _, upstream_name = name.partition("__")
+                if slug in mcp_by_slug:
+                    info = {"slug": slug, "upstream_name": upstream_name}
+            if info is not None:
+                slug = info["slug"]
+                upstream_name = info["upstream_name"]
+                mcp = mcp_by_slug.get(slug)
+                if mcp is None:
+                    return types.CallToolResult(
+                        content=[types.TextContent(type="text", text=json.dumps({"error": f"MCP '{slug}' not enabled"}))],
+                        isError=True,
+                    )
+                credit_cost = _get_credit_cost(slug)
+                if credit_cost > 0:
+                    new_balance = _deduct_credits(user_id, credit_cost)
+                    if new_balance < 0:
+                        return types.CallToolResult(
+                            content=[types.TextContent(type="text", text=json.dumps({"error": "Insufficient credits. Visit your portal to buy more credits."}))],
+                            isError=True,
+                        )
+                t0 = time.monotonic()
+                try:
+                    print(
+                        f"GATEWAY: call_upstream_tool_structured {slug}/{upstream_name} "
+                        f"user_id={user_id!r} client_id={client_id!r} url={mcp['upstream_url']}",
+                        file=sys.stderr,
+                    )
+                    raw = await call_upstream_tool_structured(
+                        mcp["upstream_url"], upstream_name, arguments,
+                        api_key=mcp.get("upstream_api_key", ""),
+                        user_id=user_id,
+                        client_id=client_id,
+                    )
+                except RuntimeError as exc:
+                    print(f"GATEWAY: upstream auth/config error {slug}/{upstream_name}: {exc}", file=sys.stderr)
+                    try:
+                        import sentry_sdk; sentry_sdk.capture_exception(exc)
+                    except Exception:
+                        pass
+                    return types.CallToolResult(
+                        content=[types.TextContent(type="text", text=json.dumps({"error": str(exc)}))],
+                        isError=True,
+                    )
+                except Exception as exc:
+                    is_timeout = isinstance(exc, TimeoutError) or "timeout" in str(exc).lower()
+                    msg = (
+                        f"Upstream MCP '{slug}' timed out after retries."
+                        if is_timeout else str(exc)
+                    )
+                    print(f"GATEWAY: upstream error {slug}/{upstream_name}: {exc}", file=sys.stderr)
+                    try:
+                        import sentry_sdk; sentry_sdk.capture_exception(exc)
+                    except Exception:
+                        pass
+                    return types.CallToolResult(
+                        content=[types.TextContent(type="text", text=json.dumps({"error": msg}))],
+                        isError=True,
+                    )
+                elapsed_ms = int((time.monotonic() - t0) * 1000)
+                # Build blocks from serialised dicts
+                blocks: list = []
+                for b in raw.get("content") or []:
+                    if isinstance(b, dict):
+                        btype = b.get("type", "text")
+                        if btype == "text":
+                            blocks.append(types.TextContent(type="text", text=b.get("text", "")))
+                        else:
+                            # Fall back to JSON dump of unknown block types
+                            blocks.append(types.TextContent(type="text", text=json.dumps(b)))
+                if not blocks:
+                    blocks = [types.TextContent(type="text", text="")]
+                _log_tool_call(
+                    user_id, client_id, slug, upstream_name,
+                    credits_used=credit_cost,
+                    duration_ms=elapsed_ms,
+                    response_bytes=len(json.dumps(raw).encode("utf-8")),
+                )
+                return types.CallToolResult(
+                    content=blocks,
+                    structuredContent=raw.get("structuredContent"),
+                    meta=raw.get("_meta"),
+                    isError=bool(raw.get("isError", False)),
+                )
+
         # Deprecated-name compatibility shim (remove after one release cycle).
         _legacy_aliases = {"list_tools": "list_mcp_tools", "call_tool": "invoke_mcp_tool"}
         if name in _legacy_aliases:
@@ -643,6 +792,96 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
 
         text = json.dumps(structured)
         return [types.TextContent(type="text", text=text)], structured
+
+    @server.list_resources()
+    async def list_resources_handler() -> list[types.Resource]:
+        """Aggregate resources from upstream MCPs that expose UI-bearing tools.
+        Populates `_resource_origin` so `read_resource_handler` can proxy by URI."""
+        # Ensure _ui_tools is populated (Claude.ai may call list_resources before list_tools).
+        if not _ui_tools:
+            try:
+                await _promoted_ui_tools()
+            except Exception as exc:
+                print(f"GATEWAY: UI-tool prefetch failed: {exc}", file=sys.stderr)
+
+        origin_slugs = {info["slug"] for info in _ui_tools.values()}
+        resources: list[types.Resource] = []
+        for mcp in enabled_mcps:
+            slug = mcp["slug"]
+            if slug not in origin_slugs:
+                continue
+            try:
+                items = await list_upstream_resources(
+                    mcp["upstream_url"],
+                    api_key=mcp.get("upstream_api_key", ""),
+                    user_id=user_id,
+                    client_id=client_id,
+                )
+            except Exception as exc:
+                print(f"GATEWAY: list_resources failed for {slug}: {exc}", file=sys.stderr)
+                continue
+            for it in items:
+                uri = it.get("uri")
+                if not uri:
+                    continue
+                _resource_origin[uri] = slug
+                resources.append(
+                    types.Resource(
+                        uri=uri,
+                        name=it.get("name") or uri,
+                        description=it.get("description"),
+                        mimeType=it.get("mimeType"),
+                        title=it.get("title"),
+                        meta=it.get("_meta") or None,
+                    )
+                )
+        return resources
+
+    @server.read_resource()
+    async def read_resource_handler(uri):
+        from mcp.server.lowlevel.helper_types import ReadResourceContents
+        uri_str = str(uri)
+        slug = _resource_origin.get(uri_str)
+        if slug is None:
+            # Try to resolve via list first
+            try:
+                await list_resources_handler()  # populates _resource_origin
+            except Exception:
+                pass
+            slug = _resource_origin.get(uri_str)
+        if slug is None:
+            raise ValueError(f"Unknown resource: {uri_str}")
+        mcp = mcp_by_slug.get(slug)
+        if mcp is None:
+            raise ValueError(f"MCP '{slug}' not enabled")
+        raw = await read_upstream_resource(
+            mcp["upstream_url"], uri_str,
+            api_key=mcp.get("upstream_api_key", ""),
+            user_id=user_id,
+            client_id=client_id,
+        )
+        out: list[ReadResourceContents] = []
+        for c in raw.get("contents") or []:
+            if not isinstance(c, dict):
+                continue
+            if "text" in c:
+                out.append(ReadResourceContents(
+                    content=c.get("text", ""),
+                    mime_type=c.get("mimeType"),
+                    meta=c.get("_meta"),
+                ))
+            elif "blob" in c:
+                import base64
+                try:
+                    data = base64.b64decode(c["blob"])
+                except Exception:
+                    data = b""
+                out.append(ReadResourceContents(
+                    content=data,
+                    mime_type=c.get("mimeType"),
+                    meta=c.get("_meta"),
+                ))
+        return out
 
     return server
 
