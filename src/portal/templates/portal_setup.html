@@ -200,16 +200,33 @@
 </div>
 
 <div class="card">
+  <h2>Claude Code (CLI)</h2>
+  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.5">
+    Run once — Claude Code handles OAuth automatically. On first use a browser opens for sign-in; tokens refresh silently after that.
+  </p>
+  <div class="code-pill">
+    <span>claude mcp add --transport http dsmoz {{ gateway_me_url }}</span>
+    <button class="copy-btn" onclick="copyText('claude mcp add --transport http dsmoz {{ gateway_me_url }}', this)" title="Copy">
+      <i class="ph-light ph-copy" style="font-size:14px"></i>
+    </button>
+  </div>
+  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.5rem;line-height:1.5">
+    The <code style="font-size:0.75rem;background:var(--elevated);padding:0.15em 0.4em;border-radius:3px">/gateway/me</code> URL is the same for all users — no per-user path needed. Your identity is resolved from the OAuth token.
+  </p>
+</div>
+
+<div class="card">
   <h2>How the Gateway Works</h2>
   <p style="font-size:0.8125rem;color:var(--text-muted);line-height:1.6;margin-bottom:0.75rem">
-    Your LLM connects to the gateway once and gets access to all your enabled MCP tools via four meta-tools:
+    Your LLM connects to the gateway once and gets access to all your enabled MCP tools via meta-tools:
   </p>
   <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:0.5rem">
     {% for tool, desc in [
+      ("browse_mcps()", "See the full catalogue with enabled status and credit cost per call"),
+      ("add_mcp(mcp_slug)", "Enable an MCP in your toolbox — persists across sessions"),
       ("search_tools(query)", "Find tools by keyword across all your enabled MCPs"),
-      ("list_mcps()", "See which MCPs you have enabled"),
-      ("list_tools(mcp_slug)", "List all tools for a specific MCP"),
-      ("call_tool(mcp_slug, tool_name, arguments)", "Execute a tool on the upstream MCP server")
+      ("list_mcp_tools(mcp_slug)", "List all tools for a specific enabled MCP"),
+      ("invoke_mcp_tool(mcp_slug, tool_name, arguments)", "Execute a tool on an upstream MCP — credit-gated")
     ] %}
     <li style="display:flex;align-items:flex-start;gap:0.75rem">
       <code style="background:var(--elevated);border:1px solid var(--border);border-radius:4px;padding:0.2em 0.5em;font-size:0.75rem;color:var(--amber);flex-shrink:0">{{ tool }}</code>

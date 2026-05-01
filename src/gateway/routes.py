@@ -3,6 +3,8 @@ Gateway — one MCP endpoint per user (tenant) via Streamable HTTP transport.
 
 GET/POST/DELETE  /gateway/{user_id}       — primary endpoint
 GET/POST/DELETE  /gateway/{user_id}/mcp   — alias with /mcp suffix
+GET/POST/DELETE  /gateway/me              — token-resolved alias (same user_id as token)
+GET/POST/DELETE  /gateway/me/mcp          — alias with /mcp suffix
 
 The path key is the user_id (tenant). Access tokens carry both user_id and
 client_id: the user_id must match the URL, and the client_id is forwarded
@@ -956,7 +958,10 @@ async def _gateway_asgi(scope, receive, send):
         await response(scope, receive, send)
         return
 
-    if token_user_id != url_user_id:
+    if url_user_id == "me":
+        # /gateway/me — resolve user from token rather than URL
+        url_user_id = token_user_id
+    elif token_user_id != url_user_id:
         print(
             f"GATEWAY: user mismatch — token user_id={token_user_id!r} "
             f"vs URL user_id={url_user_id!r} on {request.method} {path}",

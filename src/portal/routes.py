@@ -613,6 +613,7 @@ async def portal_setup(request: Request, user_id: str = Depends(_require_portal_
     settings = get_settings()
     gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{user_id}"
     streamable_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{user_id}/mcp"
+    gateway_me_url = f"{settings.OAUTH_ISSUER_URL}/gateway/me"
     new_secret = request.query_params.get("secret")
     rotated_client_id = request.query_params.get("client_id")
     devices = _list_devices(user_id)
@@ -631,6 +632,7 @@ async def portal_setup(request: Request, user_id: str = Depends(_require_portal_
             "active_nav": "setup",
             "gateway_url": gateway_url,
             "streamable_url": streamable_url,
+            "gateway_me_url": gateway_me_url,
             "client_id": user_id,
             "new_secret": new_secret,
             "rotated_client_id": rotated_client_id,
