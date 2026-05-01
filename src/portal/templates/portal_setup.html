@@ -205,8 +205,8 @@
     Run once — Claude Code handles OAuth automatically. On first use a browser opens for sign-in; tokens refresh silently after that.
   </p>
   <div class="code-pill">
-    <span>claude mcp add --transport http dsmoz {{ gateway_me_url }}</span>
-    <button class="copy-btn" onclick="copyText('claude mcp add --transport http dsmoz {{ gateway_me_url }}', this)" title="Copy">
+    <span>claude mcp add --transport http --scope user gateway {{ gateway_me_url }}</span>
+    <button class="copy-btn" onclick="copyText('claude mcp add --transport http --scope user gateway {{ gateway_me_url }}', this)" title="Copy">
       <i class="ph-light ph-copy" style="font-size:14px"></i>
     </button>
   </div>
