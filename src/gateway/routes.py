@@ -977,16 +977,33 @@ async def _gateway_asgi(scope, receive, send):
         f"{request.method} {path}",
         file=sys.stderr,
     )
-    enabled_mcps = _load_enabled_mcps(token_user_id)
+    try:
+        enabled_mcps = _load_enabled_mcps(token_user_id)
+    except Exception as exc:
+        print(f"GATEWAY: DB error loading MCPs for {token_user_id}: {exc}", file=sys.stderr)
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_exception(exc)
+        except Exception:
+            pass
+        error = JSONResponse(
+            content={"error": "internal_error", "error_description": "Failed to load user configuration"},
+            status_code=500,
+        )
+        await error(scope, receive, send)
+        return
     mcp_server = _build_mcp_server(token_user_id, client_id, enabled_mcps)
     transport = StreamableHTTPServerTransport(mcp_session_id=None)
 
     response_started = False
+    response_completed = False
 
     async def guarded_send(message):
-        nonlocal response_started
+        nonlocal response_started, response_completed
         if message.get("type") == "http.response.start":
             response_started = True
+        elif message.get("type") == "http.response.body" and not message.get("more_body", False):
+            response_completed = True
         await send(message)
 
     async def run_stateless_server(*, task_status=anyio.TASK_STATUS_IGNORED):
@@ -1019,6 +1036,11 @@ async def _gateway_asgi(scope, receive, send):
                 status_code=500,
             )
             await error(scope, receive, send)
+        elif not response_completed:
+            try:
+                await send({"type": "http.response.body", "body": b"", "more_body": False})
+            except Exception:
+                pass
     finally:
         with anyio.move_on_after(2, shield=True):
             await transport.terminate()
