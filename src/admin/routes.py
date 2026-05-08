@@ -885,6 +885,22 @@ async def refresh_description(request: Request, slug: str, _: str = Depends(_req
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
 
+@router.post("/catalogue/{slug}/generate-description")
+async def generate_description_api(request: Request, slug: str, _: str = Depends(_require_admin)):
+    """Return AI-generated description as JSON without saving — used by the edit form."""
+    from fastapi.responses import JSONResponse
+    db = get_db()
+    entry = _get_catalogue_row(db, slug)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    description = await _auto_describe_mcp(
+        entry["upstream_url"], entry.get("upstream_api_key", ""), entry["name"]
+    )
+    if not description:
+        return JSONResponse({"error": "Could not generate description — upstream unreachable or no tools found"}, status_code=502)
+    return JSONResponse({"description": description})
+
+
 @router.post("/catalogue/{slug}/delete", response_class=HTMLResponse)
 async def delete_catalogue(request: Request, slug: str, _: str = Depends(_require_admin)):
     db = get_db()
