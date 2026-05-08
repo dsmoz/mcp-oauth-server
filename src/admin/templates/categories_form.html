@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}New Category — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>New Category</h1>
+  <a href="/admin/categories" class="btn btn-secondary">
+    <i class="ph-light ph-arrow-left"></i> Categories
+  </a>
+</div>
+
+{% if error %}
+<div class="card" style="border-color:var(--danger-border);background:var(--danger-bg);margin-bottom:1rem">
+  <p style="color:var(--danger-fg);font-size:0.875rem">{{ error }}</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <form method="post" action="/admin/categories">
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input type="text" name="name" class="form-input" required placeholder="e.g. Analytics">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Sort Order <small>Lower numbers appear first in dropdowns</small></label>
+      <input type="number" name="sort_order" class="form-input" value="0" min="0" style="width:120px">
+    </div>
+    <button type="submit" class="btn btn-primary">
+      <i class="ph-light ph-floppy-disk"></i> Save
+    </button>
+  </form>
+</div>
+{% endblock %}
