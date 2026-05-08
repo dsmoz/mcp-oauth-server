@@ -606,22 +606,33 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
             for t in tools
         )
 
+        tool_names = ", ".join(t["name"] for t in tools)
+
         settings = get_settings()
         if settings.ANTHROPIC_API_KEY:
             import httpx as _httpx
+            slug = name.lower().replace(" ", "-")
             prompt = (
-                f"You are writing a catalogue entry for an MCP server called \"{name}\" "
-                f"that will be read by an AI agent deciding which MCP to call.\n\n"
-                f"Here are the tools it exposes:\n{tool_manifest}\n\n"
-                f"Write a concise catalogue description (3-5 sentences) that:\n"
-                f"1. States the server's primary purpose in one sentence\n"
-                f"2. Lists the key capabilities an agent would care about\n"
-                f"3. Gives clear guidance on WHEN to use this MCP vs others\n"
-                f"4. Mentions that the agent should call list_tools or search_tools "
-                f"with this MCP's slug to get the full tool list before calling any tool\n\n"
-                f"Be specific and practical. Do not use bullet points — write flowing prose."
+                f"Write a catalogue description for an MCP server named \"{name}\" "
+                f"that will be read by an AI agent choosing which MCP to invoke.\n\n"
+                f"Tools it exposes:\n{tool_manifest}\n\n"
+                f"Requirements:\n"
+                f"- 2-4 sentences of flowing prose, no bullet points\n"
+                f"- Sentence 1: what the server does and its domain (e.g. \"Academia is a course and "
+                f"lesson management MCP for...\")\n"
+                f"- Sentence 2-3: key capabilities and concrete use-cases — when should an agent "
+                f"reach for THIS server over others? Be specific about actions, not just tool names\n"
+                f"- Final sentence: \"Call list_tools with slug {slug} to see the full tool list "
+                f"before calling any tool.\"\n\n"
+                f"Good example: \"Linguist is a translation and language services MCP supporting "
+                f"text and document translation across 30+ languages with formality control, custom "
+                f"glossaries, and translation memory. Use it when a task requires translating text "
+                f"or documents, rephrasing content in a different style or tone, detecting language, "
+                f"reviewing translation quality, or managing multilingual terminology. Call list_tools "
+                f"with slug linguist to see the full tool list before calling any tool.\"\n\n"
+                f"Output only the description — no preamble, no labels."
             )
-            async with _httpx.AsyncClient(timeout=20) as client:
+            async with _httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
                     "https://api.anthropic.com/v1/messages",
                     headers={
@@ -631,7 +642,7 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
                     },
                     json={
                         "model": "claude-haiku-4-5-20251001",
-                        "max_tokens": 300,
+                        "max_tokens": 400,
                         "messages": [{"role": "user", "content": prompt}],
                     },
                 )
@@ -641,16 +652,11 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
                     if description:
                         return description
 
-        # Fallback: structured plain-text summary
-        tool_lines = "; ".join(
-            f"{t['name']} ({t['description'][:80]})" if t.get("description") else t["name"]
-            for t in tools[:10]
-        )
+        # Fallback: clean tool-names-only summary
+        slug = name.lower().replace(" ", "-")
         return (
-            f"Provides tools for: {tool_lines}. "
-            f"Use when the task requires any of these capabilities. "
-            f"Call search_tools with a keyword or list_tools with this MCP's slug "
-            f"to discover the full tool list before calling any tool."
+            f"{name} exposes {len(tools)} tools: {tool_names}. "
+            f"Call list_tools with slug {slug} to see the full tool list before calling any tool."
         )
     except Exception as exc:
         import logging
@@ -883,6 +889,22 @@ async def refresh_description(request: Request, slug: str, _: str = Depends(_req
     if description:
         db.table("mcp_catalogue").update({"description": description}).eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+@router.post("/catalogue/{slug}/generate-description")
+async def generate_description_api(request: Request, slug: str, _: str = Depends(_require_admin)):
+    """Return AI-generated description as JSON without saving — used by the edit form."""
+    from fastapi.responses import JSONResponse
+    db = get_db()
+    entry = _get_catalogue_row(db, slug)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    description = await _auto_describe_mcp(
+        entry["upstream_url"], entry.get("upstream_api_key", ""), entry["name"]
+    )
+    if not description:
+        return JSONResponse({"error": "Could not generate description — upstream unreachable or no tools found"}, status_code=502)
+    return JSONResponse({"description": description})
 
 
 @router.post("/catalogue/{slug}/delete", response_class=HTMLResponse)

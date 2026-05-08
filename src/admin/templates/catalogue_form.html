@@ -28,7 +28,16 @@
     </div>
     <div class="form-group">
       <label class="form-label">Description</label>
-      <textarea name="description" class="form-input" rows="3" required>{{ entry.description if entry else '' }}</textarea>
+      <textarea name="description" id="description" class="form-input" rows="3" required>{{ entry.description if entry else '' }}</textarea>
+      {% if entry %}
+      <div style="margin-top:0.4rem">
+        <button type="button" id="gen-desc-btn" class="btn btn-secondary" onclick="generateDescription('{{ entry.slug }}')"
+                style="font-size:0.8rem">
+          <i class="ph-light ph-sparkle"></i> Generate Description
+        </button>
+        <span id="gen-desc-status" style="font-size:0.8rem;color:var(--text-muted);margin-left:0.5rem"></span>
+      </div>
+      {% endif %}
     </div>
     <div class="form-group">
       <label class="form-label">Category</label>
@@ -81,6 +90,27 @@ function generateApiKey() {
   const token = btoa(String.fromCharCode(...arr))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   document.getElementById('upstream_api_key').value = token;
+}
+
+async function generateDescription(slug) {
+  const btn = document.getElementById('gen-desc-btn');
+  const status = document.getElementById('gen-desc-status');
+  btn.disabled = true;
+  status.textContent = 'Generating…';
+  try {
+    const resp = await fetch(`/admin/catalogue/${slug}/generate-description`, {method: 'POST'});
+    const data = await resp.json();
+    if (data.description) {
+      document.getElementById('description').value = data.description;
+      status.textContent = 'Generated — review and save.';
+    } else {
+      status.textContent = data.error || 'Failed.';
+    }
+  } catch (e) {
+    status.textContent = 'Request failed.';
+  } finally {
+    btn.disabled = false;
+  }
 }
 </script>
 {% endblock %}
