@@ -32,7 +32,7 @@ _APPROVAL_HTML = """\
 <div class="card">
   <div style="margin-bottom:1.5rem">
     <img src="https://res.cloudinary.com/dq2ajrfxl/image/upload/v1742962913/dsmoz_logos/dsmoz-logo-orange.png"
-         alt="DS-MOZ Intelligence" width="180" height="45"
+         alt="DS-MOZ Connect" width="180" height="45"
          style="display:block">
   </div>
   <h1>Your MCP Access is Ready</h1>
@@ -58,8 +58,8 @@ _APPROVAL_HTML = """\
   </div>
 
   <div class="footer">
-    Questions? Reply to this email or contact your DS-MOZ Intelligence administrator.<br>
-    &copy; DS-MOZ Intelligence
+    Questions? Reply to this email or contact your DS-MOZ Connect administrator.<br>
+    &copy; DS-MOZ Connect
   </div>
 </div>
 </body>
@@ -97,7 +97,7 @@ async def send_approval_email(
             "email": settings.BREVO_SENDER_EMAIL,
         },
         "to": [{"name": contact_name, "email": contact_email}],
-        "subject": f"Your DS-MOZ Intelligence MCP credentials — {company_name}",
+        "subject": f"Your DS-MOZ Connect MCP credentials — {company_name}",
         "htmlContent": html,
     }
 
@@ -139,15 +139,15 @@ _RESET_HTML = """\
 <div class="card">
   <div class="brand">
     <img src="https://res.cloudinary.com/dq2ajrfxl/image/upload/v1742962913/dsmoz_logos/dsmoz-logo-orange.png"
-         alt="DS-MOZ Intelligence" width="180" height="45" style="display:block">
+         alt="DS-MOZ Connect" width="180" height="45" style="display:block">
   </div>
   <h1>Reset Your Password</h1>
-  <p>Hi {contact_name}, we received a request to reset the password for your DS-MOZ Intelligence portal account.</p>
+  <p>Hi {contact_name}, we received a request to reset the password for your DS-MOZ Connect portal account.</p>
   <p>Click the button below to set a new password. This link is valid for 24 hours and can only be used once.</p>
   <a href="{reset_url}" class="btn">Reset Password</a>
   <p class="link">If the button doesn't work, paste this URL into your browser:<br>{reset_url}</p>
   <p style="margin-top:1rem;font-size:0.8rem;color:#91BCC1">If you did not request a password reset, you can safely ignore this email.</p>
-  <div class="footer">&copy; DS-MOZ Intelligence</div>
+  <div class="footer">&copy; DS-MOZ Connect</div>
 </div>
 </body>
 </html>
@@ -174,7 +174,7 @@ async def send_password_reset_email(
             "email": settings.BREVO_SENDER_EMAIL,
         },
         "to": [{"name": contact_name, "email": contact_email}],
-        "subject": "Reset your DS-MOZ Intelligence portal password",
+        "subject": "Reset your DS-MOZ Connect portal password",
         "htmlContent": html,
     }
 
