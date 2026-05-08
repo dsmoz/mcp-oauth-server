@@ -2,93 +2,142 @@
 {% block title %}My Toolbox — DS-MOZ Connect{% endblock %}
 
 {% block content %}
+
+{% set total = catalogue | length %}
+{% set on_count = enabled | length %}
+
+<!-- ── Page header ── -->
 <div class="page-header">
-  <h1>My Toolbox</h1>
+  <div>
+    <h1>My toolbox</h1>
+    <p style="font-size:13px;color:var(--fg-3);margin-top:4px">Pick the tools to expose to your AI clients. <strong style="color:var(--fg-2)">{{ on_count }} of {{ total }} enabled.</strong></p>
+  </div>
+  <div style="flex-shrink:0">
+    <button form="mcps-form" type="submit" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Save selection
+    </button>
+  </div>
 </div>
 
-<form method="post" action="/portal/mcps">
+<!-- ── Category filter chips ── -->
+{% set categories = catalogue | map(attribute='category') | list | unique | list %}
+<div id="cat-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">
+  <button type="button" class="chip active filter-chip" data-cat="__all__">
+    <span class="chip-dot"></span>All &middot; {{ total }}
+  </button>
+  {% for cat in categories %}
+  <button type="button" class="chip filter-chip" data-cat="{{ cat }}">
+    {{ cat }} &middot; {{ catalogue | selectattr('category', 'equalto', cat) | list | length }}
+  </button>
+  {% endfor %}
+</div>
 
-  {% for category, mcps_in_cat in catalogue | groupby('category') %}
-  <div style="margin-bottom:28px">
-    <div class="eyebrow" style="margin-bottom:12px">{{ category }}</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
-      {% for mcp in mcps_in_cat %}
-      {% set is_on = mcp.slug in enabled %}
-      <label style="cursor:pointer;display:block">
-        <div class="card" style="margin-bottom:0;border-color:{% if is_on %}var(--accent){% else %}var(--line){% endif %};transition:border-color 0.15s,box-shadow 0.15s">
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
-            <div style="flex:1;min-width:0">
-              <div style="font-family:'Raleway',sans-serif;font-size:14px;font-weight:600;color:var(--fg-1);margin-bottom:4px">{{ mcp.name }}</div>
-              <p style="font-size:12px;color:var(--fg-3);line-height:1.5">{{ mcp.description }}</p>
-            </div>
-            <div style="flex-shrink:0;padding-top:2px">
-              <input type="checkbox" name="mcps" value="{{ mcp.slug }}"
-                     {% if is_on %}checked{% endif %}
-                     class="mcp-toggle"
-                     style="display:none">
-              <div class="toggle-track {% if is_on %}on{% endif %}">
-                <div class="toggle-thumb"></div>
-              </div>
-            </div>
-          </div>
+<form id="mcps-form" method="post" action="/portal/mcps">
+
+  {% if catalogue %}
+  <div id="tool-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+    {% for mcp in catalogue %}
+    {% set is_on = mcp.slug in enabled %}
+    {% set cat_color = {
+      'Research': 'teal',
+      'Writing': 'green',
+      'Data': 'orange',
+      'Other': 'beige',
+    }.get(mcp.category, 'beige') %}
+    <label class="tool-card-wrap" data-cat="{{ mcp.category }}" style="cursor:pointer;display:block">
+      <input type="checkbox" name="mcps" value="{{ mcp.slug }}"
+             {% if is_on %}checked{% endif %}
+             class="mcp-toggle" style="display:none">
+      <div class="tool-card{% if is_on %} tool-card-on{% endif %}">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
+          <div style="font-family:'Raleway',sans-serif;font-size:14px;font-weight:600;color:var(--fg-1);line-height:1.3;flex:1;min-width:0">{{ mcp.name }}</div>
+          <span class="tool-checkbox{% if is_on %} on{% endif %}" aria-hidden="true">
+            <svg class="tool-check-svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display:{% if is_on %}block{% else %}none{% endif %}"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
         </div>
-      </label>
-      {% endfor %}
-    </div>
+        <span class="chip {{ cat_color }}" style="margin-bottom:8px">{{ mcp.category }}</span>
+        <p style="font-size:12px;color:var(--fg-3);line-height:1.5;margin-top:6px">{{ mcp.description }}</p>
+      </div>
+    </label>
+    {% endfor %}
   </div>
   {% else %}
   <div class="card" style="text-align:center;padding:40px;color:var(--fg-3)">
     No MCP tools are published yet. Check back soon.
   </div>
-  {% endfor %}
-
-  <button type="submit" class="btn btn-primary">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-    Save Selection
-  </button>
+  {% endif %}
 
 </form>
 
 <style>
-.toggle-track {
-  width: 36px; height: 20px;
-  border-radius: 999px;
-  background: var(--line-2);
-  border: 1px solid var(--line-2);
-  position: relative;
-  transition: background 0.15s, border-color 0.15s;
+.filter-chip {
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+.filter-chip:hover { color: var(--fg-1); }
+
+.tool-card {
+  background: var(--bg-card);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 14px 12px;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.tool-card:hover { border-color: var(--line-2); }
+.tool-card-on {
+  border-color: var(--accent);
+  background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--bg-card);
+}
+
+.tool-checkbox {
+  width: 16px; height: 16px;
+  border: 1.5px solid var(--line-2);
+  border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
+  transition: background 0.12s, border-color 0.12s;
 }
-.toggle-track.on { background: var(--accent); border-color: var(--accent); }
-.toggle-thumb {
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  background: #fff;
-  position: absolute;
-  top: 2px; left: 2px;
-  transition: left 0.15s;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
-}
-.toggle-track.on .toggle-thumb { left: 18px; }
+.tool-checkbox.on { background: var(--accent); border-color: var(--accent); }
 </style>
 
 {% block extra_scripts %}
 <script>
-document.querySelectorAll('label').forEach(function(lbl) {
+// Toggle card on click
+document.querySelectorAll('.tool-card-wrap').forEach(function(lbl) {
   lbl.addEventListener('click', function(e) {
+    e.preventDefault();
     const cb = lbl.querySelector('.mcp-toggle');
-    const track = lbl.querySelector('.toggle-track');
-    const card = lbl.querySelector('.card');
-    if (!cb) return;
+    const card = lbl.querySelector('.tool-card');
+    const box = lbl.querySelector('.tool-checkbox');
+    const svg = lbl.querySelector('.tool-check-svg');
     cb.checked = !cb.checked;
     if (cb.checked) {
-      track.classList.add('on');
-      card.style.borderColor = 'var(--accent)';
+      card.classList.add('tool-card-on');
+      box.classList.add('on');
+      if (svg) svg.style.display = 'block';
     } else {
-      track.classList.remove('on');
-      card.style.borderColor = 'var(--line)';
+      card.classList.remove('tool-card-on');
+      box.classList.remove('on');
+      if (svg) svg.style.display = 'none';
     }
-    e.preventDefault();
+  });
+});
+
+// Category filter
+document.querySelectorAll('.filter-chip').forEach(function(chip) {
+  chip.addEventListener('click', function() {
+    document.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
+    chip.classList.add('active');
+    const cat = chip.getAttribute('data-cat');
+    document.querySelectorAll('.tool-card-wrap').forEach(function(card) {
+      if (cat === '__all__' || card.getAttribute('data-cat') === cat) {
+        card.style.display = 'block';
+      } else {
+        card.style.display = 'none';
+      }
+    });
   });
 });
 </script>
