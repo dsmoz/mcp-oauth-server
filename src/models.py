@@ -12,6 +12,7 @@ class User(BaseModel):
     display_name: Optional[str] = None
     credit_balance: float = 0.0
     allowed_mcp_resources: List[str] = []
+    tier: str = "standard"
     is_active: bool = False
     created_at: Optional[str] = None
     updated_at: Optional[str] = None

@@ -59,6 +59,16 @@
     </div>
   </div>
   <div class="detail-row">
+    <div class="detail-label">Tier</div>
+    <div class="detail-value">
+      {% if user.tier == 'super' %}
+        <span class="badge" style="background:var(--secret-bg);color:var(--accent-vivid);border:1px solid var(--secret-border)">Super</span>
+      {% else %}
+        <span class="badge badge-inactive">Standard</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="detail-row">
     <div class="detail-label">Credits</div>
     <div class="detail-value">{{ "%.2f"|format(user.credit_balance or 0) }}</div>
   </div>
@@ -94,6 +104,23 @@
       <div style="font-size:0.8rem;color:var(--text-muted);">Calls this month</div>
     </div>
   </div>
+</div>
+
+<div class="card">
+  <h2>Set Tier</h2>
+  <form method="post" action="/admin/users/{{ user.user_id }}/set-tier"
+        style="display:flex;gap:0.75rem;align-items:flex-end;">
+    <div class="form-group" style="margin:0">
+      <label for="tier">Tier</label>
+      <select name="tier" id="tier" style="padding:0.6rem 0.875rem;background:var(--elevated);border:1px solid var(--border);border-radius:6px;color:var(--text-h);font-size:0.875rem;font-family:inherit;outline:none">
+        <option value="standard" {% if user.tier != 'super' %}selected{% endif %}>Standard</option>
+        <option value="super" {% if user.tier == 'super' %}selected{% endif %}>Super</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary">
+      <i class="ph-light ph-floppy-disk"></i> Save
+    </button>
+  </form>
 </div>
 
 <div class="card">

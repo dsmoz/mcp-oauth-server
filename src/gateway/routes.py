@@ -101,28 +101,31 @@ def _resolve_user_id_for_token(at) -> str | None:
 
 
 def _load_enabled_mcps(user_id: str) -> list[dict]:
-    """Return MCPs the user has added, filtered to only published ones."""
+    """Return MCPs the user has added, filtered to published and tier-allowed ones."""
     db = get_db()
     user_row = (
         db.table("users")
-        .select("allowed_mcp_resources")
+        .select("allowed_mcp_resources, tier")
         .eq("user_id", user_id)
         .limit(1)
         .execute()
     )
     if not user_row.data:
         return []
-    slugs = user_row.data[0].get("allowed_mcp_resources") or []
+    row = user_row.data[0]
+    slugs = row.get("allowed_mcp_resources") or []
     if not slugs:
         return []
-    return (
+    user_tier = row.get("tier") or "standard"
+    query = (
         db.table("mcp_catalogue")
           .select("*")
           .in_("slug", slugs)
           .eq("is_published", True)
-          .execute()
-          .data or []
     )
+    if user_tier != "super":
+        query = query.eq("tier", "standard")
+    return query.execute().data or []
 
 
 def _get_credit_cost(mcp_slug: str) -> float:
@@ -167,8 +170,16 @@ def _log_tool_call(
         print(f"WARNING: usage log failed for user {user_id}: {exc}", file=sys.stderr)
 
 
-def _get_all_published_mcps() -> list[dict]:
-    return get_db().table("mcp_catalogue").select("*").eq("is_published", True).execute().data or []
+def _get_user_tier(user_id: str) -> str:
+    row = get_db().table("users").select("tier").eq("user_id", user_id).limit(1).execute()
+    return (row.data or [{}])[0].get("tier") or "standard"
+
+
+def _get_all_published_mcps(user_tier: str = "standard") -> list[dict]:
+    query = get_db().table("mcp_catalogue").select("*").eq("is_published", True)
+    if user_tier != "super":
+        query = query.eq("tier", "standard")
+    return query.execute().data or []
 
 
 def _update_user_mcps(user_id: str, slugs: list[str]) -> None:
@@ -635,7 +646,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
             ]}
 
         elif name == "browse_mcps":
-            all_mcps = _get_all_published_mcps()
+            all_mcps = _get_all_published_mcps(_get_user_tier(user_id))
             enabled_slugs = set(mcp_by_slug.keys())
             structured = {"items": [
                 {
@@ -651,7 +662,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
 
         elif name == "add_mcp":
             slug = arguments.get("mcp_slug", "")
-            all_mcps = {m["slug"]: m for m in _get_all_published_mcps()}
+            all_mcps = {m["slug"]: m for m in _get_all_published_mcps(_get_user_tier(user_id))}
             if slug not in all_mcps:
                 structured = {"error": f"MCP '{slug}' not found or not published"}
             elif slug in mcp_by_slug:

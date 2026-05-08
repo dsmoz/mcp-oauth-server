@@ -769,18 +769,20 @@ async def create_catalogue(
     category: str = Form(...),
     upstream_url: str = Form(...),
     upstream_api_key: str = Form(""),
+    tier: str = Form("standard"),
     _: str = Depends(_require_admin),
 ):
     db = get_db()
     if _get_catalogue_row(db, slug):
         return templates.TemplateResponse(
             request=request, name="catalogue_form.html",
-            context={"entry": None, "error": f"Slug '{slug}' already exists"}
+            context={"entry": None, "error": f"Slug '{slug}' already exists", "categories": _get_categories(db)}
         )
     db.table("mcp_catalogue").insert({
         "slug": slug, "name": name, "description": description,
         "category": category, "upstream_url": upstream_url,
         "upstream_api_key": upstream_api_key, "is_published": False,
+        "tier": tier if tier in ("standard", "super") else "standard",
     }).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
@@ -806,6 +808,7 @@ async def save_catalogue(
     category: str = Form(...),
     upstream_url: str = Form(...),
     upstream_api_key: str = Form(""),
+    tier: str = Form("standard"),
     _: str = Depends(_require_admin),
 ):
     db = get_db()
@@ -814,6 +817,7 @@ async def save_catalogue(
     update: dict = {
         "name": name, "description": description, "category": category,
         "upstream_url": upstream_url,
+        "tier": tier if tier in ("standard", "super") else "standard",
     }
     if upstream_api_key:
         update["upstream_api_key"] = upstream_api_key
@@ -1040,6 +1044,18 @@ async def user_add_credits(
     if users.get_user(user_id) is None:
         raise HTTPException(status_code=404, detail="User not found")
     users.add_credits(user_id, amount)
+    return RedirectResponse(url=f"/admin/users/{user_id}", status_code=303)
+
+
+@router.post("/users/{user_id}/set-tier", response_class=HTMLResponse)
+async def user_set_tier(
+    user_id: str,
+    tier: str = Form(...),
+    _: str = Depends(_require_admin),
+):
+    if tier not in ("standard", "super"):
+        raise HTTPException(status_code=400, detail="Invalid tier")
+    get_db().table("users").update({"tier": tier}).eq("user_id", user_id).execute()
     return RedirectResponse(url=f"/admin/users/{user_id}", status_code=303)
 
 
