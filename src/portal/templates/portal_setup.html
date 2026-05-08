@@ -2,161 +2,62 @@
 {% block title %}Setup Guide — DS-MOZ Connect{% endblock %}
 
 {% block content %}
+
 <div class="page-header">
-  <h1>Setup Guide</h1>
-</div>
-
-<!-- Stepper -->
-<div style="display:flex;align-items:center;gap:0;margin-bottom:28px">
-  <div style="display:flex;align-items:center;gap:8px">
-    <span style="width:24px;height:24px;border-radius:50%;background:var(--success);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-    </span>
-    <span style="font-size:13px;font-weight:600;color:var(--fg-3)">Choose client</span>
-  </div>
-  <div style="flex:1;height:1px;background:var(--line);margin:0 12px"></div>
-  <div style="display:flex;align-items:center;gap:8px">
-    <span style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">2</span>
-    <span style="font-size:13px;font-weight:600;color:var(--fg-1)">Copy config</span>
-  </div>
-  <div style="flex:1;height:1px;background:var(--line);margin:0 12px"></div>
-  <div style="display:flex;align-items:center;gap:8px">
-    <span style="width:24px;height:24px;border-radius:50%;border:2px solid var(--line-2);color:var(--fg-3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">3</span>
-    <span style="font-size:13px;font-weight:600;color:var(--fg-3)">Verify</span>
-  </div>
-</div>
-
-<!-- Gateway URL -->
-<div class="card" style="margin-bottom:16px">
-  <div class="eyebrow" style="margin-bottom:8px">Your Gateway URL</div>
-  <p style="font-size:13px;color:var(--fg-3);margin-bottom:8px">Single MCP endpoint — connect any LLM client here.</p>
-  <div class="copy-pill">
-    <span class="pill-value">{{ gateway_url }}</span>
-    <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)">Copy</button>
-  </div>
-</div>
-
-<!-- Claude Desktop -->
-<div class="card" style="margin-bottom:16px">
-  <h2 style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:16px">Claude Desktop</h2>
-
-  <div style="margin-bottom:20px">
-    <div style="font-size:13px;font-weight:600;color:var(--fg-2);margin-bottom:10px">Option A: Custom Connector <span style="font-size:11px;padding:2px 6px;background:var(--accent-soft);color:var(--accent);border-radius:999px;font-weight:600;margin-left:4px">Recommended</span></div>
-    <p style="font-size:13px;color:var(--fg-3);margin-bottom:14px;line-height:1.6">Open Claude Desktop &rarr; <strong style="color:var(--fg-2)">Settings &rarr; Connectors &rarr; Add custom connector</strong> and fill in:</p>
-    <div style="display:flex;flex-direction:column;gap:12px">
-      <div>
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">Name</div>
-        <div style="font-size:13px;color:var(--fg-2)">DS-MOZ Connect (or any label)</div>
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">Remote MCP Server URL</div>
-        <div class="copy-pill">
-          <span class="pill-value">{{ gateway_url }}</span>
-          <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)">Copy</button>
-        </div>
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">OAuth Client ID <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(under Advanced settings)</span></div>
-        <div class="copy-pill">
-          <span class="pill-value">{{ client_id }}</span>
-          <button class="pill-copy" onclick="copyText('{{ client_id }}', this)">Copy</button>
-        </div>
-      </div>
-      <div>
-        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">OAuth Client Secret <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(under Advanced settings)</span></div>
-        {% if new_secret %}
-        <div class="copy-pill" style="border-color:var(--accent)">
-          <span class="pill-value">{{ new_secret }}</span>
-          <button class="pill-copy" onclick="copyText('{{ new_secret }}', this)">Copy</button>
-        </div>
-        <p style="font-size:12px;color:var(--accent);margin-top:6px">&#9888; Copy this now — it will not be shown again.</p>
-        {% else %}
-        <form method="post" action="/portal/setup/rotate-secret" style="margin:0">
-          <button type="submit" class="btn btn-sm"
-            onclick="return confirm('This will invalidate your current secret. Continue?')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
-            Generate new secret
-          </button>
-        </form>
-        {% endif %}
-      </div>
-    </div>
-    <p style="font-size:12px;color:var(--fg-3);margin-top:12px;line-height:1.6">Click <strong>Add</strong> — Claude Desktop will open a browser to sign you in. Tokens refresh automatically.</p>
-  </div>
-
-  <hr class="divider">
-
   <div>
-    <div style="font-size:13px;font-weight:600;color:var(--fg-2);margin-bottom:10px">Option B: Config file (JSON)</div>
-    <p style="font-size:13px;color:var(--fg-3);margin-bottom:12px;line-height:1.6">Download the config and merge it into your <code style="font-size:12px;background:var(--bg);padding:2px 5px;border-radius:3px">claude_desktop_config.json</code>. Uses <code style="font-size:12px;background:var(--bg);padding:2px 5px;border-radius:3px">mcp-remote</code> to handle OAuth automatically.</p>
-    <a href="/portal/setup/download" class="btn btn-sm">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      Download config
-    </a>
-    <p style="font-size:12px;color:var(--fg-3);margin-top:8px;line-height:1.6">Requires <a href="https://nodejs.org" style="color:var(--accent)" target="_blank">Node.js</a> installed. On first connection, a browser opens for sign-in.</p>
+    <h1>Setup guide</h1>
+    <p style="font-size:13px;color:var(--fg-3);margin-top:4px">Connect a client in three steps. Pick your client, copy the connection details, verify.</p>
   </div>
 </div>
 
-<!-- Claude.ai -->
-<div class="card" style="margin-bottom:16px">
-  <h2 style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:14px">Claude.ai (Web)</h2>
-  <p style="font-size:13px;color:var(--fg-3);margin-bottom:14px;line-height:1.6">Go to <strong style="color:var(--fg-2)">Claude.ai &rarr; Settings &rarr; Connectors &rarr; Add custom connector</strong> and fill in:</p>
-  <div style="display:flex;flex-direction:column;gap:12px">
+<!-- ── Stepper ── -->
+{% set has_device = devices and devices | selectattr('is_active') | list | length > 0 %}
+{% set step1_done = true %}
+{% set step2_done = has_device %}
+{% set step3_done = has_device %}
+
+<div style="display:flex;align-items:center;gap:0;margin-bottom:28px;max-width:640px">
+  <!-- step 1 -->
+  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:140px">
+    <span style="width:28px;height:28px;border-radius:50%;background:var(--bg-deep);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </span>
+    <span style="font-size:12px;font-weight:600;color:var(--fg-1);margin-top:6px">Choose client</span>
+  </div>
+  <div style="flex:1;height:1.5px;background:var(--bg-deep);margin-top:-22px"></div>
+  <!-- step 2 -->
+  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:140px">
+    <span style="width:28px;height:28px;border-radius:50%;background:{% if step2_done %}var(--bg-deep){% else %}var(--accent){% endif %};color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">
+      {% if step2_done %}
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      {% else %}2{% endif %}
+    </span>
+    <span style="font-size:12px;font-weight:{% if step2_done %}500{% else %}700{% endif %};color:{% if step2_done %}var(--fg-1){% else %}var(--accent){% endif %};margin-top:6px">Copy connection</span>
+  </div>
+  <div style="flex:1;height:1.5px;background:{% if step3_done %}var(--bg-deep){% else %}var(--line-2){% endif %};margin-top:-22px"></div>
+  <!-- step 3 -->
+  <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:140px">
+    <span style="width:28px;height:28px;border-radius:50%;{% if step3_done %}background:var(--bg-deep);color:#fff{% else %}border:1.5px solid var(--line-2);background:var(--bg-card);color:var(--fg-3){% endif %};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">
+      {% if step3_done %}
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      {% else %}3{% endif %}
+    </span>
+    <span style="font-size:12px;font-weight:{% if step3_done %}500{% else %}500{% endif %};color:{% if step3_done %}var(--fg-1){% else %}var(--fg-3){% endif %};margin-top:6px">Verify</span>
+  </div>
+</div>
+
+<!-- ── Connection details (always visible) ── -->
+<div class="card" style="margin-bottom:20px">
+  <div class="eyebrow" style="margin-bottom:12px">Step 2 of 3 &middot; Your connection details</div>
+  <p style="font-size:13px;color:var(--fg-3);margin-bottom:14px;line-height:1.6">Use these in the client of your choice. Pick a client below for guided setup.</p>
+
+  <div style="display:flex;flex-direction:column;gap:10px">
     <div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">Remote MCP URL</div>
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">Gateway URL</div>
       <div class="copy-pill">
         <span class="pill-value">{{ gateway_url }}</span>
         <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)">Copy</button>
       </div>
-    </div>
-    <div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">OAuth Client ID <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(click Advanced settings)</span></div>
-      <div class="copy-pill">
-        <span class="pill-value">{{ client_id }}</span>
-        <button class="pill-copy" onclick="copyText('{{ client_id }}', this)">Copy</button>
-      </div>
-    </div>
-    {% if new_secret %}
-    <div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">OAuth Client Secret <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px">(click Advanced settings)</span></div>
-      <div class="copy-pill" style="border-color:var(--accent)">
-        <span class="pill-value">{{ new_secret }}</span>
-        <button class="pill-copy" onclick="copyText('{{ new_secret }}', this)">Copy</button>
-      </div>
-    </div>
-    {% endif %}
-  </div>
-  <p style="font-size:12px;color:var(--fg-3);margin-top:12px;line-height:1.6">
-    {% if not new_secret %}Generate your secret in the Claude Desktop section above, then use it here too.{% else %}Use the same Client Secret shown above.{% endif %}
-  </p>
-  <hr class="divider">
-  <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:6px">Icon (optional)</div>
-  <p style="font-size:12px;color:var(--fg-3);margin-bottom:10px;line-height:1.6">Claude.ai lets you upload a custom icon for the connector. Download the DS-MOZ brand icon (128&times;128 PNG, transparent):</p>
-  <a href="/portal/static/dsmoz-icon-128.png" download="dsmoz-icon.png" class="btn btn-sm">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    Download icon
-  </a>
-</div>
-
-<!-- ChatGPT -->
-<div class="card" style="margin-bottom:16px">
-  <h2 style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:14px">ChatGPT</h2>
-  <p style="font-size:13px;color:var(--fg-3);margin-bottom:14px;line-height:1.6">In ChatGPT, open <strong style="color:var(--fg-2)">Settings &rarr; Connectors &rarr; Create &rarr; New App</strong> (Developer mode / custom connectors must be enabled). Fill in:</p>
-  <div style="display:flex;flex-direction:column;gap:12px">
-    <div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">Name</div>
-      <div style="font-size:13px;color:var(--fg-2)">DS-MOZ Connect (or any label)</div>
-    </div>
-    <div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">MCP Server URL</div>
-      <div class="copy-pill">
-        <span class="pill-value">{{ gateway_url }}</span>
-        <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)">Copy</button>
-      </div>
-    </div>
-    <div>
-      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">Authentication</div>
-      <div style="font-size:13px;color:var(--fg-2)">OAuth</div>
     </div>
     <div>
       <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">OAuth Client ID</div>
@@ -165,41 +66,115 @@
         <button class="pill-copy" onclick="copyText('{{ client_id }}', this)">Copy</button>
       </div>
     </div>
-    {% if new_secret %}
     <div>
       <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px">OAuth Client Secret</div>
+      {% if new_secret %}
       <div class="copy-pill" style="border-color:var(--accent)">
         <span class="pill-value">{{ new_secret }}</span>
         <button class="pill-copy" onclick="copyText('{{ new_secret }}', this)">Copy</button>
       </div>
+      <p style="font-size:12px;color:var(--accent);margin-top:6px">&#9888; Copy this now &mdash; it will not be shown again.</p>
+      {% else %}
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--fg-3)">
+        <span style="letter-spacing:0.2em">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span>
+        <form method="post" action="/portal/setup/rotate-secret" style="margin:0">
+          <button type="submit" class="btn btn-sm"
+            onclick="return confirm('This will invalidate your current secret. Continue?')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+            Generate / rotate secret
+          </button>
+        </form>
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
   </div>
-  <p style="font-size:12px;color:var(--fg-3);margin-top:12px;line-height:1.6">Tick <strong style="color:var(--fg-2)">&ldquo;I understand and want to continue&rdquo;</strong> then click <strong style="color:var(--fg-2)">Create</strong>. ChatGPT opens a browser for sign-in.{% if not new_secret %} Generate your secret in the Claude Desktop section above, then use it here too.{% else %} Use the same Client Secret shown above.{% endif %}</p>
-  <hr class="divider">
-  <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:6px">Icon (optional)</div>
-  <p style="font-size:12px;color:var(--fg-3);margin-bottom:10px;line-height:1.6">Download the DS-MOZ brand icon (128&times;128 PNG, transparent):</p>
-  <a href="/portal/static/dsmoz-icon-128.png" download="dsmoz-icon.png" class="btn btn-sm">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    Download icon
-  </a>
 </div>
 
-<!-- Claude Code CLI -->
-<div class="card" style="margin-bottom:16px">
-  <h2 style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:14px">Claude Code (CLI)</h2>
-  <p style="font-size:13px;color:var(--fg-3);margin-bottom:12px;line-height:1.6">Run once — Claude Code handles OAuth automatically. A browser opens for sign-in on first use; tokens refresh silently after that.</p>
-  <div class="copy-pill">
-    <span class="pill-value">claude mcp add --transport http --scope user gateway {{ gateway_me_url }}</span>
-    <button class="pill-copy" onclick="copyText('claude mcp add --transport http --scope user gateway {{ gateway_me_url }}', this)">Copy</button>
-  </div>
-  <p style="font-size:12px;color:var(--fg-3);margin-top:8px;line-height:1.6">The <code style="font-size:12px;background:var(--bg);padding:2px 5px;border-radius:3px">/gateway/me</code> URL is the same for all users — your identity is resolved from the OAuth token.</p>
+<!-- ── Client tabs ── -->
+<div style="display:flex;gap:18px;border-bottom:1px solid var(--line);padding-bottom:0;margin-bottom:18px;overflow-x:auto">
+  {% for tab_id, tab_label in [
+    ('claude-desktop', 'Claude Desktop'),
+    ('claude-ai', 'Claude.ai'),
+    ('chatgpt', 'ChatGPT'),
+    ('claude-code', 'Claude Code'),
+    ('cursor', 'Cursor'),
+  ] %}
+  <button type="button" class="client-tab {% if loop.first %}active{% endif %}" data-tab="{{ tab_id }}"
+    style="background:none;border:none;padding:8px 2px;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:var(--fg-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:color 0.12s,border-color 0.12s">
+    {{ tab_label }}
+  </button>
+  {% endfor %}
 </div>
 
-<!-- How it works -->
-<div class="card">
-  <h2 style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:10px">How the Gateway Works</h2>
-  <p style="font-size:13px;color:var(--fg-3);line-height:1.6;margin-bottom:14px">Your LLM connects once and gets access to all enabled tools via meta-tools:</p>
+<!-- ── Tab panels ── -->
+<div id="tab-claude-desktop" class="client-panel">
+  <div class="card" style="margin-bottom:0">
+    <h2 style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:14px">Claude Desktop</h2>
+    <p style="font-size:13px;color:var(--fg-3);margin-bottom:14px;line-height:1.6">Open Claude Desktop &rarr; <strong style="color:var(--fg-2)">Settings &rarr; Connectors &rarr; Add custom connector</strong>. Paste:</p>
+    <ol style="list-style:none;padding:0;display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+      <li style="display:flex;align-items:flex-start;gap:8px"><span style="width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px">1</span><span style="font-size:13px;color:var(--fg-2);line-height:1.5">Name: <strong style="color:var(--fg-1)">DS-MOZ Connect</strong> (or any label)</span></li>
+      <li style="display:flex;align-items:flex-start;gap:8px"><span style="width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px">2</span><span style="font-size:13px;color:var(--fg-2);line-height:1.5">Remote MCP Server URL &rarr; the Gateway URL above</span></li>
+      <li style="display:flex;align-items:flex-start;gap:8px"><span style="width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px">3</span><span style="font-size:13px;color:var(--fg-2);line-height:1.5">Under <strong style="color:var(--fg-1)">Advanced</strong>: paste OAuth Client ID and Secret</span></li>
+      <li style="display:flex;align-items:flex-start;gap:8px"><span style="width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px">4</span><span style="font-size:13px;color:var(--fg-2);line-height:1.5">Click <strong style="color:var(--fg-1)">Add</strong>. Sign in when the browser opens. Tokens refresh automatically.</span></li>
+    </ol>
+    <hr class="divider">
+    <p style="font-size:12px;color:var(--fg-3);line-height:1.6;margin-bottom:8px">Prefer a config file? Download <code style="font-size:11px;background:var(--bg);padding:2px 5px;border-radius:3px">claude_desktop_config.json</code> &mdash; uses <code style="font-size:11px;background:var(--bg);padding:2px 5px;border-radius:3px">mcp-remote</code> to handle OAuth. Requires Node.js.</p>
+    <a href="/portal/setup/download" class="btn btn-sm">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download config
+    </a>
+  </div>
+</div>
+
+<div id="tab-claude-ai" class="client-panel" style="display:none">
+  <div class="card" style="margin-bottom:0">
+    <h2 style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:14px">Claude.ai (Web)</h2>
+    <p style="font-size:13px;color:var(--fg-3);margin-bottom:14px;line-height:1.6">Go to <strong style="color:var(--fg-2)">Claude.ai &rarr; Settings &rarr; Connectors &rarr; Add custom connector</strong>. Paste the Gateway URL, then expand <strong style="color:var(--fg-2)">Advanced</strong> for OAuth Client ID and Secret.</p>
+    <hr class="divider">
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:6px">Icon (optional)</div>
+    <p style="font-size:12px;color:var(--fg-3);margin-bottom:10px;line-height:1.6">Custom icon for the connector (128&times;128 PNG, transparent):</p>
+    <a href="/portal/static/dsmoz-icon-128.png" download="dsmoz-icon.png" class="btn btn-sm">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download icon
+    </a>
+  </div>
+</div>
+
+<div id="tab-chatgpt" class="client-panel" style="display:none">
+  <div class="card" style="margin-bottom:0">
+    <h2 style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:14px">ChatGPT</h2>
+    <p style="font-size:13px;color:var(--fg-3);margin-bottom:14px;line-height:1.6">Open <strong style="color:var(--fg-2)">Settings &rarr; Connectors &rarr; Create &rarr; New App</strong> (Developer mode required). Set Authentication to <strong style="color:var(--fg-2)">OAuth</strong> and paste the URL, Client ID, and Secret. Tick &ldquo;I understand and want to continue&rdquo;, then <strong style="color:var(--fg-2)">Create</strong>.</p>
+  </div>
+</div>
+
+<div id="tab-claude-code" class="client-panel" style="display:none">
+  <div class="card" style="margin-bottom:0">
+    <h2 style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:14px">Claude Code (CLI)</h2>
+    <p style="font-size:13px;color:var(--fg-3);margin-bottom:12px;line-height:1.6">Run once &mdash; Claude Code handles OAuth automatically. A browser opens for sign-in on first use; tokens refresh silently after.</p>
+    <div class="copy-pill">
+      <span class="pill-value">claude mcp add --transport http --scope user gateway {{ gateway_me_url }}</span>
+      <button class="pill-copy" onclick="copyText('claude mcp add --transport http --scope user gateway {{ gateway_me_url }}', this)">Copy</button>
+    </div>
+    <p style="font-size:12px;color:var(--fg-3);margin-top:8px;line-height:1.6">The <code style="font-size:11px;background:var(--bg);padding:2px 5px;border-radius:3px">/gateway/me</code> URL is shared &mdash; identity comes from your OAuth token.</p>
+  </div>
+</div>
+
+<div id="tab-cursor" class="client-panel" style="display:none">
+  <div class="card" style="margin-bottom:0">
+    <h2 style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:14px">Cursor</h2>
+    <p style="font-size:13px;color:var(--fg-3);margin-bottom:12px;line-height:1.6">Cursor uses the same Streamable HTTP transport. Add to <code style="font-size:11px;background:var(--bg);padding:2px 5px;border-radius:3px">~/.cursor/mcp.json</code>:</p>
+    <div class="copy-pill" style="font-size:11px">
+      <span class="pill-value">{ "mcpServers": { "dsmoz": { "url": "{{ gateway_url }}" } } }</span>
+      <button class="pill-copy" onclick='copyText({{ ("{ \"mcpServers\": { \"dsmoz\": { \"url\": \"" ~ gateway_url ~ "\" } } }") | tojson }}, this)'>Copy</button>
+    </div>
+    <p style="font-size:12px;color:var(--fg-3);margin-top:8px;line-height:1.6">First request triggers OAuth in your browser.</p>
+  </div>
+</div>
+
+<!-- ── How it works (always visible) ── -->
+<div class="card" style="margin-top:20px">
+  <div class="eyebrow" style="margin-bottom:10px">How it works</div>
+  <p style="font-size:13px;color:var(--fg-3);line-height:1.6;margin-bottom:14px">Your client connects once. The gateway exposes meta-tools your AI uses to discover and call upstream MCPs:</p>
   <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:10px">
     {% for tool, desc in [
       ("browse_mcps()", "See the full catalogue with enabled status and credit cost per call"),
@@ -214,7 +189,26 @@
     </li>
     {% endfor %}
   </ul>
-  <p style="font-size:12px;color:var(--fg-3);margin-top:12px;line-height:1.5">Enable or disable MCPs at any time from <a href="/portal/mcps" style="color:var(--accent)">My Toolbox</a>. Changes take effect immediately.</p>
+  <p style="font-size:12px;color:var(--fg-3);margin-top:14px;line-height:1.5">Manage enabled tools at any time in <a href="/portal/mcps" style="color:var(--accent)">My Toolbox</a>. Changes take effect immediately.</p>
 </div>
 
+<style>
+.client-tab.active { color: var(--fg-1); border-bottom-color: var(--accent); }
+.client-tab:hover { color: var(--fg-1); }
+</style>
+
+{% block extra_scripts %}
+<script>
+document.querySelectorAll('.client-tab').forEach(function(tab) {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.client-tab').forEach(function(t) { t.classList.remove('active'); });
+    tab.classList.add('active');
+    const id = tab.getAttribute('data-tab');
+    document.querySelectorAll('.client-panel').forEach(function(p) { p.style.display = 'none'; });
+    const panel = document.getElementById('tab-' + id);
+    if (panel) panel.style.display = 'block';
+  });
+});
+</script>
+{% endblock %}
 {% endblock %}
