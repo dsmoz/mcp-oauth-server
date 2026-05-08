@@ -529,7 +529,7 @@ async def portal_overview(
           .eq("user_id", user_id).execute()
     )
 
-    gateway_url = f"{get_settings().OAUTH_ISSUER_URL}/gateway/{user_id}"
+    gateway_url = f"{str(request.base_url).rstrip('/')}/gateway/{user_id}"
     devices = _list_devices(user_id)
 
     # Template compatibility: expose a `client` dict mirroring the old shape
@@ -614,10 +614,10 @@ async def portal_setup(request: Request, user_id: str = Depends(_require_portal_
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
 
-    settings = get_settings()
-    gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{user_id}"
-    streamable_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{user_id}/mcp"
-    gateway_me_url = f"{settings.OAUTH_ISSUER_URL}/gateway/me"
+    base_url = str(request.base_url).rstrip("/")
+    gateway_url = f"{base_url}/gateway/{user_id}"
+    streamable_url = f"{base_url}/gateway/{user_id}/mcp"
+    gateway_me_url = f"{base_url}/gateway/me"
     new_secret = request.query_params.get("secret")
     rotated_client_id = request.query_params.get("client_id")
     devices = _list_devices(user_id)
@@ -783,15 +783,14 @@ async def portal_devices_delete(
 
 
 @router.get("/setup/download")
-async def portal_setup_download(user_id: str = Depends(_require_portal_user)):
+async def portal_setup_download(request: Request, user_id: str = Depends(_require_portal_user)):
     import json
     from fastapi.responses import Response
     user = _users().get_user(user_id)
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
 
-    settings = get_settings()
-    gateway_url = f"{settings.OAUTH_ISSUER_URL}/gateway/{user_id}"
+    gateway_url = f"{str(request.base_url).rstrip('/')}/gateway/{user_id}"
     server_name = (user.display_name or "dsmoz-intelligence").lower().replace(" ", "-")
 
     config = {

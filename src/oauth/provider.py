@@ -55,6 +55,21 @@ class SupabaseOAuthProvider:
         if existing_user is not None:
             raise ValueError("Client already claimed by a different user")
 
+        # Deactivate older active devices with the same client_name for this user
+        # so that reconnecting clients don't accumulate duplicate entries.
+        client_name = row.get("client_name")
+        if client_name:
+            dups = (
+                self.db.table("oauth_clients")
+                .select("client_id")
+                .eq("user_id", user_id)
+                .eq("client_name", client_name)
+                .eq("is_active", True)
+                .execute()
+            )
+            for dup in (dups.data or []):
+                self.db.table("oauth_clients").update({"is_active": False}).eq("client_id", dup["client_id"]).execute()
+
         # Atomic: only update when user_id IS NULL. If another process won the race,
         # the update returns zero rows and we surface a clear error.
         from datetime import datetime, timezone
