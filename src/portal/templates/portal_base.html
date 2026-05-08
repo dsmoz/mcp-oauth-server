@@ -3,176 +3,413 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{% block title %}Client Portal — DS-MOZ Connect{% endblock %}</title>
-<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/light/style.css">
+<title>{% block title %}DS-MOZ Connect{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@500;600;700;800&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #060E10; --surface: #0A1C20; --elevated: #0D2A30;
-  --border: #16464F; --focus: #115E67;
-  --accent: #E8500A; --vivid: #FF5E00; --amber: #FFAE62;
-  --text-h: #F0F7F8; --text-b: #D4E8EA; --text-ui: #91BCC1; --text-muted: #5A8A90;
-  --success: #3DD68C; --success-bg: #073D20;
-  --danger-fg: #FF6B6B; --danger-border: #7A1E1E; --danger-bg: #1A0505;
-  --sidebar-w: 200px;
+  --bg: #FAF6F4;
+  --bg-card: #FFFFFF;
+  --bg-deep: #072B31;
+  --bg-deep-alt: #115E67;
+  --fg-1: #072B31;
+  --fg-2: #2A4449;
+  --fg-3: #6B7E81;
+  --accent: #FF5E00;
+  --accent-soft: rgba(255,94,0,0.08);
+  --beige: #E4D5D3;
+  --line: rgba(7,43,49,0.10);
+  --line-2: rgba(7,43,49,0.20);
+  --radius: 4px;
+  --shadow: 0 1px 2px rgba(7,43,49,0.06), 0 4px 12px rgba(7,43,49,0.05);
+  --success: #086d4f;
+  --success-bg: rgba(8,109,79,0.08);
+  --danger: #B91C1C;
+  --danger-bg: rgba(185,28,28,0.08);
+  --rail-w: 60px;
 }
 
 html, body { height: 100%; }
 
 body {
-  font-family: 'Avenir Next','Avenir','Segoe UI',Helvetica Neue,Arial,sans-serif;
+  font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
   background: var(--bg);
-  color: var(--text-b);
+  color: var(--fg-1);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
 
-/* ── Top bar ── */
+/* ── Topbar ── */
 .topbar {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 0 1.25rem;
-  height: 48px;
+  height: 56px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--line);
+  padding: 0 20px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.topbar-brand {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--fg-1);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.topbar-brand .dot { color: var(--accent); }
+
+.topbar-breadcrumb {
+  font-size: 13px;
+  color: var(--fg-3);
+  flex: 1;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-help {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius);
+  color: var(--fg-3);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+.topbar-help:hover { background: var(--bg); }
+
+.topbar-avatar {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--fg-2);
+  white-space: nowrap; overflow: hidden;
+}
+.topbar-avatar-dot {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--bg-deep);
+  color: #fff;
+  font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.topbar-brand { font-size: 0.65rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--vivid); }
-.topbar-user { font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem; }
 
 /* ── Shell ── */
 .shell { display: flex; flex: 1; overflow: hidden; }
 
-/* ── Sidebar ── */
-.sidebar {
-  width: var(--sidebar-w);
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  padding: 1rem 0;
+/* ── Icon Rail ── */
+.rail {
+  width: var(--rail-w);
+  background: var(--bg-card);
+  border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  overflow-y: auto;
-}
-
-.nav-item {
-  display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 1rem;
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  text-decoration: none;
-  border-left: 2px solid transparent;
-  transition: color 0.12s, background 0.12s;
+  padding: 12px 0;
+  flex-shrink: 0;
+  gap: 2px;
 }
-.nav-item i { font-size: 16px; flex-shrink: 0; }
-.nav-item:hover { color: var(--text-h); background: var(--elevated); }
-.nav-item.active { color: var(--text-h); background: var(--elevated); border-left-color: var(--vivid); }
 
-.sidebar-spacer { flex: 1; }
-.sidebar-bottom { padding: 0.5rem 0; border-top: 1px solid var(--border); }
+.rail-mark {
+  width: 32px; height: 32px;
+  background: var(--accent);
+  border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-family: 'Raleway', sans-serif;
+  font-weight: 800; font-size: 13px;
+  letter-spacing: -0.02em;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
 
-/* ── Main content ── */
+.rail-item {
+  position: relative;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius);
+  color: var(--fg-3);
+  text-decoration: none;
+  transition: color 0.12s, background 0.12s;
+  border-left: 2px solid transparent;
+  margin-left: -1px;
+}
+.rail-item:hover { background: var(--bg); color: var(--fg-1); }
+.rail-item.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); }
+
+.rail-item .rail-tooltip {
+  position: absolute;
+  left: 52px;
+  background: var(--fg-1);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+  z-index: 200;
+}
+.rail-item:hover .rail-tooltip { opacity: 1; }
+
+.rail-spacer { flex: 1; }
+
+.rail-logout {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--fg-3);
+  cursor: pointer;
+  background: none; border: none;
+  border-radius: var(--radius);
+  transition: color 0.12s, background 0.12s;
+  margin-top: 4px;
+}
+.rail-logout:hover { background: var(--danger-bg); color: var(--danger); }
+
+/* ── Main ── */
 .main {
   flex: 1;
   overflow-y: auto;
-  padding: 1.75rem 2rem;
+  padding: 28px 40px;
+  background: var(--bg);
 }
 
 /* ── Cards ── */
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
 }
-.card h2 { font-size: 1rem; font-weight: 700; color: var(--text-h); margin-bottom: 1rem; }
+
+.card-deep {
+  background: var(--bg-deep);
+  border-radius: var(--radius);
+  padding: 24px 28px;
+  color: #fff;
+}
 
 /* ── Page header ── */
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
+  margin-bottom: 24px;
 }
-.page-header h1 { font-size: 1.3rem; font-weight: 800; color: var(--text-h); }
+.page-header h1 {
+  font-family: 'Raleway', sans-serif;
+  font-size: 22px; font-weight: 700;
+  color: var(--fg-1);
+}
+
+/* ── Eyebrow ── */
+.eyebrow {
+  font-family: 'Raleway', sans-serif;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.eyebrow-light { color: rgba(255,255,255,0.6); }
 
 /* ── Buttons ── */
 .btn {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  padding: 0.45rem 0.875rem;
-  border-radius: 6px; border: 1px solid var(--border);
-  font-size: 0.8125rem; font-weight: 600; font-family: inherit;
-  cursor: pointer; text-decoration: none; transition: opacity 0.15s;
-  background: var(--elevated); color: var(--text-b);
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-2);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; text-decoration: none;
+  background: var(--bg-card); color: var(--fg-2);
+  transition: opacity 0.12s, background 0.12s;
+  white-space: nowrap;
 }
-.btn:hover { opacity: 0.8; }
+.btn:hover { background: var(--bg); }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: 0.88; background: var(--accent); }
+.btn-ghost { background: transparent; border-color: transparent; }
+.btn-ghost:hover { background: var(--bg); border-color: var(--line); }
+.btn-danger { color: var(--danger); }
+.btn-danger:hover { background: var(--danger-bg); border-color: var(--danger); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
 
-/* ── Stat grid ── */
-.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-.stat-box { text-align: center; }
-.stat-num { font-size: 2rem; font-weight: 800; color: var(--vivid); line-height: 1; }
-.stat-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 0.25rem; }
-
-/* ── Code pill ── */
-.code-pill {
-  background: #1A0C00; border: 1px solid #7A3000; border-radius: 6px;
-  padding: 0.6rem 0.875rem; font-family: monospace; font-size: 0.8125rem;
-  color: var(--amber); display: flex; align-items: center;
-  justify-content: space-between; gap: 0.5rem; margin-top: 0.5rem;
+/* ── Copy pill ── */
+.copy-pill {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--fg-2);
+  margin-top: 6px;
   word-break: break-all;
 }
-.copy-btn {
-  background: none; border: none; cursor: pointer;
-  color: var(--text-muted); font-size: 14px; flex-shrink: 0;
-  padding: 0.2rem; border-radius: 4px; transition: color 0.12s;
+.copy-pill .pill-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 600;
+  color: var(--fg-3);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.copy-btn:hover { color: var(--vivid); }
-.copy-btn.copied { color: var(--success); }
+.copy-pill .pill-value { flex: 1; min-width: 0; }
+.copy-pill .pill-copy {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: var(--radius);
+  background: none; border: 1px solid var(--line);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 600; color: var(--fg-3);
+  cursor: pointer; transition: color 0.12s, border-color 0.12s;
+}
+.copy-pill .pill-copy:hover { color: var(--accent); border-color: var(--accent); }
+.copy-pill .pill-copy.copied { color: var(--success); border-color: var(--success); }
+
+/* ── Chips ── */
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  background: var(--bg); color: var(--fg-3);
+  border: 1px solid var(--line);
+}
+.chip.green { color: var(--success); background: var(--success-bg); border-color: transparent; }
+.chip.danger { color: var(--danger); background: var(--danger-bg); border-color: transparent; }
+.chip.beige { color: var(--fg-3); background: rgba(228,213,211,0.5); border-color: transparent; }
+.chip-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ── Form ── */
+.form-group { margin-bottom: 16px; }
+label {
+  display: block; margin-bottom: 5px;
+  font-size: 12px; font-weight: 600; color: var(--fg-2);
+}
+input[type="text"], input[type="email"], input[type="password"] {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  color: var(--fg-1);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus { border-color: var(--bg-deep-alt); box-shadow: 0 0 0 3px rgba(17,94,103,0.08); }
+
+/* ── Alert boxes ── */
+.alert {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: flex; align-items: flex-start; gap: 8px;
+}
+.alert.success { background: var(--success-bg); color: var(--success); }
+.alert.danger { background: var(--danger-bg); color: var(--danger); }
+.alert.warning { background: rgba(255,171,0,0.10); color: #92600A; }
+
+/* ── Stat ── */
+.stat-num { font-family: 'Raleway', sans-serif; font-size: 32px; font-weight: 800; color: var(--fg-1); line-height: 1; }
+.stat-num.lg { font-size: 40px; }
+.stat-num.accent { color: var(--accent); }
+.stat-label { font-size: 11px; color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 4px; }
+
+/* ── Grid helpers ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.col { display: flex; flex-direction: column; }
+.col.gap-4 { gap: 16px; }
+.col.gap-2 { gap: 8px; }
+.flex-1 { flex: 1; }
+
+/* ── Divider ── */
+.divider { border: none; border-top: 1px solid var(--line); margin: 20px 0; }
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <span class="topbar-brand">DS-MOZ Connect</span>
-  <div class="topbar-user">
-    <i class="ph-light ph-user-circle" style="font-size:16px"></i>
-    <span>{{ client.client_name }}</span>
+  <a href="/portal/" class="topbar-brand">DS&#8209;MOZ<span class="dot">.</span></a>
+  <div class="topbar-breadcrumb">
+    {% if active_nav == 'overview' %}Overview
+    {% elif active_nav == 'mcps' %}My Toolbox
+    {% elif active_nav == 'setup' %}Setup Guide
+    {% elif active_nav == 'devices' %}Devices
+    {% elif active_nav == 'credits' %}Credits
+    {% endif %}
+  </div>
+  <div class="topbar-right">
+    <a href="https://docs.dsmoz.com" target="_blank" class="topbar-help" title="Help">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+    </a>
+    <div class="topbar-avatar">
+      <div class="topbar-avatar-dot">{{ (client.client_name or 'U')[:1] | upper }}</div>
+      <span>{{ client.client_name }}</span>
+    </div>
   </div>
 </div>
 
 <div class="shell">
-  <aside class="sidebar">
-    <a href="/portal/" class="nav-item {% if active_nav == 'overview' %}active{% endif %}">
-      <i class="ph-light ph-squares-four"></i> Overview
+  <nav class="rail">
+    <div class="rail-mark">DS</div>
+
+    <a href="/portal/" class="rail-item {% if active_nav == 'overview' %}active{% endif %}">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span class="rail-tooltip">Overview</span>
     </a>
-    <a href="/portal/mcps" class="nav-item {% if active_nav == 'mcps' %}active{% endif %}">
-      <i class="ph-light ph-toolbox"></i> My Toolbox
+
+    <a href="/portal/mcps" class="rail-item {% if active_nav == 'mcps' %}active{% endif %}">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      <span class="rail-tooltip">My Toolbox</span>
     </a>
-    <a href="/portal/setup" class="nav-item {% if active_nav == 'setup' %}active{% endif %}">
-      <i class="ph-light ph-book-open"></i> Setup Guide
+
+    <a href="/portal/setup" class="rail-item {% if active_nav == 'setup' %}active{% endif %}">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <span class="rail-tooltip">Setup Guide</span>
     </a>
-    <a href="/portal/devices" class="nav-item {% if active_nav == 'devices' %}active{% endif %}">
-      <i class="ph-light ph-devices"></i> Devices
+
+    <a href="/portal/devices" class="rail-item {% if active_nav == 'devices' %}active{% endif %}">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+      <span class="rail-tooltip">Devices</span>
     </a>
-    <a href="/portal/credits" class="nav-item {% if active_nav == 'credits' %}active{% endif %}">
-      <i class="ph-light ph-coins"></i> Credits
+
+    <a href="/portal/credits" class="rail-item {% if active_nav == 'credits' %}active{% endif %}">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>
+      <span class="rail-tooltip">Credits</span>
     </a>
-    <div class="sidebar-spacer"></div>
-    <div class="sidebar-bottom">
-      <form method="post" action="/portal/logout" style="margin:0">
-        <button type="submit" class="nav-item" style="width:100%;background:none;border:none;cursor:pointer;text-align:left">
-          <i class="ph-light ph-sign-out"></i> Sign Out
-        </button>
-      </form>
-    </div>
-  </aside>
+
+    <div class="rail-spacer"></div>
+
+    <form method="post" action="/portal/logout" style="margin:0">
+      <button type="submit" class="rail-logout" title="Sign out">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </form>
+  </nav>
 
   <main class="main">
     {% block content %}{% endblock %}
@@ -182,10 +419,15 @@ body {
 <script>
 function copyText(text, btn) {
   navigator.clipboard.writeText(text).then(function() {
-    btn.classList.add('copied');
-    setTimeout(function() { btn.classList.remove('copied'); }, 1500);
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = 'Copied';
+      btn.classList.add('copied');
+      setTimeout(function() { btn.textContent = orig; btn.classList.remove('copied'); }, 1500);
+    }
   });
 }
 </script>
+{% block extra_scripts %}{% endblock %}
 </body>
 </html>
