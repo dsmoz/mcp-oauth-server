@@ -176,7 +176,7 @@ async def fetch_railway_services(
             for svc in services:
                 if filter_by_prefix and not svc["slug"].startswith(service_prefix):
                     continue
-                if filter_by_prefix and svc["slug"] in _EXCLUDED_SLUGS:
+                if svc["slug"] in _EXCLUDED_SLUGS:
                     continue
                 if svc["slug"] in seen_slugs:
                     continue
