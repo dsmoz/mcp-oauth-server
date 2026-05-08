@@ -1,4 +1,4 @@
-# DS-MOZ Intelligence — MCP OAuth Server
+# DS-MOZ Connect — MCP OAuth Server
 
 OAuth 2.0 authorization server and AI gateway for Claude Desktop, Claude.ai, and Cursor. Handles the full Authorization Code + PKCE flow, self-service client registration, a client portal, and a single gateway endpoint that proxies multiple upstream MCP servers per client.
 
@@ -26,7 +26,7 @@ flowchart TD
     Portal -->|credits| Credits["Buy Credits\n/portal/credits"]
 
     Register["Self-service\n/register"] -->|instant account\n+ RFC 7591 DCR| Supabase
-    Register -->|credentials email| Brevo(("Brevo\nSMTP API"))
+    Register -->|credentials email| Resend(("Resend\nAPI"))
 
     Telegram(("Telegram Bot")) -->|consent webhook| OAuth
 ```
@@ -99,7 +99,7 @@ flowchart TD
 
 1. Client visits `/register`, fills in company name, email, use case
 2. OAuth client created immediately — no admin approval needed
-3. Credentials email sent via Brevo: Client ID, Client Secret, gateway URL, setup instructions for Claude.ai / Claude Desktop / Cursor / ChatGPT
+3. Credentials email sent via Resend: Client ID, Client Secret, gateway URL, setup instructions for Claude.ai / Claude Desktop / Cursor / ChatGPT
 4. Client follows one-time portal link to set password
 5. Client lands on `/portal/mcps` to configure their toolbox
 6. Client adds credits via `/portal/credits` to enable tool calls
@@ -154,9 +154,9 @@ lifecycle and credit semantics.
 | `INTROSPECT_SECRET` | Yes | Shared secret for `/introspect` endpoint |
 | `TELEGRAM_BOT_TOKEN` | Recommended | Enables Telegram consent approval gate |
 | `TELEGRAM_OWNER_CHAT_ID` | Recommended | Owner's Telegram chat ID |
-| `BREVO_API_KEY` | Recommended | Brevo API key — enables credentials email |
-| `BREVO_SENDER_EMAIL` | Recommended | Sender email address |
-| `BREVO_SENDER_NAME` | Optional | Sender display name (default: DS-MOZ Intelligence) |
+| `RESEND_API_KEY` | Recommended | Resend API key — enables credentials email |
+| `RESEND_SENDER_EMAIL` | Recommended | Sender email address (must be on verified domain) |
+| `RESEND_SENDER_NAME` | Optional | Sender display name (default: DSMOZ Connect) |
 | `RAILWAY_API_TOKEN` | Recommended | Railway API token — enables catalogue auto-discovery |
 | `RAILWAY_PROJECT_ID` | Recommended | Railway project UUID |
 
@@ -185,7 +185,7 @@ Deployed on Railway via `Dockerfile`. Push to `main` → auto-deploy.
 | 1.9.0 | 2026-04-04 | RFC 7591 dynamic client registration, ASGI gateway middleware, Claude Desktop connector support |
 | 1.8.0 | 2026-04-04 | Instant registration, credit system, Buy Credits portal page, toolbox rename |
 | 1.7.0 | 2026-04-04 | Admin MCP catalogue with Railway auto-discovery |
-| 1.6.0 | 2026-04-04 | DS-MOZ Intelligence Gateway — multi-MCP proxy per client |
+| 1.6.0 | 2026-04-04 | DS-MOZ Connect Gateway — multi-MCP proxy per client |
 | 1.5.0 | 2026-04-04 | Client portal (login, overview, MCP selection, setup guide) |
 | 1.4.0 | 2026-04-04 | RFC 7591 dynamic registration, RFC 9728, Cursor support |
 | 1.3.0 | 2026-04-04 | Visual identity — DS-MOZ brand, Phosphor icons |

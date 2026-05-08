@@ -40,7 +40,7 @@ from src.oauth.provider import SupabaseOAuthProvider
 
 
 GATEWAY_INSTRUCTIONS = """\
-DS-MOZ Intelligence Gateway — a multi-tenant proxy in front of many upstream
+DS-MOZ Connect Gateway — a multi-tenant proxy in front of many upstream
 MCP servers. Each authenticated user has a persistent "toolbox" of enabled
 MCPs. You, the assistant, discover, enable, search and invoke tools from
 those upstream MCPs through the seven meta-tools exposed here.
@@ -243,7 +243,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
     _resource_origin: dict[str, str] = {}
 
     server = Server(
-        "DS-MOZ Intelligence Gateway",
+        "DS-MOZ Connect Gateway",
         instructions=GATEWAY_INSTRUCTIONS,
     )
 
