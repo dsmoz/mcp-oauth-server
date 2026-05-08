@@ -2,83 +2,117 @@
 {% block title %}Overview — DS-MOZ Connect{% endblock %}
 
 {% block content %}
-<div class="page-header">
-  <h1>Overview</h1>
-</div>
 
 {% if oauth_expired %}
-<div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:flex-start;gap:0.75rem">
-  <i class="ph-light ph-warning" style="font-size:1.25rem;color:#F59E0B;flex-shrink:0;margin-top:1px"></i>
+<div class="alert warning" style="margin-bottom:20px">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
   <div>
-    <strong style="color:#92400E;font-size:0.9rem">Connection session expired</strong>
-    <p style="color:#92400E;font-size:0.85rem;margin:0.2rem 0 0">Your account is active. Go back to Claude Code or Cursor and click <strong>Connect</strong> again to authorise.</p>
+    <strong>Connection session expired</strong>
+    <p style="margin-top:3px;font-size:12px">Your account is active. Go back to Claude Code or Cursor and click <strong>Connect</strong> again to authorise.</p>
   </div>
+</div>
+{% else %}
+<div class="card-deep" style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+  <div>
+    <div class="eyebrow eyebrow-light" style="margin-bottom:8px">Status</div>
+    <h2 style="font-family:'Raleway',sans-serif;font-size:20px;font-weight:700;color:#fff;margin-bottom:6px">You're connected — {{ (client.allowed_mcp_resources or []) | length }} tools enabled</h2>
+    <p style="font-size:13px;color:rgba(255,255,255,0.55)">Last activity &middot; from Claude Desktop</p>
+  </div>
+  <a href="/portal/mcps" class="btn btn-primary" style="flex-shrink:0">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+    Add a tool
+  </a>
 </div>
 {% endif %}
 
-<div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
-  <div>
-    <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem">Credit Balance</div>
-    <div style="display:flex;align-items:baseline;gap:0.4rem">
-      <span style="font-size:2rem;font-weight:800;color:var(--vivid);line-height:1">{{ "%.2f"|format(credit_balance) }}</span>
-      <span style="font-size:0.85rem;color:var(--text-muted)">credits</span>
-    </div>
-  </div>
-  <a href="/portal/credits" class="btn btn-primary">
-    <i class="ph-light ph-plus-circle"></i> Buy Credits
-  </a>
-</div>
+<div class="grid-2" style="margin-bottom:20px">
 
-<div class="card">
-  <h2>Usage</h2>
-  <div class="stat-grid">
-    <div class="stat-box">
-      <div class="stat-num">{{ usage_today }}</div>
-      <div class="stat-label">Today</div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-num">{{ usage_month }}</div>
-      <div class="stat-label">This Month</div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-num" style="color:var(--text-ui)">{{ usage_total }}</div>
-      <div class="stat-label">All Time</div>
-    </div>
-  </div>
-</div>
+  <div class="col gap-4">
 
-<div class="card">
-  <h2>Your Gateway URL</h2>
-  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.5rem;line-height:1.5">
-    Connect Claude Desktop or ChatGPT to this single endpoint to access all your enabled MCP tools.
-  </p>
-  <div class="code-pill">
-    <span id="gateway-url">{{ gateway_url }}</span>
-    <button class="copy-btn" onclick="copyText('{{ gateway_url }}', this)" title="Copy URL">
-      <i class="ph-light ph-copy" style="font-size:14px"></i>
-    </button>
-  </div>
-  <p style="font-size:0.75rem;color:var(--text-muted);margin-top:0.75rem">
-    Use your OAuth access token as the Bearer token when connecting.
-    Visit <a href="/portal/setup" style="color:var(--vivid)">Setup Guide</a> for the full config.
-  </p>
-</div>
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Finish setup</div>
+      <ul style="list-style:none;display:flex;flex-direction:column;gap:10px">
+        <li style="display:flex;align-items:center;gap:10px">
+          <span style="width:18px;height:18px;border-radius:50%;background:var(--success-bg);color:var(--success);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
+          <span style="font-size:13px;color:var(--fg-3);text-decoration:line-through">Set your password</span>
+        </li>
+        <li style="display:flex;align-items:center;gap:10px">
+          <span style="width:18px;height:18px;border-radius:50%;background:var(--success-bg);color:var(--success);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
+          <span style="font-size:13px;color:var(--fg-3);text-decoration:line-through">Sign in to the portal</span>
+        </li>
+        <li style="display:flex;align-items:center;gap:10px">
+          <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);flex-shrink:0"></span>
+          <a href="/portal/mcps" style="font-size:13px;color:var(--fg-2);text-decoration:none">Enable your first MCP tool</a>
+        </li>
+        <li style="display:flex;align-items:center;gap:10px">
+          <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);flex-shrink:0"></span>
+          <a href="/portal/setup" style="font-size:13px;color:var(--fg-2);text-decoration:none">Connect Claude Desktop or Claude.ai</a>
+        </li>
+        <li style="display:flex;align-items:center;gap:10px">
+          <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);flex-shrink:0"></span>
+          <a href="/portal/devices" style="font-size:13px;color:var(--fg-2);text-decoration:none">Verify a device is active</a>
+        </li>
+      </ul>
+    </div>
 
-<div class="card">
-  <h2>Account</h2>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
-    <div>
-      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">Organisation</div>
-      <div style="font-size:0.9rem;color:var(--text-h);font-weight:600">{{ client.client_name }}</div>
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Gateway URL</div>
+      <p style="font-size:12px;color:var(--fg-3);margin-bottom:8px;line-height:1.5">Connect any AI client to this endpoint to access all your enabled tools.</p>
+      <div class="copy-pill">
+        <span class="pill-value">{{ gateway_url }}</span>
+        <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)">Copy</button>
+      </div>
+      <p style="font-size:11px;color:var(--fg-3);margin-top:8px">Full instructions in the <a href="/portal/setup" style="color:var(--accent)">Setup Guide</a>.</p>
     </div>
-    <div>
-      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">Status</div>
-      <div style="font-size:0.875rem;color:var(--success)">&#9679; Active</div>
-    </div>
-    <div>
-      <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.25rem">Toolbox</div>
-      <div style="font-size:0.875rem;color:var(--text-h)">{{ (client.allowed_mcp_resources or []) | length }} tools</div>
-    </div>
+
   </div>
+
+  <div class="col gap-4">
+
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Credit Balance</div>
+        <div style="display:flex;align-items:baseline;gap:6px">
+          <span class="stat-num accent">{{ "%.2f"|format(credit_balance) }}</span>
+          <span style="font-size:13px;color:var(--fg-3)">credits</span>
+        </div>
+      </div>
+      <a href="/portal/credits" class="btn btn-sm btn-primary">Top up</a>
+    </div>
+
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Usage</div>
+      <div class="grid-2">
+        <div>
+          <div class="stat-num" style="font-size:24px">{{ usage_today }}</div>
+          <div class="stat-label">Today</div>
+        </div>
+        <div>
+          <div class="stat-num" style="font-size:24px">{{ usage_month }}</div>
+          <div class="stat-label">This month</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Account</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <div style="font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px">Organisation</div>
+          <div style="font-size:14px;color:var(--fg-1);font-weight:600">{{ client.client_name }}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="chip green"><span class="chip-dot"></span>Active</span>
+          <span style="font-size:12px;color:var(--fg-3)">{{ (client.allowed_mcp_resources or []) | length }} tools enabled</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
 </div>
 {% endblock %}

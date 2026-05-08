@@ -6,35 +6,33 @@
   <h1>Credits</h1>
 </div>
 
-<div class="card">
-  <h2>Current Balance</h2>
-  <div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.5rem">
-    <span style="font-size:2.5rem;font-weight:800;color:var(--vivid);line-height:1">{{ "%.2f"|format(credit_balance) }}</span>
-    <span style="font-size:1rem;color:var(--text-muted)">credits</span>
-  </div>
-  <p style="font-size:0.8125rem;color:var(--text-muted);line-height:1.6">
-    Credits are consumed each time you call a tool. Browse and add MCPs to your toolbox for free — only actual tool calls are charged.
-  </p>
-</div>
-
 {% if success %}
-<div style="background:var(--success-bg);border:1px solid var(--success);border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.75rem">
-  <i class="ph-light ph-check-circle" style="font-size:20px;color:var(--success)"></i>
-  <span style="color:var(--success);font-size:0.875rem;font-weight:600">{{ success }}</span>
+<div class="alert success" style="margin-bottom:20px">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  <span>{{ success }}</span>
 </div>
 {% endif %}
 
+<!-- Balance -->
+<div class="card" style="background:var(--accent-soft);border-color:rgba(255,94,0,0.15);margin-bottom:20px">
+  <div class="eyebrow" style="margin-bottom:10px">Credit Balance</div>
+  <div style="display:flex;align-items:baseline;gap:8px">
+    <span class="stat-num lg accent">{{ "%.2f"|format(credit_balance) }}</span>
+    <span style="font-size:14px;color:var(--fg-3)">credits</span>
+  </div>
+  <p style="font-size:13px;color:var(--fg-3);margin-top:10px;line-height:1.6">Credits are consumed each time you call a tool. Browse and add MCPs for free — only actual tool calls are charged.</p>
+</div>
+
+<!-- Buy credits -->
 <div class="card">
-  <h2>Buy Credits</h2>
-  <p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:1.5rem;line-height:1.6">
-    Select a plan below and click <strong style="color:var(--text-h)">Proceed to Payment</strong> to add credits to your account.
-  </p>
+  <div style="font-family:'Raleway',sans-serif;font-size:16px;font-weight:700;color:var(--fg-1);margin-bottom:6px">Top Up</div>
+  <p style="font-size:13px;color:var(--fg-3);margin-bottom:20px;line-height:1.6">Select a plan and click <strong style="color:var(--fg-2)">Proceed to Payment</strong> to add credits.</p>
 
   <form method="post" action="/portal/credits/buy">
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem">
+    <div class="grid-3" style="margin-bottom:20px">
 
       <label style="cursor:pointer">
-        <input type="radio" name="plan" value="starter" required style="display:none" class="plan-radio">
+        <input type="radio" name="plan" value="starter" required class="plan-radio" style="display:none">
         <div class="plan-card" data-plan="starter">
           <div class="plan-name">Starter</div>
           <div class="plan-credits">10 <span>credits</span></div>
@@ -44,8 +42,11 @@
       </label>
 
       <label style="cursor:pointer">
-        <input type="radio" name="plan" value="pro" required style="display:none" class="plan-radio">
-        <div class="plan-card" data-plan="pro">
+        <input type="radio" name="plan" value="pro" required class="plan-radio" style="display:none">
+        <div class="plan-card plan-featured" data-plan="pro">
+          <div style="position:absolute;top:-1px;left:50%;transform:translateX(-50%)">
+            <span style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:2px 10px;border-radius:0 0 6px 6px;letter-spacing:0.06em;text-transform:uppercase">Popular</span>
+          </div>
           <div class="plan-name">Pro</div>
           <div class="plan-credits">50 <span>credits</span></div>
           <div class="plan-price">$40</div>
@@ -54,7 +55,7 @@
       </label>
 
       <label style="cursor:pointer">
-        <input type="radio" name="plan" value="enterprise" required style="display:none" class="plan-radio">
+        <input type="radio" name="plan" value="enterprise" required class="plan-radio" style="display:none">
         <div class="plan-card" data-plan="enterprise">
           <div class="plan-name">Enterprise</div>
           <div class="plan-credits">200 <span>credits</span></div>
@@ -65,30 +66,34 @@
 
     </div>
 
-    <button type="submit" class="btn btn-primary" style="font-size:0.9rem;padding:0.6rem 1.5rem">
-      <i class="ph-light ph-credit-card"></i> Proceed to Payment
+    <button type="submit" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Proceed to Payment
     </button>
   </form>
 </div>
 
 <style>
 .plan-card {
-  border: 2px solid var(--border);
-  border-radius: 10px;
-  padding: 1.25rem 1rem;
+  border: 2px solid var(--line-2);
+  border-radius: 8px;
+  padding: 20px 16px;
   text-align: center;
-  background: var(--elevated);
-  transition: border-color 0.15s, background 0.15s;
+  background: var(--bg-card);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  position: relative;
 }
-.plan-card:hover { border-color: var(--focus); }
-.plan-card.selected { border-color: var(--vivid); background: rgba(255,94,0,0.06); }
-.plan-name { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.75rem; }
-.plan-credits { font-size: 2rem; font-weight: 800; color: var(--text-h); line-height: 1; }
-.plan-credits span { font-size: 0.85rem; font-weight: 500; color: var(--text-muted); }
-.plan-price { font-size: 1.1rem; font-weight: 700; color: var(--vivid); margin: 0.5rem 0 0.25rem; }
-.plan-note { font-size: 0.7rem; color: var(--text-muted); }
+.plan-card:hover { border-color: var(--accent); }
+.plan-card.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.plan-card.plan-featured { border-color: var(--accent); }
+.plan-name { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 12px; }
+.plan-credits { font-family: 'Raleway', sans-serif; font-size: 32px; font-weight: 800; color: var(--fg-1); line-height: 1; }
+.plan-credits span { font-size: 13px; font-weight: 500; color: var(--fg-3); }
+.plan-price { font-size: 18px; font-weight: 700; color: var(--accent); margin: 8px 0 4px; }
+.plan-note { font-size: 11px; color: var(--fg-3); }
 </style>
 
+{% block extra_scripts %}
 <script>
 document.querySelectorAll('.plan-radio').forEach(function(radio) {
   radio.addEventListener('change', function() {
@@ -99,4 +104,5 @@ document.querySelectorAll('.plan-radio').forEach(function(radio) {
   });
 });
 </script>
+{% endblock %}
 {% endblock %}
