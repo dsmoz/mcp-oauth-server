@@ -6,140 +6,280 @@
 {% set total = catalogue | length %}
 {% set on_count = enabled | length %}
 
+{% set cat_icons = {
+  'Research': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  'Writing':  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+  'Data':     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+  'Other':    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+} %}
+
+{% set cat_bg = {
+  'Research': 'rgba(17,94,103,0.10)',
+  'Writing':  'rgba(8,109,79,0.10)',
+  'Data':     'rgba(255,94,0,0.10)',
+  'Other':    'rgba(228,213,211,0.6)',
+} %}
+
+{% set cat_fg = {
+  'Research': 'var(--bg-deep-alt)',
+  'Writing':  'var(--success)',
+  'Data':     'var(--accent)',
+  'Other':    'var(--fg-3)',
+} %}
+
 <!-- ── Page header ── -->
-<div class="page-header">
+<div class="page-header" style="align-items:flex-start">
   <div>
     <h1>My toolbox</h1>
-    <p style="font-size:13px;color:var(--fg-3);margin-top:4px">Pick the tools to expose to your AI clients. <strong style="color:var(--fg-2)">{{ on_count }} of {{ total }} enabled.</strong></p>
+    <p style="font-size:13px;color:var(--fg-3);margin-top:4px">Curate the MCP tools your AI clients can call. Changes save automatically.</p>
   </div>
-  <div style="flex-shrink:0">
-    <button form="mcps-form" type="submit" class="btn btn-primary">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-      Save selection
-    </button>
+  <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="tool-search" type="text" placeholder="Search tools…" autocomplete="off">
+    </div>
+    <span id="enabled-pill" class="chip orange"><span class="chip-dot"></span><span id="enabled-count">{{ on_count }}</span>&nbsp;enabled</span>
   </div>
-</div>
-
-<!-- ── Category filter chips ── -->
-{% set categories = catalogue | map(attribute='category') | list | unique | list %}
-<div id="cat-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px">
-  <button type="button" class="chip active filter-chip" data-cat="__all__">
-    <span class="chip-dot"></span>All &middot; {{ total }}
-  </button>
-  {% for cat in categories %}
-  <button type="button" class="chip filter-chip" data-cat="{{ cat }}">
-    {{ cat }} &middot; {{ catalogue | selectattr('category', 'equalto', cat) | list | length }}
-  </button>
-  {% endfor %}
 </div>
 
 <form id="mcps-form" method="post" action="/portal/mcps">
 
   {% if catalogue %}
-  <div id="tool-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
-    {% for mcp in catalogue %}
-    {% set is_on = mcp.slug in enabled %}
-    {% set cat_color = {
-      'Research': 'teal',
-      'Writing': 'green',
-      'Data': 'orange',
-      'Other': 'beige',
-    }.get(mcp.category, 'beige') %}
-    <label class="tool-card-wrap" data-cat="{{ mcp.category }}" style="cursor:pointer;display:block">
-      <input type="checkbox" name="mcps" value="{{ mcp.slug }}"
-             {% if is_on %}checked{% endif %}
-             class="mcp-toggle" style="display:none">
-      <div class="tool-card{% if is_on %} tool-card-on{% endif %}">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
-          <div style="font-family:'Raleway',sans-serif;font-size:14px;font-weight:600;color:var(--fg-1);line-height:1.3;flex:1;min-width:0">{{ mcp.name }}</div>
-          <span class="tool-checkbox{% if is_on %} on{% endif %}" aria-hidden="true">
-            <svg class="tool-check-svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="display:{% if is_on %}block{% else %}none{% endif %}"><polyline points="20 6 9 17 4 12"/></svg>
+    {% set cat_order = ['Research', 'Writing', 'Data', 'Other'] %}
+    {% set seen_cats = catalogue | map(attribute='category') | list | unique | list %}
+    {% set ordered_cats = [] %}
+    {% for c in cat_order %}{% if c in seen_cats %}{% set _ = ordered_cats.append(c) %}{% endif %}{% endfor %}
+    {% for c in seen_cats %}{% if c not in ordered_cats %}{% set _ = ordered_cats.append(c) %}{% endif %}{% endfor %}
+
+    {% for cat in ordered_cats %}
+      {% set group = catalogue | selectattr('category', 'equalto', cat) | list %}
+      {% set group_total = group | length %}
+      {% set group_on = group | selectattr('slug', 'in', enabled) | list | length %}
+
+      <section class="cat-section" data-cat="{{ cat }}">
+        <div class="cat-head">
+          <span class="cat-icon" style="background:{{ cat_bg.get(cat, cat_bg['Other']) }};color:{{ cat_fg.get(cat, cat_fg['Other']) }}">
+            {{ cat_icons.get(cat, cat_icons['Other']) | safe }}
           </span>
+          <div>
+            <div class="cat-name">{{ cat }}</div>
+            <div class="cat-sub"><span class="cat-on">{{ group_on }}</span> of {{ group_total }} enabled</div>
+          </div>
         </div>
-        <span class="chip {{ cat_color }}" style="margin-bottom:8px">{{ mcp.category }}</span>
-        <p style="font-size:12px;color:var(--fg-3);line-height:1.5;margin-top:6px">{{ mcp.description }}</p>
-      </div>
-    </label>
+
+        <div class="cat-rows">
+          {% for mcp in group %}
+            {% set is_on = mcp.slug in enabled %}
+            <label class="tool-row{% if is_on %} on{% endif %}" data-slug="{{ mcp.slug }}" data-cat="{{ cat }}" data-name="{{ mcp.name | lower }}" data-desc="{{ (mcp.description or '') | lower }}">
+              <input type="checkbox" name="mcps" value="{{ mcp.slug }}" {% if is_on %}checked{% endif %} class="mcp-toggle">
+              <div class="tool-text">
+                <div class="tool-name">{{ mcp.name }}</div>
+                <div class="tool-desc">{{ mcp.description }}</div>
+              </div>
+              <div class="tool-control">
+                <span class="on-pill" aria-hidden="true"><span class="chip-dot"></span>on</span>
+                <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
+              </div>
+            </label>
+          {% endfor %}
+        </div>
+      </section>
     {% endfor %}
-  </div>
+
+    <div id="empty-search" class="card" style="text-align:center;padding:32px;color:var(--fg-3);display:none">
+      No tools match your search.
+    </div>
   {% else %}
-  <div class="card" style="text-align:center;padding:40px;color:var(--fg-3)">
-    No MCP tools are published yet. Check back soon.
-  </div>
+    <div class="card" style="text-align:center;padding:40px;color:var(--fg-3)">
+      No MCP tools are published yet. Check back soon.
+    </div>
   {% endif %}
+
+  <noscript>
+    <div style="margin-top:20px"><button type="submit" class="btn btn-primary">Save selection</button></div>
+  </noscript>
 
 </form>
 
 <style>
-.filter-chip {
-  cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  transition: color 0.12s, background 0.12s, border-color 0.12s;
+.search-wrap {
+  position: relative;
+  display: flex; align-items: center;
 }
-.filter-chip:hover { color: var(--fg-1); }
-
-.tool-card {
+.search-wrap svg {
+  position: absolute; left: 10px; color: var(--fg-3); pointer-events: none;
+}
+.search-wrap input {
+  width: 240px;
+  padding: 7px 12px 7px 30px;
   background: var(--bg-card);
-  border: 1.5px solid var(--line);
+  border: 1px solid var(--line-2);
   border-radius: var(--radius);
-  padding: 14px 14px 12px;
-  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  color: var(--fg-1);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
 }
-.tool-card:hover { border-color: var(--line-2); }
-.tool-card-on {
-  border-color: var(--accent);
-  background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--bg-card);
-}
+.search-wrap input:focus { border-color: var(--bg-deep-alt); box-shadow: 0 0 0 3px rgba(17,94,103,0.08); }
 
-.tool-checkbox {
-  width: 16px; height: 16px;
-  border: 1.5px solid var(--line-2);
-  border-radius: 3px;
+.cat-section { margin-bottom: 8px; }
+.cat-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 0 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+.cat-icon {
+  width: 28px; height: 28px;
+  border-radius: var(--radius);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  transition: background 0.12s, border-color 0.12s;
 }
-.tool-checkbox.on { background: var(--accent); border-color: var(--accent); }
+.cat-name {
+  font-family: 'Raleway', sans-serif;
+  font-size: 14px; font-weight: 700;
+  color: var(--fg-1);
+  line-height: 1.2;
+}
+.cat-sub {
+  font-size: 11px; color: var(--fg-3);
+  margin-top: 2px;
+}
+
+.cat-rows { display: flex; flex-direction: column; }
+
+.tool-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.tool-row:last-child { border-bottom: none; }
+.tool-row:hover { background: rgba(7,43,49,0.02); }
+.tool-row .mcp-toggle { display: none; }
+
+.tool-text { flex: 1; min-width: 0; }
+.tool-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 600;
+  color: var(--fg-1);
+  line-height: 1.3;
+}
+.tool-desc {
+  font-size: 12px; color: var(--fg-3);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.tool-control {
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.on-pill {
+  display: none;
+  align-items: center; gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  color: var(--success);
+  background: var(--success-bg);
+}
+.tool-row.on .on-pill { display: inline-flex; }
+
+.switch {
+  width: 36px; height: 20px;
+  border-radius: 999px;
+  background: rgba(7,43,49,0.18);
+  position: relative;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.switch-knob {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  transition: left 0.15s;
+}
+.tool-row.on .switch { background: var(--accent); }
+.tool-row.on .switch-knob { left: 18px; }
+
+#enabled-pill { padding: 4px 10px; }
 </style>
 
 {% block extra_scripts %}
 <script>
-// Toggle card on click
-document.querySelectorAll('.tool-card-wrap').forEach(function(lbl) {
-  lbl.addEventListener('click', function(e) {
-    e.preventDefault();
-    const cb = lbl.querySelector('.mcp-toggle');
-    const card = lbl.querySelector('.tool-card');
-    const box = lbl.querySelector('.tool-checkbox');
-    const svg = lbl.querySelector('.tool-check-svg');
-    cb.checked = !cb.checked;
-    if (cb.checked) {
-      card.classList.add('tool-card-on');
-      box.classList.add('on');
-      if (svg) svg.style.display = 'block';
-    } else {
-      card.classList.remove('tool-card-on');
-      box.classList.remove('on');
-      if (svg) svg.style.display = 'none';
-    }
-  });
-});
+(function() {
+  const form = document.getElementById('mcps-form');
+  const enabledCount = document.getElementById('enabled-count');
+  const search = document.getElementById('tool-search');
+  const empty = document.getElementById('empty-search');
 
-// Category filter
-document.querySelectorAll('.filter-chip').forEach(function(chip) {
-  chip.addEventListener('click', function() {
-    document.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
-    chip.classList.add('active');
-    const cat = chip.getAttribute('data-cat');
-    document.querySelectorAll('.tool-card-wrap').forEach(function(card) {
-      if (cat === '__all__' || card.getAttribute('data-cat') === cat) {
-        card.style.display = 'block';
-      } else {
-        card.style.display = 'none';
-      }
+  function recountAll() {
+    let total = 0;
+    document.querySelectorAll('.cat-section').forEach(function(sec) {
+      const on = sec.querySelectorAll('.tool-row.on').length;
+      total += on;
+      const onEl = sec.querySelector('.cat-on');
+      if (onEl) onEl.textContent = on;
+    });
+    if (enabledCount) enabledCount.textContent = total;
+  }
+
+  let saveTimer = null;
+  let inFlight = null;
+  function autosave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(function() {
+      const data = new FormData(form);
+      if (inFlight && inFlight.abort) try { inFlight.abort(); } catch(e) {}
+      const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      inFlight = ctrl;
+      fetch(form.action, {
+        method: 'POST',
+        body: data,
+        credentials: 'same-origin',
+        redirect: 'manual',
+        signal: ctrl ? ctrl.signal : undefined,
+      }).catch(function(){});
+    }, 250);
+  }
+
+  document.querySelectorAll('.tool-row').forEach(function(row) {
+    row.addEventListener('click', function(e) {
+      if (e.target.tagName === 'A') return;
+      e.preventDefault();
+      const cb = row.querySelector('.mcp-toggle');
+      cb.checked = !cb.checked;
+      row.classList.toggle('on', cb.checked);
+      recountAll();
+      autosave();
     });
   });
-});
+
+  if (search) {
+    search.addEventListener('input', function() {
+      const q = search.value.trim().toLowerCase();
+      let anyVisible = false;
+      document.querySelectorAll('.cat-section').forEach(function(sec) {
+        let visibleInSec = 0;
+        sec.querySelectorAll('.tool-row').forEach(function(row) {
+          const hay = (row.dataset.name || '') + ' ' + (row.dataset.desc || '');
+          const match = !q || hay.indexOf(q) !== -1;
+          row.style.display = match ? '' : 'none';
+          if (match) visibleInSec++;
+        });
+        sec.style.display = visibleInSec > 0 ? '' : 'none';
+        if (visibleInSec > 0) anyVisible = true;
+      });
+      if (empty) empty.style.display = (q && !anyVisible) ? 'block' : 'none';
+    });
+  }
+})();
 </script>
 {% endblock %}
 {% endblock %}
