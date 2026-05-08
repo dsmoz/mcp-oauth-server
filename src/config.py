@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     TELEGRAM_OWNER_CHAT_ID: str = ""
     BREVO_API_KEY: str = ""
     BREVO_SENDER_EMAIL: str = ""
-    BREVO_SENDER_NAME: str = "DS-MOZ Intelligence"
+    BREVO_SENDER_NAME: str = "DS-MOZ Connect"
     SECRET_KEY: str = "change-me-portal-secret"
     RAILWAY_API_TOKEN: str = ""
     RAILWAY_PROJECT_ID: str = ""
