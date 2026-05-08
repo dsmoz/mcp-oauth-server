@@ -3,7 +3,42 @@
 
 {% block content %}
 
+{# ── derive checklist state ──────────────────────────────────────────── #}
+{% set tools_count = (client.allowed_mcp_resources or []) | length %}
+{% set device_count = active_devices | length %}
+{% set step_tools_done = tools_count > 0 %}
+{% set step_device_done = device_count > 0 %}
+{% set step_credits_done = credit_balance >= 1 %}
+{% set steps_done = 2
+  + (1 if step_tools_done else 0)
+  + (1 if step_device_done else 0)
+  + (1 if step_credits_done else 0) %}
+{% set steps_remaining = 5 - steps_done %}
+
+{# rough cost-per-call estimate for "≈ N calls at your current rate" #}
+{% set est_per_call = 2.0 %}
+{% set est_calls = (credit_balance / est_per_call) | round(0, 'floor') | int %}
+
+<!-- ── Page header ── -->
+<div class="page-header">
+  <div>
+    <h1>Overview</h1>
+    <p style="font-size:13px;color:var(--fg-3);margin-top:4px">Your gateway to MCP tools for Claude, ChatGPT and Cursor.</p>
+  </div>
+  <div style="display:flex;gap:8px;flex-shrink:0">
+    <a href="/portal/setup" class="btn btn-ghost">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      Open Setup guide
+    </a>
+    <a href="/portal/mcps" class="btn btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add a tool
+    </a>
+  </div>
+</div>
+
 {% if oauth_expired %}
+<!-- ── OAuth expired warning ── -->
 <div class="alert warning" style="margin-bottom:20px">
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
   <div>
@@ -12,107 +47,164 @@
   </div>
 </div>
 {% else %}
-<div class="card-deep" style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap">
-  <div>
-    <div class="eyebrow eyebrow-light" style="margin-bottom:8px">Status</div>
-    <h2 style="font-family:'Raleway',sans-serif;font-size:20px;font-weight:700;color:#fff;margin-bottom:6px">You're connected — {{ (client.allowed_mcp_resources or []) | length }} tools enabled</h2>
-    <p style="font-size:13px;color:rgba(255,255,255,0.55)">Last activity &middot; from Claude Desktop</p>
+<!-- ── Status hero ── -->
+<div class="card-deep" style="margin-bottom:20px">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <span class="chip green"><span class="chip-dot"></span>Connected</span>
+    <span style="font-size:12px;color:rgba(255,255,255,0.55)">
+      {{ tools_count }} tool{{ 's' if tools_count != 1 else '' }} enabled
+      &middot; {{ device_count }} device{{ 's' if device_count != 1 else '' }}
+    </span>
   </div>
-  <a href="/portal/mcps" class="btn btn-primary" style="flex-shrink:0">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-    Add a tool
-  </a>
+  <h2 style="font-family:'Raleway',sans-serif;font-size:22px;font-weight:700;color:#fff;margin-bottom:14px;line-height:1.3">
+    {% if last_call_time_str %}
+      You're set up. Last call {{ last_call_time_str }}{% if last_call_client %} from {{ last_call_client }}{% endif %}.
+    {% else %}
+      You're set up. No calls yet — ready when you are.
+    {% endif %}
+  </h2>
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <div class="copy-pill" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.12);color:#fff;margin-top:0;flex:1;min-width:240px">
+      <span class="pill-value" style="color:rgba(255,255,255,0.85)">{{ gateway_url }}</span>
+      <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)">Copy</button>
+    </div>
+    <a href="/portal/setup" class="btn btn-ghost" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:#fff">Manage gateway</a>
+  </div>
 </div>
 {% endif %}
 
-<div class="grid-2" style="margin-bottom:20px">
+<!-- ── 2-col grid ── -->
+<div class="grid-2">
 
-  <div class="col gap-4">
-
-    <div class="card">
-      <div style="font-size:12px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Finish setup</div>
-      <ul style="list-style:none;display:flex;flex-direction:column;gap:10px">
-        <li style="display:flex;align-items:center;gap:10px">
-          <span style="width:18px;height:18px;border-radius:50%;background:var(--success-bg);color:var(--success);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </span>
-          <span style="font-size:13px;color:var(--fg-3);text-decoration:line-through">Set your password</span>
-        </li>
-        <li style="display:flex;align-items:center;gap:10px">
-          <span style="width:18px;height:18px;border-radius:50%;background:var(--success-bg);color:var(--success);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </span>
-          <span style="font-size:13px;color:var(--fg-3);text-decoration:line-through">Sign in to the portal</span>
-        </li>
-        <li style="display:flex;align-items:center;gap:10px">
-          <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);flex-shrink:0"></span>
-          <a href="/portal/mcps" style="font-size:13px;color:var(--fg-2);text-decoration:none">Enable your first MCP tool</a>
-        </li>
-        <li style="display:flex;align-items:center;gap:10px">
-          <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);flex-shrink:0"></span>
-          <a href="/portal/setup" style="font-size:13px;color:var(--fg-2);text-decoration:none">Connect Claude Desktop or Claude.ai</a>
-        </li>
-        <li style="display:flex;align-items:center;gap:10px">
-          <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);flex-shrink:0"></span>
-          <a href="/portal/devices" style="font-size:13px;color:var(--fg-2);text-decoration:none">Verify a device is active</a>
-        </li>
-      </ul>
-    </div>
-
-    <div class="card">
-      <div style="font-size:12px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px">Gateway URL</div>
-      <p style="font-size:12px;color:var(--fg-3);margin-bottom:8px;line-height:1.5">Connect any AI client to this endpoint to access all your enabled tools.</p>
-      <div class="copy-pill">
-        <span class="pill-value">{{ gateway_url }}</span>
-        <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)">Copy</button>
+  <!-- ── Finish setup ── -->
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px">
+      <div style="font-family:'Raleway',sans-serif;font-size:15px;font-weight:700;color:var(--fg-1)">
+        {% if steps_remaining > 0 %}{{ steps_remaining }} of 5 steps remaining{% else %}All set — 5 of 5 done{% endif %}
       </div>
-      <p style="font-size:11px;color:var(--fg-3);margin-top:8px">Full instructions in the <a href="/portal/setup" style="color:var(--accent)">Setup Guide</a>.</p>
+      {% if steps_remaining > 0 %}
+        <span class="chip orange">In progress</span>
+      {% else %}
+        <span class="chip green"><span class="chip-dot"></span>Complete</span>
+      {% endif %}
     </div>
 
+    <ul style="list-style:none;display:flex;flex-direction:column;gap:12px">
+
+      {# step 1 — done #}
+      <li style="display:flex;align-items:center;gap:10px">
+        <span style="width:18px;height:18px;border-radius:50%;background:var(--success-bg);color:var(--success);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <span style="font-size:13px;color:var(--fg-3);text-decoration:line-through;flex:1">Set your password</span>
+      </li>
+
+      {# step 2 — done #}
+      <li style="display:flex;align-items:center;gap:10px">
+        <span style="width:18px;height:18px;border-radius:50%;background:var(--success-bg);color:var(--success);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <span style="font-size:13px;color:var(--fg-3);text-decoration:line-through;flex:1">Sign in to the portal</span>
+      </li>
+
+      {# step 3 — pick tools #}
+      <li style="display:flex;align-items:center;gap:10px">
+        {% if step_tools_done %}
+        <span style="width:18px;height:18px;border-radius:50%;background:var(--success-bg);color:var(--success);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        {% else %}
+        <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);flex-shrink:0"></span>
+        {% endif %}
+        <a href="/portal/mcps" style="font-size:13px;color:{% if step_tools_done %}var(--fg-3);text-decoration:line-through{% else %}var(--fg-1);text-decoration:none{% endif %};flex:1">Pick your tools</a>
+        <span style="font-size:11px;color:var(--fg-3);flex-shrink:0">{{ tools_count }} of {{ total_tools }} enabled</span>
+      </li>
+
+      {# step 4 — connect device #}
+      <li style="display:flex;align-items:center;gap:10px">
+        {% if step_device_done %}
+        <span style="width:18px;height:18px;border-radius:50%;background:var(--success-bg);color:var(--success);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        {% else %}
+        <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);flex-shrink:0"></span>
+        {% endif %}
+        <a href="/portal/setup" style="font-size:13px;color:{% if step_device_done %}var(--fg-3);text-decoration:line-through{% else %}var(--fg-1);text-decoration:none{% endif %};flex:1">Connect your first device</a>
+        <span style="font-size:11px;color:var(--fg-3);flex-shrink:0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          {% if active_devices %}
+            {{ active_devices | map(attribute='client_name') | join(' · ') }}
+          {% else %}
+            Claude Desktop &middot; Cursor &middot; ChatGPT
+          {% endif %}
+        </span>
+      </li>
+
+      {# step 5 — top up credits (optional) #}
+      <li style="display:flex;align-items:center;gap:10px">
+        {% if step_credits_done %}
+        <span style="width:18px;height:18px;border-radius:50%;background:var(--success-bg);color:var(--success);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        {% else %}
+        <span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--line-2);flex-shrink:0"></span>
+        {% endif %}
+        <a href="/portal/credits" style="font-size:13px;color:{% if step_credits_done %}var(--fg-3);text-decoration:line-through{% else %}var(--fg-1);text-decoration:none{% endif %};flex:1">Top up credits</a>
+        <span style="font-size:11px;color:var(--fg-3);flex-shrink:0">Optional</span>
+      </li>
+
+    </ul>
   </div>
 
+  <!-- ── Right column ── -->
   <div class="col gap-4">
 
-    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-      <div>
-        <div style="font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">Credit Balance</div>
-        <div style="display:flex;align-items:baseline;gap:6px">
-          <span class="stat-num accent">{{ "%.2f"|format(credit_balance) }}</span>
-          <span style="font-size:13px;color:var(--fg-3)">credits</span>
-        </div>
-      </div>
-      <a href="/portal/credits" class="btn btn-sm btn-primary">Top up</a>
-    </div>
-
+    <!-- Credits -->
     <div class="card">
-      <div style="font-size:12px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Usage</div>
-      <div class="grid-2">
-        <div>
-          <div class="stat-num" style="font-size:24px">{{ usage_today }}</div>
-          <div class="stat-label">Today</div>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+        <div style="flex:1">
+          <div class="eyebrow" style="margin-bottom:10px">Credits</div>
+          <div style="display:flex;align-items:baseline;gap:6px">
+            <span class="stat-num lg accent">{{ credit_balance | int }}</span>
+            <span style="font-size:13px;color:var(--fg-3)">credits</span>
+          </div>
+          <div style="font-size:12px;color:var(--fg-3);margin-top:6px">≈ {{ est_calls }} calls at your current rate</div>
         </div>
-        <div>
-          <div class="stat-num" style="font-size:24px">{{ usage_month }}</div>
-          <div class="stat-label">This month</div>
-        </div>
+        <a href="/portal/credits" class="btn btn-sm btn-primary" style="flex-shrink:0">Top up</a>
       </div>
     </div>
 
+    <!-- Activity (14-day bar chart) -->
     <div class="card">
-      <div style="font-size:12px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Account</div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        <div>
-          <div style="font-size:11px;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px">Organisation</div>
-          <div style="font-size:14px;color:var(--fg-1);font-weight:600">{{ client.client_name }}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px">
+        <div class="eyebrow">Activity</div>
+        <span class="chip">{{ usage_total }} call{{ 's' if usage_total != 1 else '' }}</span>
+      </div>
+
+      {% set max_val = (activity_14days | max) or 1 %}
+      <div style="display:flex;align-items:flex-end;gap:4px;height:54px;padding:2px 0">
+        {% for val in activity_14days %}
+        {% set h = ((val / max_val) * 50) | int %}
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="{{ val }} call{{ 's' if val != 1 else '' }}">
+          <div style="background:{% if loop.last %}var(--accent){% else %}var(--accent-soft){% endif %};border:1px solid {% if loop.last %}var(--accent){% else %}rgba(255,94,0,0.25){% endif %};border-radius:2px 2px 0 0;height:{{ h if h > 2 else 2 }}px"></div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="chip green"><span class="chip-dot"></span>Active</span>
-          <span style="font-size:12px;color:var(--fg-3)">{{ (client.allowed_mcp_resources or []) | length }} tools enabled</span>
-        </div>
+        {% endfor %}
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:11px">
+        <span style="color:var(--fg-3)">Today &middot; <strong style="color:var(--fg-1)">{{ usage_today }}</strong> call{{ 's' if usage_today != 1 else '' }}</span>
+        {% set delta = usage_today - usage_yesterday %}
+        {% if delta > 0 %}
+          <span style="color:var(--success);font-weight:600">&uarr; {{ delta }} vs yesterday</span>
+        {% elif delta < 0 %}
+          <span style="color:var(--danger);font-weight:600">&darr; {{ -delta }} vs yesterday</span>
+        {% else %}
+          <span style="color:var(--fg-3)">= same as yesterday</span>
+        {% endif %}
       </div>
     </div>
 
   </div>
 
 </div>
+
 {% endblock %}

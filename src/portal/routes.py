@@ -510,8 +510,13 @@ async def portal_overview(
 
     db = get_db()
     from datetime import date
-    today = date.today().isoformat()
-    month_start = date.today().replace(day=1).isoformat()
+    from collections import defaultdict
+    today_dt = date.today()
+    today = today_dt.isoformat()
+    yesterday_dt = today_dt - timedelta(days=1)
+    yesterday = yesterday_dt.isoformat()
+    month_start = today_dt.replace(day=1).isoformat()
+    fourteen_days_ago = (today_dt - timedelta(days=13)).isoformat()
 
     def _count(query_result) -> int:
         return query_result.data[0]["count"] if query_result.data else 0
@@ -519,6 +524,10 @@ async def portal_overview(
     usage_today = _count(
         db.table("oauth_usage_logs").select("count", count="exact")
           .eq("user_id", user_id).gte("called_at", today).execute()
+    )
+    usage_yesterday = _count(
+        db.table("oauth_usage_logs").select("count", count="exact")
+          .eq("user_id", user_id).gte("called_at", yesterday).lt("called_at", today).execute()
     )
     usage_month = _count(
         db.table("oauth_usage_logs").select("count", count="exact")
@@ -529,8 +538,71 @@ async def portal_overview(
           .eq("user_id", user_id).execute()
     )
 
+    # 14-day activity bars (oldest → newest)
+    activity_rows = (
+        db.table("oauth_usage_logs").select("called_at")
+          .eq("user_id", user_id).gte("called_at", fourteen_days_ago)
+          .execute().data or []
+    )
+    day_counts: dict[str, int] = defaultdict(int)
+    for row in activity_rows:
+        ca = row.get("called_at") or ""
+        if len(ca) >= 10:
+            day_counts[ca[:10]] += 1
+    activity_14days = [
+        day_counts.get((today_dt - timedelta(days=13 - i)).isoformat(), 0)
+        for i in range(14)
+    ]
+
+    # Last call (time + client name)
+    last_call_time_str: Optional[str] = None
+    last_call_client: Optional[str] = None
+    last_call_rows = (
+        db.table("oauth_usage_logs").select("called_at, client_id")
+          .eq("user_id", user_id).order("called_at", desc=True).limit(1)
+          .execute().data or []
+    )
+    if last_call_rows:
+        try:
+            ca = last_call_rows[0]["called_at"].replace("Z", "+00:00")
+            last_dt = datetime.fromisoformat(ca)
+            now = datetime.now(timezone.utc)
+            secs = int((now - last_dt).total_seconds())
+            if secs < 60:
+                last_call_time_str = "just now"
+            elif secs < 3600:
+                m = secs // 60
+                last_call_time_str = f"{m} minute{'s' if m != 1 else ''} ago"
+            elif secs < 86400:
+                h = secs // 3600
+                last_call_time_str = f"{h} hour{'s' if h != 1 else ''} ago"
+            else:
+                d = secs // 86400
+                last_call_time_str = f"{d} day{'s' if d != 1 else ''} ago"
+        except Exception:
+            pass
+        cid = last_call_rows[0].get("client_id")
+        if cid:
+            try:
+                cli = (
+                    db.table("oauth_clients").select("client_name")
+                      .eq("client_id", cid).limit(1).execute().data or []
+                )
+                if cli:
+                    last_call_client = cli[0].get("client_name")
+            except Exception:
+                pass
+
+    # Total published tools available to this user's tier
+    tier = getattr(user, "tier", "standard")
+    catalogue_q = db.table("mcp_catalogue").select("slug").eq("is_published", True)
+    if tier != "super":
+        catalogue_q = catalogue_q.eq("tier", "standard")
+    total_tools = len(catalogue_q.execute().data or [])
+
     gateway_url = f"{str(request.base_url).rstrip('/')}/gateway/{user_id}"
     devices = _list_devices(user_id)
+    active_devices = [d for d in devices if d.get("is_active")]
 
     # Template compatibility: expose a `client` dict mirroring the old shape
     client_ctx = {
@@ -547,10 +619,16 @@ async def portal_overview(
             "client": client_ctx,
             "user": user,
             "devices": devices,
+            "active_devices": active_devices,
             "active_nav": "overview",
             "usage_today": usage_today,
+            "usage_yesterday": usage_yesterday,
             "usage_month": usage_month,
             "usage_total": usage_total,
+            "activity_14days": activity_14days,
+            "last_call_time_str": last_call_time_str,
+            "last_call_client": last_call_client,
+            "total_tools": total_tools,
             "gateway_url": gateway_url,
             "credit_balance": float(user.credit_balance or 0),
             "oauth_expired": bool(oauth_expired),
