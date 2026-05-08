@@ -30,6 +30,7 @@
     <tr>
       <th>Service</th>
       <th>Domain</th>
+      <th>Tier</th>
       <th>Status</th>
       <th>Actions</th>
     </tr>
@@ -48,6 +49,13 @@
       </td>
       <td style="font-family:monospace;font-size:0.75rem;color:var(--text-muted)">
         {% if e.domain %}{{ e.domain }}{% else %}<span style="color:#999">—</span>{% endif %}
+      </td>
+      <td>
+        {% if e.tier == 'super' %}
+          <span class="badge" style="background:var(--secret-bg);color:var(--accent-vivid);border:1px solid var(--secret-border)">Super</span>
+        {% else %}
+          <span class="badge badge-inactive">Standard</span>
+        {% endif %}
       </td>
       <td>
         {% if e.is_published %}

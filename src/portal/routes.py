@@ -567,10 +567,10 @@ async def portal_mcps_get(request: Request, user_id: str = Depends(_require_port
         raise HTTPException(status_code=401, detail="User not found")
 
     db = get_db()
-    catalogue = (
-        db.table("mcp_catalogue").select("*").eq("is_published", True).order("name").execute().data
-        or []
-    )
+    query = db.table("mcp_catalogue").select("*").eq("is_published", True).order("name")
+    if getattr(user, "tier", "standard") != "super":
+        query = query.eq("tier", "standard")
+    catalogue = query.execute().data or []
     enabled = set(user.allowed_mcp_resources or [])
 
     client_ctx = {
@@ -594,7 +594,11 @@ async def portal_mcps_get(request: Request, user_id: str = Depends(_require_port
 async def portal_mcps_post(request: Request, user_id: str = Depends(_require_portal_user)):
     db = get_db()
     form = await request.form()
-    catalogue = db.table("mcp_catalogue").select("slug").eq("is_published", True).execute().data or []
+    user = _users().get_user(user_id)
+    query = db.table("mcp_catalogue").select("slug").eq("is_published", True)
+    if user is None or getattr(user, "tier", "standard") != "super":
+        query = query.eq("tier", "standard")
+    catalogue = query.execute().data or []
     valid_slugs = {row["slug"] for row in catalogue}
     selected = [slug for slug in form.getlist("mcps") if slug in valid_slugs]
 

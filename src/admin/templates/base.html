@@ -443,6 +443,11 @@
           <i class="ph-light ph-plugs"></i>
           <span class="nav-label">Catalogue</span>
         </a>
+        <a href="/admin/categories" class="nav-item {% if '/admin/categories' in request.url.path %}active{% endif %}"
+           title="Categories">
+          <i class="ph-light ph-tag"></i>
+          <span class="nav-label">Categories</span>
+        </a>
         <div class="sidebar-section-label" style="margin-top: 0.5rem;">System</div>
         <a href="/admin/settings" class="nav-item {% if '/admin/settings' in request.url.path %}active{% endif %}"
            title="Settings">

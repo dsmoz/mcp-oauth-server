@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Categories — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Categories</h1>
+  <a href="/admin/categories/new" class="btn btn-primary">
+    <i class="ph-light ph-plus"></i> New Category
+  </a>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+  {% if categories %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Sort Order</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cat in categories %}
+      <tr>
+        <td style="font-weight:600;color:var(--text-h)">{{ cat.name }}</td>
+        <td style="color:var(--text-muted)">{{ cat.sort_order }}</td>
+        <td class="actions" style="justify-content:flex-end">
+          <form method="post" action="/admin/categories/{{ cat.name }}/delete"
+                onsubmit="return confirm('Delete category {{ cat.name }}?')">
+            <button type="submit" class="btn btn-danger" style="font-size:0.75rem;padding:0.3rem 0.7rem">
+              <i class="ph-light ph-trash"></i> Delete
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="padding:2rem;text-align:center;color:var(--text-muted)">No categories yet.</div>
+  {% endif %}
+</div>
+{% endblock %}
