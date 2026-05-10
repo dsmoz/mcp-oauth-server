@@ -1035,14 +1035,16 @@ async def _gateway_asgi(scope, receive, send):
             await transport.handle_request(scope, receive, guarded_send)
             print(f"GATEWAY: handle_request completed", file=sys.stderr)
             tg.cancel_scope.cancel()
-    except Exception as exc:
-        print(f"GATEWAY: exception: {type(exc).__name__}: {exc}", file=sys.stderr)
-        try:
-            import sentry_sdk
-            sentry_sdk.capture_exception(exc)
-        except Exception:
-            pass
-        if not response_started:
+    except BaseException as exc:
+        is_cancelled = isinstance(exc, (anyio.get_cancelled_exc_class(),))
+        if not is_cancelled:
+            print(f"GATEWAY: exception: {type(exc).__name__}: {exc}", file=sys.stderr)
+            try:
+                import sentry_sdk
+                sentry_sdk.capture_exception(exc)
+            except Exception:
+                pass
+        if not response_started and not is_cancelled:
             error = JSONResponse(
                 content={"error": "internal_error", "error_description": str(exc)},
                 status_code=500,
@@ -1053,9 +1055,16 @@ async def _gateway_asgi(scope, receive, send):
                 await send({"type": "http.response.body", "body": b"", "more_body": False})
             except Exception:
                 pass
+        if is_cancelled:
+            raise
     finally:
         with anyio.move_on_after(2, shield=True):
             await transport.terminate()
+        if response_started and not response_completed:
+            try:
+                await send({"type": "http.response.body", "body": b"", "more_body": False})
+            except Exception:
+                pass
 
 
 class GatewayASGI:
