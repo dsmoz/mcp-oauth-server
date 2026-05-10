@@ -1050,11 +1050,8 @@ async def _gateway_asgi(scope, receive, send):
                 status_code=500,
             )
             await error(scope, receive, send)
-        elif not response_completed:
-            try:
-                await send({"type": "http.response.body", "body": b"", "more_body": False})
-            except Exception:
-                pass
+            response_started = True
+            response_completed = True
         if is_cancelled:
             raise
     finally:
