@@ -14,6 +14,7 @@ class User(BaseModel):
     allowed_mcp_resources: List[str] = []
     tier: str = "standard"
     is_active: bool = False
+    is_admin: bool = False
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
