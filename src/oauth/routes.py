@@ -61,11 +61,18 @@ async def oauth_authorization_server():
 
 @router.get("/.well-known/oauth-protected-resource")
 @router.get("/.well-known/oauth-protected-resource/{path:path}")
-async def oauth_protected_resource(request: Request):
-    """RFC 9728 — advertise the authorization server for this resource."""
-    base = get_settings().OAUTH_ISSUER_URL
+async def oauth_protected_resource(request: Request, path: str = ""):
+    """RFC 9728 — advertise the authorization server for this resource.
+
+    The `resource` field MUST reflect the specific protected resource URI
+    that the metadata describes, including any path component. Strict
+    clients (e.g. Claude.ai) reject tokens whose resource indicator does
+    not match the path-specific resource URI.
+    """
+    base = get_settings().OAUTH_ISSUER_URL.rstrip("/")
+    resource = f"{base}/{path}" if path else base
     return JSONResponse({
-        "resource": base,
+        "resource": resource,
         "authorization_servers": [base],
         "bearer_methods_supported": ["header"],
         "scopes_supported": ["mcp"],
