@@ -919,6 +919,7 @@ def _unauth_response(request: Request, detail: str = "Bearer token required") ->
                 f' error_description="{detail}"'
             ),
             "Link": f'<{issuer}/.well-known/oauth-authorization-server>; rel="oauth-authorization-server"',
+            "Cache-Control": "no-store, no-cache",
         },
     )
 
