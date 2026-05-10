@@ -50,10 +50,24 @@ security = HTTPBasic()
 
 
 def _require_admin(credentials: HTTPBasicCredentials = Depends(security)):
-    settings = get_settings()
-    ok_user = secrets.compare_digest(credentials.username, settings.ADMIN_USERNAME)
-    ok_pass = secrets.compare_digest(credentials.password, settings.ADMIN_PASSWORD)
-    if not (ok_user and ok_pass):
+    from src.crypto import verify_secret
+    db = get_db()
+    result = (
+        db.table("users")
+        .select("user_id, email, password_hash, is_admin")
+        .eq("email", credentials.username)
+        .eq("is_admin", True)
+        .limit(1)
+        .execute()
+    )
+    user = result.data[0] if result.data else None
+    if not user or not user.get("password_hash"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    if not verify_secret(credentials.password, user["password_hash"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",
