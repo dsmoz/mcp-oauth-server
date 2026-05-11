@@ -48,6 +48,8 @@ def _discovery_doc() -> dict:
         "token_endpoint_auth_methods_supported": ["client_secret_post", "none"],
         "revocation_endpoint_auth_methods_supported": ["client_secret_post", "none"],
         "resource_indicators_supported": True,
+        "logo_uri": "https://media.dsmozconsultancy.com/logos/dsmoz-connect.png",
+        "service_name": "DS-MOZ Connect",
     }
 
 
@@ -82,6 +84,8 @@ async def oauth_protected_resource(request: Request, path: str = ""):
             "authorization_servers": [base],
             "bearer_methods_supported": ["header"],
             "scopes_supported": ["mcp"],
+            "logo_uri": "https://media.dsmozconsultancy.com/logos/dsmoz-connect.png",
+            "service_name": "DS-MOZ Connect",
         },
         headers=_NO_STORE,
     )
