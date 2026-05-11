@@ -5,15 +5,18 @@
 
 {# ── State ───────────────────────────────────────────────────────────────── #}
 {% set has_device = devices and devices | selectattr('is_active') | list | length > 0 %}
-{% set sel_client = request.query_params.get('client') or 'claude-desktop' %}
+{% set sel_client = request.query_params.get('client') %}
 {% set step_q = request.query_params.get('step') %}
 {% if step_q in ('1', '2', '3') %}
   {% set step = step_q | int %}
+{% elif sel_client %}
+  {% set step = 2 %}
 {% elif has_device %}
   {% set step = 3 %}
 {% else %}
-  {% set step = 2 %}
+  {% set step = 1 %}
 {% endif %}
+{% if not sel_client %}{% set sel_client = 'claude-desktop' %}{% endif %}
 
 {% set clients = [
   ('claude-desktop', 'Claude Desktop',  'Custom connector — macOS, Windows', 'desktop'),
@@ -47,7 +50,8 @@
     {% for s_num, s_label in [(1, 'Choose a client'), (2, 'Copy configuration'), (3, 'Verify connection')] %}
       {% set is_done = step > s_num %}
       {% set is_active = step == s_num %}
-      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+      {% set step_href = '/portal/setup?step=' ~ s_num if s_num == 1 else '/portal/setup?client=' ~ sel_client ~ '&step=' ~ s_num %}
+      <a href="{{ step_href }}" style="display:flex;align-items:center;gap:10px;flex-shrink:0;text-decoration:none;cursor:pointer">
         <span style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;
           {% if is_done %}background:var(--bg-deep);color:#fff
           {% elif is_active %}background:var(--accent);color:#fff
@@ -56,7 +60,7 @@
           {% else %}{{ s_num }}{% endif %}
         </span>
         <span style="font-size:13px;font-weight:{% if is_active %}700{% else %}600{% endif %};color:{% if is_active %}var(--fg-1){% elif is_done %}var(--fg-2){% else %}var(--fg-3){% endif %};white-space:nowrap">{{ s_label }}</span>
-      </div>
+      </a>
       {% if not loop.last %}
       <div style="flex:1;height:1.5px;background:{% if step > s_num %}var(--bg-deep){% else %}var(--line){% endif %};margin:0 16px;min-width:40px"></div>
       {% endif %}
@@ -108,50 +112,26 @@
     </h2>
 
     {% if sel_client == 'claude-desktop' %}
-    <p style="font-size:13px;color:var(--fg-3);margin-bottom:18px;line-height:1.6">Open Claude Desktop, then <strong style="color:var(--fg-2)">Settings &rarr; Connectors &rarr; Add custom connector</strong>. Paste the values below, then sign in with the email you used here.</p>
+    <p style="font-size:13px;color:var(--fg-3);margin-bottom:18px;line-height:1.6">Open Claude Desktop, then <strong style="color:var(--fg-2)">Settings &rarr; Connectors &rarr; Add custom connector</strong>. Paste the URL below, then sign in with the email you used here. OAuth client ID is issued automatically &mdash; do not fill the Advanced section.</p>
     {% elif sel_client == 'claude-ai' %}
-    <p style="font-size:13px;color:var(--fg-3);margin-bottom:18px;line-height:1.6">Go to <strong style="color:var(--fg-2)">Claude.ai &rarr; Settings &rarr; Connectors &rarr; Add custom connector</strong>. Paste the URL, then expand <strong style="color:var(--fg-2)">Advanced</strong> for the OAuth Client ID and Secret.</p>
+    <p style="font-size:13px;color:var(--fg-3);margin-bottom:18px;line-height:1.6">Go to <strong style="color:var(--fg-2)">Claude.ai &rarr; Settings &rarr; Connectors &rarr; Add custom connector</strong>. Paste the URL only &mdash; leave the Advanced section blank. The OAuth client is registered automatically on first sign-in.</p>
     {% elif sel_client == 'chatgpt' %}
-    <p style="font-size:13px;color:var(--fg-3);margin-bottom:18px;line-height:1.6">Open <strong style="color:var(--fg-2)">Settings &rarr; Connectors &rarr; Create &rarr; New App</strong> (Developer mode). Set Authentication to <strong style="color:var(--fg-2)">OAuth</strong> and paste the values below.</p>
+    <p style="font-size:13px;color:var(--fg-3);margin-bottom:18px;line-height:1.6">Open <strong style="color:var(--fg-2)">Settings &rarr; Connectors &rarr; Create &rarr; New App</strong> (Developer mode). Set Authentication to <strong style="color:var(--fg-2)">OAuth</strong> and paste the URL below. Leave Client ID and Secret blank &mdash; they are issued automatically.</p>
     {% elif sel_client == 'cursor' %}
     <p style="font-size:13px;color:var(--fg-3);margin-bottom:18px;line-height:1.6">Add this entry to <code style="font-size:11px;background:var(--bg);padding:2px 5px;border-radius:3px">~/.cursor/mcp.json</code>. First request triggers OAuth in your browser.</p>
     {% elif sel_client == 'claude-code' %}
     <p style="font-size:13px;color:var(--fg-3);margin-bottom:18px;line-height:1.6">Run once &mdash; Claude Code handles OAuth automatically. A browser opens for sign-in on first use; tokens refresh silently after.</p>
     {% endif %}
 
-    {# ── Connection fields (URL / ID / Secret) ── #}
+    {# ── Connection field (URL only — OAuth handles client ID/secret via DCR) ── #}
     {% if sel_client in ('claude-desktop', 'claude-ai', 'chatgpt') %}
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-      {# URL #}
       <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px">
         <span style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--fg-3);width:50px;flex-shrink:0">URL</span>
         <span class="pill-value" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:var(--fg-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ gateway_url }}</span>
         <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)" type="button">Copy</button>
       </div>
-      {# ID #}
-      <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px">
-        <span style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--fg-3);width:50px;flex-shrink:0">ID</span>
-        <span class="pill-value" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:var(--fg-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ client_id }}</span>
-        <button class="pill-copy" onclick="copyText('{{ client_id }}', this)" type="button">Copy</button>
-      </div>
-      {# Secret #}
-      <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid {% if new_secret %}var(--accent){% else %}var(--line){% endif %};border-radius:var(--radius);padding:10px 12px">
-        <span style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--fg-3);width:50px;flex-shrink:0">Secret</span>
-        {% if new_secret %}
-        <span id="secret-value" class="pill-value" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:var(--fg-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-real="{{ new_secret }}" data-masked="••••••••••••••••">••••••••••••••••</span>
-        <button class="pill-copy" onclick="toggleSecret(this)" type="button" data-label-show="Reveal" data-label-hide="Hide">Reveal</button>
-        <button class="pill-copy" onclick="copyText('{{ new_secret }}', this)" type="button">Copy</button>
-        {% else %}
-        <span class="pill-value" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:var(--fg-3);flex:1;letter-spacing:0.2em">••••••••••••••••</span>
-        <form method="post" action="/portal/setup/rotate-secret" style="margin:0">
-          <button type="submit" class="pill-copy" onclick="return confirm('This will invalidate your current secret. Continue?')">Reveal</button>
-        </form>
-        {% endif %}
-      </div>
     </div>
-    {% if new_secret %}
-    <p style="font-size:12px;color:var(--accent);margin:-6px 0 14px 0">&#9888; Copy the secret now &mdash; it will not be shown again.</p>
-    {% endif %}
     {% endif %}
 
     {# ── Cursor JSON snippet ── #}
@@ -242,7 +222,11 @@
       <span>Connected. {{ devices | selectattr('is_active') | list | length }} active device{{ '' if (devices | selectattr('is_active') | list | length) == 1 else 's' }}.</span>
     </div>
     <p style="font-size:13px;color:var(--fg-3);line-height:1.6;margin-bottom:18px">Your gateway is live. Open your AI client and ask it to <em>browse_mcps()</em> to see the catalogue.</p>
-    <div style="display:flex;gap:10px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a href="/portal/setup?step=1" class="btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Configure another client
+      </a>
       <a href="/portal/devices" class="btn">View devices</a>
       <a href="/portal/mcps" class="btn btn-primary">Open my toolbox</a>
     </div>
