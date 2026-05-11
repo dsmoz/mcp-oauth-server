@@ -46,6 +46,8 @@ def _discovery_doc() -> dict:
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["client_secret_post", "none"],
+        "revocation_endpoint_auth_methods_supported": ["client_secret_post", "none"],
+        "resource_indicators_supported": True,
     }
 
 
@@ -149,6 +151,8 @@ async def token(
     redirect_uri: Optional[str] = Form(None),
     code_verifier: Optional[str] = Form(None),
     refresh_token: Optional[str] = Form(None),
+    resource: Optional[str] = Form(None),  # RFC 8707 — accepted, optional
+    scope: Optional[str] = Form(None),
 ):
     provider = _provider()
 
@@ -173,9 +177,10 @@ async def token(
         return JSONResponse(
             {
                 "access_token": access_token,
-                "token_type": "bearer",
+                "token_type": "Bearer",
                 "expires_in": expires_in,
                 "refresh_token": rt,
+                "scope": "mcp",
             }
         )
 
@@ -192,9 +197,10 @@ async def token(
         return JSONResponse(
             {
                 "access_token": access_token,
-                "token_type": "bearer",
+                "token_type": "Bearer",
                 "expires_in": expires_in,
                 "refresh_token": new_rt,
+                "scope": "mcp",
             }
         )
 
