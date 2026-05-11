@@ -907,8 +907,20 @@ def _get_bearer(request: Request) -> str | None:
 
 
 def _unauth_response(request: Request, detail: str = "Bearer token required") -> JSONResponse:
-    """Return a 401 with OAuth discovery headers before the SSE transport starts."""
-    issuer = get_settings().OAUTH_ISSUER_URL
+    """Return a 401 with OAuth discovery headers before the SSE transport starts.
+
+    Advertises the path-specific protected-resource metadata URL via
+    RFC 9728's `resource_metadata` WWW-Authenticate parameter so strict
+    clients (Claude.ai) request the path-scoped PRM and receive a `resource`
+    indicator matching the URL they called.
+    """
+    issuer = get_settings().OAUTH_ISSUER_URL.rstrip("/")
+    request_path = request.url.path.lstrip("/")
+    resource_metadata_url = (
+        f"{issuer}/.well-known/oauth-protected-resource/{request_path}"
+        if request_path
+        else f"{issuer}/.well-known/oauth-protected-resource"
+    )
     return JSONResponse(
         content={"error": "unauthorized", "error_description": detail},
         status_code=401,
@@ -916,7 +928,8 @@ def _unauth_response(request: Request, detail: str = "Bearer token required") ->
             "WWW-Authenticate": (
                 f'Bearer realm="{issuer}",'
                 f' error="invalid_token",'
-                f' error_description="{detail}"'
+                f' error_description="{detail}",'
+                f' resource_metadata="{resource_metadata_url}"'
             ),
             "Link": f'<{issuer}/.well-known/oauth-authorization-server>; rel="oauth-authorization-server"',
             "Cache-Control": "no-store, no-cache",

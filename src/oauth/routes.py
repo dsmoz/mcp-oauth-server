@@ -51,14 +51,17 @@ def _discovery_doc() -> dict:
     }
 
 
+_NO_STORE = {"Cache-Control": "no-store, no-cache, must-revalidate"}
+
+
 @router.get("/.well-known/openid-configuration")
 async def openid_configuration():
-    return JSONResponse(_discovery_doc())
+    return JSONResponse(_discovery_doc(), headers=_NO_STORE)
 
 
 @router.get("/.well-known/oauth-authorization-server")
 async def oauth_authorization_server():
-    return JSONResponse(_discovery_doc())
+    return JSONResponse(_discovery_doc(), headers=_NO_STORE)
 
 
 @router.get("/.well-known/oauth-protected-resource")
@@ -73,12 +76,15 @@ async def oauth_protected_resource(request: Request, path: str = ""):
     """
     base = get_settings().OAUTH_ISSUER_URL.rstrip("/")
     resource = f"{base}/{path}" if path else base
-    return JSONResponse({
-        "resource": resource,
-        "authorization_servers": [base],
-        "bearer_methods_supported": ["header"],
-        "scopes_supported": ["mcp"],
-    })
+    return JSONResponse(
+        {
+            "resource": resource,
+            "authorization_servers": [base],
+            "bearer_methods_supported": ["header"],
+            "scopes_supported": ["mcp"],
+        },
+        headers=_NO_STORE,
+    )
 
 
 # ── Authorization ─────────────────────────────────────────────────────────────

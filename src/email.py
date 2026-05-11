@@ -81,7 +81,7 @@ async def send_approval_email(
         print("WARNING: Brevo not configured — skipping approval email", file=sys.stderr)
         return
 
-    gateway_url = f"{issuer_url}/gateway/{user_id}"
+    gateway_url = f"{issuer_url}/gateway/me"
     setup_url = f"{issuer_url}/portal/setup-password?token={setup_token}" if setup_token else f"{issuer_url}/portal/login"
 
     html = _APPROVAL_HTML.format(

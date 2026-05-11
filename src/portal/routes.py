@@ -600,7 +600,7 @@ async def portal_overview(
         catalogue_q = catalogue_q.eq("tier", "standard")
     total_tools = len(catalogue_q.execute().data or [])
 
-    gateway_url = f"{str(request.base_url).rstrip('/')}/gateway/{user_id}"
+    gateway_url = f"{str(request.base_url).rstrip('/')}/gateway/me"
     devices = _list_devices(user_id)
     active_devices = [d for d in devices if d.get("is_active")]
 
@@ -693,8 +693,8 @@ async def portal_setup(request: Request, user_id: str = Depends(_require_portal_
         raise HTTPException(status_code=401, detail="User not found")
 
     base_url = str(request.base_url).rstrip("/")
-    gateway_url = f"{base_url}/gateway/{user_id}"
-    streamable_url = f"{base_url}/gateway/{user_id}/mcp"
+    gateway_url = f"{base_url}/gateway/me"
+    streamable_url = f"{base_url}/gateway/me/mcp"
     gateway_me_url = f"{base_url}/gateway/me"
     new_secret = request.query_params.get("secret")
     rotated_client_id = request.query_params.get("client_id")
@@ -868,7 +868,7 @@ async def portal_setup_download(request: Request, user_id: str = Depends(_requir
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
 
-    gateway_url = f"{str(request.base_url).rstrip('/')}/gateway/{user_id}"
+    gateway_url = f"{str(request.base_url).rstrip('/')}/gateway/me"
     server_name = (user.display_name or "dsmoz-intelligence").lower().replace(" ", "-")
 
     config = {
