@@ -99,6 +99,12 @@ _portal_static = Path(__file__).parent / "src" / "portal" / "static"
 app.mount("/portal/static", StaticFiles(directory=str(_portal_static)), name="portal-static")
 
 
+@app.get("/")
+async def root():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/portal", status_code=302)
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
