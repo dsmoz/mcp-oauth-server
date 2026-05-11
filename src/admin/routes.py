@@ -11,7 +11,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
 from src.config import get_settings
-from src.crypto import generate_client_id, generate_token, hash_secret, now_unix
+from src.crypto import generate_client_id, generate_token, hash_secret, now_unix, verify_secret
 from src.db import get_db
 from src import email as em
 from src.oauth.provider import SupabaseOAuthProvider
@@ -46,34 +46,64 @@ templates.env.filters["unix_to_date"] = lambda ts: (
     datetime.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d %H:%M UTC") if ts else "—"
 )
 
-security = HTTPBasic()
+security = HTTPBasic(auto_error=False)
+
+_PORTAL_COOKIE = "portal_session"
 
 
-def _require_admin(credentials: HTTPBasicCredentials = Depends(security)):
-    from src.crypto import verify_secret
+def _verify_portal_session(token: str) -> Optional[str]:
+    """Return user_id if the portal session cookie is valid, else None."""
+    from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+    settings = get_settings()
+    s = URLSafeTimedSerializer(settings.SECRET_KEY, salt="portal")
+    try:
+        data = s.loads(token, max_age=60 * 60 * 8)
+        return data.get("user_id")
+    except (BadSignature, SignatureExpired, KeyError):
+        return None
+
+
+def _require_admin(
+    request: Request,
+    credentials: Optional[HTTPBasicCredentials] = Depends(security),
+) -> str:
     db = get_db()
-    result = (
-        db.table("users")
-        .select("user_id, email, password_hash, is_admin")
-        .eq("email", credentials.username)
-        .eq("is_admin", True)
-        .limit(1)
-        .execute()
+
+    # ── Path 1: portal session cookie (admin users already logged in) ──────────
+    cookie = request.cookies.get(_PORTAL_COOKIE)
+    if cookie:
+        user_id = _verify_portal_session(cookie)
+        if user_id:
+            result = (
+                db.table("users")
+                .select("email, is_admin")
+                .eq("user_id", user_id)
+                .eq("is_admin", True)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                return result.data[0]["email"]
+
+    # ── Path 2: HTTP Basic Auth (direct / programmatic access) ─────────────────
+    if credentials:
+        result = (
+            db.table("users")
+            .select("user_id, email, password_hash, is_admin")
+            .eq("email", credentials.username)
+            .eq("is_admin", True)
+            .limit(1)
+            .execute()
+        )
+        user = result.data[0] if result.data else None
+        if user and user.get("password_hash") and verify_secret(credentials.password, user["password_hash"]):
+            return credentials.username
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Unauthorized",
+        headers={"WWW-Authenticate": "Basic"},
     )
-    user = result.data[0] if result.data else None
-    if not user or not user.get("password_hash"):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    if not verify_secret(credentials.password, user["password_hash"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -620,33 +650,22 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
             for t in tools
         )
 
-        tool_names = ", ".join(t["name"] for t in tools)
-
         settings = get_settings()
         if settings.ANTHROPIC_API_KEY:
             import httpx as _httpx
-            slug = name.lower().replace(" ", "-")
             prompt = (
-                f"Write a catalogue description for an MCP server named \"{name}\" "
-                f"that will be read by an AI agent choosing which MCP to invoke.\n\n"
-                f"Tools it exposes:\n{tool_manifest}\n\n"
-                f"Requirements:\n"
-                f"- 2-4 sentences of flowing prose, no bullet points\n"
-                f"- Sentence 1: what the server does and its domain (e.g. \"Academia is a course and "
-                f"lesson management MCP for...\")\n"
-                f"- Sentence 2-3: key capabilities and concrete use-cases — when should an agent "
-                f"reach for THIS server over others? Be specific about actions, not just tool names\n"
-                f"- Final sentence: \"Call list_tools with slug {slug} to see the full tool list "
-                f"before calling any tool.\"\n\n"
-                f"Good example: \"Linguist is a translation and language services MCP supporting "
-                f"text and document translation across 30+ languages with formality control, custom "
-                f"glossaries, and translation memory. Use it when a task requires translating text "
-                f"or documents, rephrasing content in a different style or tone, detecting language, "
-                f"reviewing translation quality, or managing multilingual terminology. Call list_tools "
-                f"with slug linguist to see the full tool list before calling any tool.\"\n\n"
-                f"Output only the description — no preamble, no labels."
+                f"You are writing a catalogue entry for an MCP server called \"{name}\" "
+                f"that will be read by an AI agent deciding which MCP to call.\n\n"
+                f"Here are the tools it exposes:\n{tool_manifest}\n\n"
+                f"Write a concise catalogue description (3-5 sentences) that:\n"
+                f"1. States the server's primary purpose in one sentence\n"
+                f"2. Lists the key capabilities an agent would care about\n"
+                f"3. Gives clear guidance on WHEN to use this MCP vs others\n"
+                f"4. Mentions that the agent should call list_tools or search_tools "
+                f"with this MCP's slug to get the full tool list before calling any tool\n\n"
+                f"Be specific and practical. Do not use bullet points — write flowing prose."
             )
-            async with _httpx.AsyncClient(timeout=30) as client:
+            async with _httpx.AsyncClient(timeout=20) as client:
                 resp = await client.post(
                     "https://api.anthropic.com/v1/messages",
                     headers={
@@ -656,7 +675,7 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
                     },
                     json={
                         "model": "claude-haiku-4-5-20251001",
-                        "max_tokens": 400,
+                        "max_tokens": 300,
                         "messages": [{"role": "user", "content": prompt}],
                     },
                 )
@@ -666,11 +685,16 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
                     if description:
                         return description
 
-        # Fallback: clean tool-names-only summary
-        slug = name.lower().replace(" ", "-")
+        # Fallback: structured plain-text summary
+        tool_lines = "; ".join(
+            f"{t['name']} ({t['description'][:80]})" if t.get("description") else t["name"]
+            for t in tools[:10]
+        )
         return (
-            f"{name} exposes {len(tools)} tools: {tool_names}. "
-            f"Call list_tools with slug {slug} to see the full tool list before calling any tool."
+            f"Provides tools for: {tool_lines}. "
+            f"Use when the task requires any of these capabilities. "
+            f"Call search_tools with a keyword or list_tools with this MCP's slug "
+            f"to discover the full tool list before calling any tool."
         )
     except Exception as exc:
         import logging
@@ -767,16 +791,10 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
     )
 
 
-def _get_categories(db) -> list[dict]:
-    return db.table("mcp_categories").select("*").order("sort_order").execute().data or []
-
-
 @router.get("/catalogue/new", response_class=HTMLResponse)
 async def new_catalogue_form(request: Request, _: str = Depends(_require_admin)):
-    db = get_db()
     return templates.TemplateResponse(
-        request=request, name="catalogue_form.html",
-        context={"entry": None, "error": None, "categories": _get_categories(db)}
+        request=request, name="catalogue_form.html", context={"entry": None, "error": None}
     )
 
 
@@ -789,20 +807,18 @@ async def create_catalogue(
     category: str = Form(...),
     upstream_url: str = Form(...),
     upstream_api_key: str = Form(""),
-    tier: str = Form("standard"),
     _: str = Depends(_require_admin),
 ):
     db = get_db()
     if _get_catalogue_row(db, slug):
         return templates.TemplateResponse(
             request=request, name="catalogue_form.html",
-            context={"entry": None, "error": f"Slug '{slug}' already exists", "categories": _get_categories(db)}
+            context={"entry": None, "error": f"Slug '{slug}' already exists"}
         )
     db.table("mcp_catalogue").insert({
         "slug": slug, "name": name, "description": description,
         "category": category, "upstream_url": upstream_url,
         "upstream_api_key": upstream_api_key, "is_published": False,
-        "tier": tier if tier in ("standard", "super") else "standard",
     }).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
@@ -814,8 +830,7 @@ async def edit_catalogue_form(request: Request, slug: str, _: str = Depends(_req
     if entry is None:
         raise HTTPException(status_code=404, detail="Not found")
     return templates.TemplateResponse(
-        request=request, name="catalogue_form.html",
-        context={"entry": entry, "error": None, "categories": _get_categories(db)}
+        request=request, name="catalogue_form.html", context={"entry": entry, "error": None}
     )
 
 
@@ -828,7 +843,6 @@ async def save_catalogue(
     category: str = Form(...),
     upstream_url: str = Form(...),
     upstream_api_key: str = Form(""),
-    tier: str = Form("standard"),
     _: str = Depends(_require_admin),
 ):
     db = get_db()
@@ -837,7 +851,6 @@ async def save_catalogue(
     update: dict = {
         "name": name, "description": description, "category": category,
         "upstream_url": upstream_url,
-        "tier": tier if tier in ("standard", "super") else "standard",
     }
     if upstream_api_key:
         update["upstream_api_key"] = upstream_api_key
@@ -905,76 +918,11 @@ async def refresh_description(request: Request, slug: str, _: str = Depends(_req
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
 
-@router.post("/catalogue/{slug}/generate-description")
-async def generate_description_api(request: Request, slug: str, _: str = Depends(_require_admin)):
-    """Return AI-generated description as JSON without saving — used by the edit form."""
-    from fastapi.responses import JSONResponse
-    db = get_db()
-    entry = _get_catalogue_row(db, slug)
-    if entry is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    description = await _auto_describe_mcp(
-        entry["upstream_url"], entry.get("upstream_api_key", ""), entry["name"]
-    )
-    if not description:
-        return JSONResponse({"error": "Could not generate description — upstream unreachable or no tools found"}, status_code=502)
-    return JSONResponse({"description": description})
-
-
 @router.post("/catalogue/{slug}/delete", response_class=HTMLResponse)
 async def delete_catalogue(request: Request, slug: str, _: str = Depends(_require_admin)):
     db = get_db()
     db.table("mcp_catalogue").delete().eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
-
-
-# ── MCP Categories ────────────────────────────────────────────────────────────
-
-@router.get("/categories", response_class=HTMLResponse)
-async def list_categories(request: Request, _: str = Depends(_require_admin)):
-    db = get_db()
-    categories = _get_categories(db)
-    return templates.TemplateResponse(
-        request=request, name="categories_list.html", context={"categories": categories}
-    )
-
-
-@router.get("/categories/new", response_class=HTMLResponse)
-async def new_category_form(request: Request, _: str = Depends(_require_admin)):
-    return templates.TemplateResponse(
-        request=request, name="categories_form.html", context={"error": None}
-    )
-
-
-@router.post("/categories", response_class=HTMLResponse)
-async def create_category(
-    request: Request,
-    name: str = Form(...),
-    sort_order: int = Form(0),
-    _: str = Depends(_require_admin),
-):
-    name = name.strip()
-    if not name:
-        return templates.TemplateResponse(
-            request=request, name="categories_form.html",
-            context={"error": "Name is required"}
-        )
-    db = get_db()
-    try:
-        db.table("mcp_categories").insert({"name": name, "sort_order": sort_order}).execute()
-    except Exception:
-        return templates.TemplateResponse(
-            request=request, name="categories_form.html",
-            context={"error": f"Category '{name}' already exists"}
-        )
-    return RedirectResponse(url="/admin/categories", status_code=303)
-
-
-@router.post("/categories/{name}/delete", response_class=HTMLResponse)
-async def delete_category(name: str, _: str = Depends(_require_admin)):
-    db = get_db()
-    db.table("mcp_categories").delete().eq("name", name).execute()
-    return RedirectResponse(url="/admin/categories", status_code=303)
 
 
 # ── Settings ─────────────────────────────────────────────────────────────────
@@ -1080,18 +1028,6 @@ async def user_add_credits(
     if users.get_user(user_id) is None:
         raise HTTPException(status_code=404, detail="User not found")
     users.add_credits(user_id, amount)
-    return RedirectResponse(url=f"/admin/users/{user_id}", status_code=303)
-
-
-@router.post("/users/{user_id}/set-tier", response_class=HTMLResponse)
-async def user_set_tier(
-    user_id: str,
-    tier: str = Form(...),
-    _: str = Depends(_require_admin),
-):
-    if tier not in ("standard", "super"):
-        raise HTTPException(status_code=400, detail="Invalid tier")
-    get_db().table("users").update({"tier": tier}).eq("user_id", user_id).execute()
     return RedirectResponse(url=f"/admin/users/{user_id}", status_code=303)
 
 
