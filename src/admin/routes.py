@@ -1148,6 +1148,20 @@ async def user_detail(
         .eq("user_id", user_id).gte("called_at", month_start).execute().count or 0
     )
 
+    # Effective allowed MCPs: intersection with published + tier-accessible
+    raw_slugs = user.allowed_mcp_resources or []
+    effective_allowed: list[str] = []
+    if raw_slugs:
+        query = (
+            db.table("mcp_catalogue")
+              .select("slug")
+              .in_("slug", raw_slugs)
+              .eq("is_published", True)
+        )
+        if getattr(user, "tier", "standard") != "super":
+            query = query.eq("tier", "standard")
+        effective_allowed = [r["slug"] for r in (query.execute().data or [])]
+
     return templates.TemplateResponse(
         request=request,
         name="user_detail.html",
@@ -1158,6 +1172,7 @@ async def user_detail(
             "new_client_id": client_id,
             "usage_today": usage_today,
             "usage_month": usage_month,
+            "effective_allowed_mcps": effective_allowed,
         },
     )
 
