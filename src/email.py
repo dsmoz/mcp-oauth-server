@@ -35,26 +35,19 @@ _APPROVAL_HTML = """\
          alt="DS-MOZ Connect" width="180" height="45"
          style="display:block">
   </div>
-  <h1>Your MCP Access is Ready</h1>
-  <p>Hi {contact_name}, your registration for <strong>{company_name}</strong> has been approved.</p>
-  <p>First, set up your portal password using the link below — then log in to find your gateway URL and connect your AI assistant.</p>
+  <h1>Welcome to DS-MOZ Connect</h1>
+  <p>Hi {contact_name}, your account for <strong>{company_name}</strong> is ready.</p>
+  <p>Set your portal password using the link below. Once signed in, the <strong>Setup</strong> page walks you through connecting any AI assistant.</p>
 
   <div class="section">
-    <h2>Step 1 — Set Up Your Portal</h2>
-    <p>Use the link below to create your password (valid for 24 hours, one-time use):</p>
+    <h2>Set your password</h2>
+    <p>One-time link, valid for 24 hours:</p>
     <p style="margin:0.75rem 0"><a href="{setup_url}" style="color:#FF5E00;font-weight:600;word-break:break-all">{setup_url}</a></p>
   </div>
 
   <div class="section">
-    <h2>Step 2 — Connect Claude Desktop</h2>
-    <p>Open Claude Desktop → <strong>Settings → Connectors → Add custom connector</strong>. Enter any name, paste the URL below as the Remote MCP server URL, leave OAuth fields empty, and click Add. Claude will open a browser to sign you in.</p>
-    <div class="code-block">{gateway_url}</div>
-  </div>
-
-  <div class="section">
-    <h2>Step 3 — Connect Claude.ai (Web)</h2>
-    <p>Go to <strong>Claude.ai → Settings → Connectors → Add custom connector</strong>, paste your gateway URL, and sign in when prompted.</p>
-    <div class="code-block">{gateway_url}</div>
+    <h2>What you'll find inside</h2>
+    <p>The portal gives you your gateway URL, step-by-step instructions for Claude Desktop and Claude.ai, and bearer tokens for any other agent (CLI tools, custom scripts, internal bots).</p>
   </div>
 
   <div class="footer">
