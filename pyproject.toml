@@ -20,6 +20,16 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.0.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.backends.legacy:build"

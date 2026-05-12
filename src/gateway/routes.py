@@ -26,6 +26,7 @@ from mcp.server import Server
 from mcp.server.streamable_http import StreamableHTTPServerTransport
 from mcp import types
 
+from src.cache import TTLCache
 from src.config import get_settings
 from src.db import get_db
 from src.gateway.upstream import (
@@ -72,6 +73,23 @@ def _ensure_agent_client(user_id: str) -> str:
         "claimed_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
     return client_id
+
+
+# ── Module-level caches ──────────────────────────────────────────────────────
+# Hot DB lookups (credit cost, published catalogue) get short TTLs; the
+# per-(slug,user_id) upstream tool descriptor list gets a 5-minute TTL so it
+# survives across gateway connections.
+
+_credit_cost_cache: TTLCache[str, float] = TTLCache(ttl=300, maxsize=256)
+_published_mcps_cache: TTLCache[str, list[dict]] = TTLCache(ttl=60, maxsize=4)
+_tool_cache: TTLCache[tuple[str, str], list[dict]] = TTLCache(ttl=300, maxsize=4096)
+
+
+def _invalidate_user_tool_cache(user_id: str) -> None:
+    """Drop every (slug, user_id) entry for this user. Called on add/remove_mcp."""
+    keys = [k for k in list(_tool_cache._store.keys()) if k[1] == user_id]
+    for k in keys:
+        _tool_cache.pop(k)
 
 
 GATEWAY_INSTRUCTIONS = """\
@@ -164,12 +182,20 @@ def _load_enabled_mcps(user_id: str) -> list[dict]:
 
 
 def _get_credit_cost(mcp_slug: str) -> float:
-    """Return credit_cost_per_call for an MCP slug (0 if not set)."""
+    """Return credit_cost_per_call for an MCP slug (0 if not set).
+
+    Cached for 300s; catalogue cost changes are rare.
+    """
+    cached = _credit_cost_cache.get(mcp_slug)
+    if cached is not None:
+        return cached
     try:
         row = get_db().table("mcp_catalogue").select("credit_cost_per_call").eq("slug", mcp_slug).limit(1).execute()
-        return float((row.data or [{}])[0].get("credit_cost_per_call") or 0)
+        cost = float((row.data or [{}])[0].get("credit_cost_per_call") or 0)
     except Exception:
         return 0.0
+    _credit_cost_cache.set(mcp_slug, cost)
+    return cost
 
 
 def _deduct_credits(user_id: str, amount: float) -> float:
@@ -205,16 +231,63 @@ def _log_tool_call(
         print(f"WARNING: usage log failed for user {user_id}: {exc}", file=sys.stderr)
 
 
+_user_tier_cache: TTLCache[str, str] = TTLCache(ttl=60, maxsize=1024)
+
+
 def _get_user_tier(user_id: str) -> str:
+    cached = _user_tier_cache.get(user_id)
+    if cached is not None:
+        return cached
     row = get_db().table("users").select("tier").eq("user_id", user_id).limit(1).execute()
-    return (row.data or [{}])[0].get("tier") or "standard"
+    tier = (row.data or [{}])[0].get("tier") or "standard"
+    _user_tier_cache.set(user_id, tier)
+    return tier
 
 
 def _get_all_published_mcps(user_tier: str = "standard") -> list[dict]:
+    """Cached snapshot of the published catalogue (60s TTL), keyed by tier.
+
+    Acceptable staleness for admin catalogue mutations — operators who toggle
+    publish flags or tier filters will see the change within a minute.
+    """
+    cache_key = "super" if user_tier == "super" else "standard"
+    cached = _published_mcps_cache.get(cache_key)
+    if cached is not None:
+        return cached
     query = get_db().table("mcp_catalogue").select("*").eq("is_published", True)
     if user_tier != "super":
         query = query.eq("tier", "standard")
-    return query.execute().data or []
+    rows = query.execute().data or []
+    _published_mcps_cache.set(cache_key, rows)
+    return rows
+
+
+def _log_tool_call_async(
+    user_id: str, client_id: str, mcp_slug: str, tool_name: str,
+    credits_used: float = 0.0, duration_ms: int | None = None,
+    response_bytes: int | None = None,
+) -> None:
+    """Fire-and-forget wrapper for _log_tool_call.
+
+    Insert happens in a background thread so the synchronous Supabase HTTP
+    write doesn't sit on the request path. Exceptions are swallowed and logged.
+    """
+    async def _runner() -> None:
+        try:
+            await asyncio.to_thread(
+                _log_tool_call, user_id, client_id, mcp_slug, tool_name,
+                credits_used, duration_ms, response_bytes,
+            )
+        except Exception as exc:
+            print(f"WARNING: background usage log failed for user {user_id}: {exc}", file=sys.stderr)
+    try:
+        asyncio.get_running_loop().create_task(_runner())
+    except RuntimeError:
+        # No running loop (shouldn't happen in handler context) — fall back to sync.
+        _log_tool_call(
+            user_id, client_id, mcp_slug, tool_name,
+            credits_used, duration_ms, response_bytes,
+        )
 
 
 def _update_user_mcps(user_id: str, slugs: list[str]) -> None:
@@ -271,7 +344,6 @@ _MUTATION_SCHEMA = {
 
 def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) -> Server:
     mcp_by_slug = {m["slug"]: m for m in enabled_mcps}
-    _tool_cache: dict[str, list[dict]] = {}
     # Promoted UI tools: promoted_name -> {slug, upstream_name, descriptor}
     _ui_tools: dict[str, dict] = {}
     # Resource origins: uri -> slug (populated lazily by list_resources_handler)
@@ -516,13 +588,15 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
         gateway tools named `{slug}__{tool_name}`. Preserves `_meta` so
         MCP Apps hosts (Claude.ai, ChatGPT) can render their UI resource."""
         promoted: list[types.Tool] = []
-        for mcp in enabled_mcps:
+        tool_lists = await asyncio.gather(
+            *[_get_tools(mcp["slug"]) for mcp in enabled_mcps],
+            return_exceptions=True,
+        )
+        for mcp, tools in zip(enabled_mcps, tool_lists):
             slug = mcp["slug"]
-            try:
-                tools = await _get_tools(slug)
-            except Exception as exc:
+            if isinstance(tools, BaseException):
                 print(
-                    f"GATEWAY: UI-tool discovery failed for {slug}, skipping: {exc}",
+                    f"GATEWAY: UI-tool discovery failed for {slug}, skipping: {tools}",
                     file=sys.stderr,
                 )
                 continue
@@ -546,20 +620,26 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
         return promoted
 
     async def _get_tools(slug: str) -> list[dict]:
-        """Return tools for slug, raising RuntimeError if discovery fails."""
-        if slug not in _tool_cache:
-            mcp = mcp_by_slug.get(slug)
-            if not mcp:
-                return []
-            # May raise RuntimeError — don't cache failures so next call retries
-            tools = await fetch_tool_list(
-                mcp["upstream_url"],
-                mcp.get("upstream_api_key", ""),
-                user_id=user_id,
-                client_id=client_id,
-            )
-            _tool_cache[slug] = tools
-        return _tool_cache[slug]
+        """Return tools for slug, raising RuntimeError if discovery fails.
+
+        Uses the module-level TTL cache keyed by (slug, user_id) so descriptors
+        survive across gateway connections. Failures aren't cached.
+        """
+        cache_key = (slug, user_id)
+        cached = _tool_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        mcp = mcp_by_slug.get(slug)
+        if not mcp:
+            return []
+        tools = await fetch_tool_list(
+            mcp["upstream_url"],
+            mcp.get("upstream_api_key", ""),
+            user_id=user_id,
+            client_id=client_id,
+        )
+        _tool_cache.set(cache_key, tools)
+        return tools
 
     @server.call_tool()
     async def call_tool_handler(name: str, arguments: dict):
@@ -639,7 +719,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                             blocks.append(types.TextContent(type="text", text=json.dumps(b)))
                 if not blocks:
                     blocks = [types.TextContent(type="text", text="")]
-                _log_tool_call(
+                _log_tool_call_async(
                     user_id, client_id, slug, upstream_name,
                     credits_used=credit_cost,
                     duration_ms=elapsed_ms,
@@ -707,6 +787,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                 _update_user_mcps(user_id, new_slugs)
                 mcp_by_slug[slug] = all_mcps[slug]
                 enabled_mcps.append(all_mcps[slug])
+                _invalidate_user_tool_cache(user_id)
                 structured = {"status": "added", "mcp": slug, "name": all_mcps[slug]["name"]}
 
         elif name == "remove_mcp":
@@ -718,17 +799,21 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                 _update_user_mcps(user_id, new_slugs)
                 del mcp_by_slug[slug]
                 enabled_mcps[:] = [m for m in enabled_mcps if m["slug"] != slug]
+                _invalidate_user_tool_cache(user_id)
                 structured = {"status": "removed", "mcp": slug}
 
         elif name == "search_tools":
             q = (arguments.get("query") or "").lower()
+            # Fan out discovery in parallel; one upstream failing must not block the rest.
+            tool_lists = await asyncio.gather(
+                *[_get_tools(mcp["slug"]) for mcp in enabled_mcps],
+                return_exceptions=True,
+            )
             results = []
-            for mcp in enabled_mcps:
-                try:
-                    tools = await _get_tools(mcp["slug"])
-                except Exception as exc:
+            for mcp, tools in zip(enabled_mcps, tool_lists):
+                if isinstance(tools, BaseException):
                     print(
-                        f"GATEWAY: tool discovery failed for {mcp['slug']}, skipping in search: {exc}",
+                        f"GATEWAY: tool discovery failed for {mcp['slug']}, skipping in search: {tools}",
                         file=sys.stderr,
                     )
                     continue
@@ -826,7 +911,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                 elapsed_ms = int((time.monotonic() - t0) * 1000)
                 text_for_log = upstream_text if upstream_text is not None else json.dumps(structured)
                 resp_bytes = len(text_for_log.encode("utf-8")) if text_for_log else 0
-                _log_tool_call(
+                _log_tool_call_async(
                     user_id, client_id, slug, tool_name,
                     credits_used=credit_cost,
                     duration_ms=elapsed_ms, response_bytes=resp_bytes,
