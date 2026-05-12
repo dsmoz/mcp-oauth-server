@@ -936,9 +936,11 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
 
 def _get_bearer(request: Request) -> str | None:
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return None
-    return auth[7:]
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    # Fallback: ?token= or ?access_token= query param (for clients that can't set headers).
+    qp = request.query_params
+    return qp.get("token") or qp.get("access_token") or None
 
 
 def _unauth_response(request: Request, detail: str = "Bearer token required") -> JSONResponse:
