@@ -54,16 +54,19 @@ def _discovery_doc() -> dict:
 
 
 _NO_STORE = {"Cache-Control": "no-store, no-cache, must-revalidate"}
+# Discovery docs are spec-stable across deployments — let clients and any
+# intermediary cache them hard.
+_DISCOVERY_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400"}
 
 
 @router.get("/.well-known/openid-configuration")
 async def openid_configuration():
-    return JSONResponse(_discovery_doc(), headers=_NO_STORE)
+    return JSONResponse(_discovery_doc(), headers=_DISCOVERY_CACHE_HEADERS)
 
 
 @router.get("/.well-known/oauth-authorization-server")
 async def oauth_authorization_server():
-    return JSONResponse(_discovery_doc(), headers=_NO_STORE)
+    return JSONResponse(_discovery_doc(), headers=_DISCOVERY_CACHE_HEADERS)
 
 
 @router.get("/.well-known/oauth-protected-resource")
@@ -87,7 +90,7 @@ async def oauth_protected_resource(request: Request, path: str = ""):
             "logo_uri": "https://media.dsmozconsultancy.com/logos/dsmoz-connect.png",
             "service_name": "DS-MOZ Connect",
         },
-        headers=_NO_STORE,
+        headers=_DISCOVERY_CACHE_HEADERS,
     )
 
 
