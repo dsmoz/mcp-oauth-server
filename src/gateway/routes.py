@@ -37,6 +37,41 @@ from src.gateway.upstream import (
     TOOL_CALL_TIMEOUT,
 )
 from src.oauth.provider import SupabaseOAuthProvider
+from src.users.agent_tokens import AgentTokenProvider
+
+
+def _ensure_agent_client(user_id: str) -> str:
+    """Find-or-create a default oauth_clients row for agent-token traffic.
+    Returns client_id used for usage logging only — agent tokens authenticate
+    independently and do not need a client_secret.
+    """
+    from datetime import datetime, timezone
+    from src.crypto import generate_client_id, generate_token, hash_secret
+    db = get_db()
+    existing = (
+        db.table("oauth_clients")
+        .select("client_id")
+        .eq("user_id", user_id)
+        .eq("client_name", "dsmoz agent")
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        return existing.data[0]["client_id"]
+    client_id = generate_client_id()
+    db.table("oauth_clients").insert({
+        "client_id": client_id,
+        "client_secret_hash": hash_secret(generate_token(32)),
+        "client_name": "dsmoz agent",
+        "redirect_uris": [],
+        "grant_types": ["authorization_code"],
+        "scope": "mcp",
+        "created_by": "agent-token",
+        "is_active": True,
+        "user_id": user_id,
+        "claimed_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
+    return client_id
 
 
 GATEWAY_INSTRUCTIONS = """\
@@ -957,31 +992,48 @@ async def _gateway_asgi(scope, receive, send):
         await response(scope, receive, send)
         return
 
-    provider = SupabaseOAuthProvider()
-    at = provider.load_access_token(token)
-    if at is None or at.is_revoked:
-        print(f"GATEWAY: invalid/revoked token on {request.method} {path}", file=sys.stderr)
-        response = _unauth_response(request)
-        await response(scope, receive, send)
-        return
+    # Agent-token path — long-lived bearer keys minted from /portal/setup.
+    if token.startswith("dsmoz_"):
+        agent_row = AgentTokenProvider().lookup(token)
+        if not agent_row:
+            print(f"GATEWAY: invalid/revoked agent token on {request.method} {path}", file=sys.stderr)
+            response = _unauth_response(request)
+            await response(scope, receive, send)
+            return
+        token_user_id = agent_row["user_id"]
+        try:
+            AgentTokenProvider().touch_last_used(agent_row["id"])
+        except Exception:
+            pass
+        client_id = _ensure_agent_client(token_user_id)
+        at = None  # no OAuth access-token context
+    else:
+        provider = SupabaseOAuthProvider()
+        at = provider.load_access_token(token)
+        if at is None or at.is_revoked:
+            print(f"GATEWAY: invalid/revoked token on {request.method} {path}", file=sys.stderr)
+            response = _unauth_response(request)
+            await response(scope, receive, send)
+            return
 
-    from src.crypto import now_unix
-    if at.expires_at and at.expires_at < now_unix():
-        print(f"GATEWAY: expired token for client {at.client_id} on {request.method} {path}", file=sys.stderr)
-        response = _unauth_response(request)
-        await response(scope, receive, send)
-        return
+        from src.crypto import now_unix
+        if at.expires_at and at.expires_at < now_unix():
+            print(f"GATEWAY: expired token for client {at.client_id} on {request.method} {path}", file=sys.stderr)
+            response = _unauth_response(request)
+            await response(scope, receive, send)
+            return
 
-    token_user_id = _resolve_user_id_for_token(at)
-    if not token_user_id:
-        print(
-            f"GATEWAY: token for client {at.client_id} has no user binding — "
-            f"unclaimed client cannot access gateway",
-            file=sys.stderr,
-        )
-        response = _unauth_response(request, "Token is not bound to a user")
-        await response(scope, receive, send)
-        return
+        token_user_id = _resolve_user_id_for_token(at)
+        if not token_user_id:
+            print(
+                f"GATEWAY: token for client {at.client_id} has no user binding — "
+                f"unclaimed client cannot access gateway",
+                file=sys.stderr,
+            )
+            response = _unauth_response(request, "Token is not bound to a user")
+            await response(scope, receive, send)
+            return
+        client_id = at.client_id
 
     if url_user_id == "me":
         # /gateway/me — resolve user from token rather than URL
@@ -996,7 +1048,6 @@ async def _gateway_asgi(scope, receive, send):
         await response(scope, receive, send)
         return
 
-    client_id = at.client_id
     print(
         f"GATEWAY: auth OK for user={token_user_id} client={client_id}, "
         f"{request.method} {path}",

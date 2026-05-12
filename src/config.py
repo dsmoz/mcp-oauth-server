@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     PORT: int = 8000
     TELEGRAM_BOT_TOKEN: str = ""
     TELEGRAM_OWNER_CHAT_ID: str = ""
-    BREVO_API_KEY: str = ""
-    BREVO_SENDER_EMAIL: str = ""
-    BREVO_SENDER_NAME: str = "DS-MOZ Connect"
+    RESEND_API_KEY: str = ""
+    RESEND_SENDER_EMAIL: str = "noreply@send.dsmozconsultancy.com"
+    RESEND_SENDER_NAME: str = "DS-MOZ Connect"
     SECRET_KEY: str = "change-me-portal-secret"
     RAILWAY_API_TOKEN: str = ""
     RAILWAY_PROJECT_ID: str = ""

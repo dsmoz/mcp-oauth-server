@@ -254,6 +254,66 @@
     <p style="font-size:12px;color:var(--fg-3);line-height:1.6;margin-bottom:12px">Your AI client signs in once. The gateway routes calls to the upstream MCP servers your tools use, and meters credits centrally.</p>
     <a href="/portal/mcps" style="font-size:12px;color:var(--accent);font-weight:600;text-decoration:none">Read the technical brief &rarr;</a>
   </div>
+
+  <div class="card" style="margin-top:20px">
+    <h2 style="font-family:'Raleway',sans-serif;font-size:20px;font-weight:700;color:var(--fg-1);margin-bottom:6px">Other agents — bearer token</h2>
+    <p style="font-size:13px;color:var(--fg-3);line-height:1.6;margin-bottom:14px">
+      For agents that don't speak OAuth (custom scripts, CLI tools, internal bots), mint a long-lived bearer token.
+      Send it as <code>Authorization: Bearer &lt;token&gt;</code> to the gateway URL above. Tokens are full-account scoped — treat like passwords.
+    </p>
+
+    {% if new_agent_token %}
+    <div style="padding:14px 16px;border:1px solid var(--accent);border-radius:var(--radius);background:var(--accent-soft);margin-bottom:16px">
+      <div class="eyebrow" style="margin-bottom:8px;color:var(--accent)">New token — copy now, shown only once</div>
+      <code style="display:block;font-family:'Courier New',monospace;font-size:12px;word-break:break-all;color:var(--fg-1);background:var(--bg-card);padding:10px 12px;border-radius:var(--radius)">{{ new_agent_token }}</code>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/portal/setup/agent-tokens/create" style="display:flex;gap:8px;margin-bottom:16px">
+      <input type="text" name="label" required maxlength="120" placeholder="Label (e.g. CLI on laptop)"
+             style="flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-card);color:var(--fg-1);font-size:13px">
+      <button type="submit" style="padding:8px 16px;border:0;border-radius:var(--radius);background:var(--accent);color:#fff;font-weight:600;font-size:13px;cursor:pointer">Generate token</button>
+    </form>
+
+    {% if agent_tokens %}
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="text-align:left;color:var(--fg-3);border-bottom:1px solid var(--line)">
+          <th style="padding:8px 6px">Label</th>
+          <th style="padding:8px 6px">Prefix</th>
+          <th style="padding:8px 6px">Created</th>
+          <th style="padding:8px 6px">Last used</th>
+          <th style="padding:8px 6px">Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in agent_tokens %}
+        <tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:8px 6px;color:var(--fg-1)">{{ t.label }}</td>
+          <td style="padding:8px 6px;font-family:'Courier New',monospace;color:var(--fg-2)">{{ t.prefix }}…</td>
+          <td style="padding:8px 6px;color:var(--fg-3)">{{ t.created_at[:10] if t.created_at else "" }}</td>
+          <td style="padding:8px 6px;color:var(--fg-3)">{{ t.last_used_at[:10] if t.last_used_at else "—" }}</td>
+          <td style="padding:8px 6px">
+            {% if t.revoked_at %}<span style="color:var(--fg-3)">revoked</span>
+            {% else %}<span style="color:var(--accent);font-weight:600">active</span>{% endif %}
+          </td>
+          <td style="padding:8px 6px;text-align:right">
+            {% if not t.revoked_at %}
+            <form method="post" action="/portal/setup/agent-tokens/revoke" style="display:inline" onsubmit="return confirm('Revoke this token? Agents using it will lose access immediately.')">
+              <input type="hidden" name="token_id" value="{{ t.id }}">
+              <button type="submit" style="background:none;border:0;color:var(--fg-3);cursor:pointer;font-size:12px;text-decoration:underline">Revoke</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="font-size:12px;color:var(--fg-3)">No agent tokens yet.</p>
+    {% endif %}
+  </div>
 </div>
 {% endif %}
 

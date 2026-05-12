@@ -375,15 +375,24 @@ async def register_submit(
     allowed_mcps = [r["slug"] for r in (published.data or [])]
 
     # Create user row (the tenant). Inactive until password is set via email link.
-    try:
-        user = users.create_user(
-            email=contact_email,
-            display_name=contact_name,
-            credit_balance=0.0,
-            allowed_mcp_resources=allowed_mcps,
-            is_active=False,
-        )
-    except ValueError:
+    existing = users.get_user_by_email(contact_email)
+    if existing is not None and not existing.is_active:
+        # Retry path: unconfirmed user — mint fresh setup token + resend email.
+        from src.portal.routes import create_setup_token
+        setup_token = create_setup_token(existing.user_id)
+        try:
+            await em.send_approval_email(
+                contact_name=contact_name,
+                contact_email=contact_email,
+                company_name=company_name,
+                user_id=existing.user_id,
+                issuer_url=settings.OAUTH_ISSUER_URL,
+                setup_token=setup_token,
+            )
+        except Exception as exc:
+            print(f"WARNING: retry credentials email failed: {exc}", file=sys.stderr)
+        return RedirectResponse(url="/register/success", status_code=303)
+    if existing is not None:
         new_q, new_signed = _make_captcha()
         return templates.TemplateResponse(
             request=request,
@@ -400,6 +409,16 @@ async def register_submit(
             },
             status_code=409,
         )
+    try:
+        user = users.create_user(
+            email=contact_email,
+            display_name=contact_name,
+            credit_balance=0.0,
+            allowed_mcp_resources=allowed_mcps,
+            is_active=False,
+        )
+    except ValueError:
+        return RedirectResponse(url="/register/success", status_code=303)
 
     # Create an OAuth client bound to the user (claimed on creation).
     client_id = generate_client_id()
@@ -444,7 +463,7 @@ async def register_submit(
             contact_name=contact_name,
             contact_email=contact_email,
             company_name=company_name,
-            client_id=client_id,
+            user_id=user.user_id,
             issuer_url=settings.OAUTH_ISSUER_URL,
             setup_token=setup_token,
         )
