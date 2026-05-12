@@ -13,6 +13,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from src.config import get_settings
 from src.crypto import generate_client_id, generate_token, hash_secret, hash_token, verify_secret
 from src.db import get_db
+from src.users.agent_tokens import AgentTokenProvider
 from src.users.provider import SupabaseUserProvider
 
 router = APIRouter(prefix="/portal")
@@ -698,7 +699,9 @@ async def portal_setup(request: Request, user_id: str = Depends(_require_portal_
     gateway_me_url = f"{base_url}/gateway/me"
     new_secret = request.query_params.get("secret")
     rotated_client_id = request.query_params.get("client_id")
+    new_agent_token = request.query_params.get("agent_token")
     devices = _list_devices(user_id)
+    agent_tokens = AgentTokenProvider().list_for_user(user_id)
 
     client_ctx = {
         "client_id": user_id,
@@ -711,6 +714,8 @@ async def portal_setup(request: Request, user_id: str = Depends(_require_portal_
             "client": client_ctx,
             "user": user,
             "devices": devices,
+            "agent_tokens": agent_tokens,
+            "new_agent_token": new_agent_token,
             "active_nav": "setup",
             "gateway_url": gateway_url,
             "streamable_url": streamable_url,
@@ -720,6 +725,24 @@ async def portal_setup(request: Request, user_id: str = Depends(_require_portal_
             "rotated_client_id": rotated_client_id,
         }
     )
+
+
+@router.post("/setup/agent-tokens/create")
+async def portal_agent_token_create(
+    user_id: str = Depends(_require_portal_user),
+    label: str = Form(...),
+):
+    raw, _ = AgentTokenProvider().create(user_id=user_id, label=label)
+    return RedirectResponse(url=f"/portal/setup?agent_token={raw}", status_code=303)
+
+
+@router.post("/setup/agent-tokens/revoke")
+async def portal_agent_token_revoke(
+    user_id: str = Depends(_require_portal_user),
+    token_id: str = Form(...),
+):
+    AgentTokenProvider().revoke(user_id=user_id, token_id=token_id)
+    return RedirectResponse(url="/portal/setup", status_code=303)
 
 
 @router.post("/setup/rotate-secret")

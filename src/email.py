@@ -1,5 +1,5 @@
 """
-Transactional email via Brevo REST API.
+Transactional email via Resend REST API.
 Uses httpx — no extra dependency.
 """
 from __future__ import annotations
@@ -8,7 +8,7 @@ import httpx
 
 from src.config import get_settings
 
-_BREVO_SEND_URL = "https://api.brevo.com/v3/smtp/email"
+_RESEND_SEND_URL = "https://api.resend.com/emails"
 
 _APPROVAL_HTML = """\
 <!DOCTYPE html>
@@ -76,9 +76,9 @@ async def send_approval_email(
 ) -> None:
     """Send setup instructions to the newly approved user."""
     settings = get_settings()
-    if not settings.BREVO_API_KEY or not settings.BREVO_SENDER_EMAIL:
+    if not settings.RESEND_API_KEY or not settings.RESEND_SENDER_EMAIL:
         import sys
-        print("WARNING: Brevo not configured — skipping approval email", file=sys.stderr)
+        print("WARNING: Resend not configured — skipping approval email", file=sys.stderr)
         return
 
     gateway_url = f"{issuer_url}/gateway/me"
@@ -92,21 +92,18 @@ async def send_approval_email(
     )
 
     payload = {
-        "sender": {
-            "name": settings.BREVO_SENDER_NAME,
-            "email": settings.BREVO_SENDER_EMAIL,
-        },
-        "to": [{"name": contact_name, "email": contact_email}],
+        "from": f"{settings.RESEND_SENDER_NAME} <{settings.RESEND_SENDER_EMAIL}>",
+        "to": [contact_email],
         "subject": f"Your DS-MOZ Connect MCP credentials — {company_name}",
-        "htmlContent": html,
+        "html": html,
     }
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            _BREVO_SEND_URL,
+            _RESEND_SEND_URL,
             json=payload,
             headers={
-                "api-key": settings.BREVO_API_KEY,
+                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
                 "Content-Type": "application/json",
             },
             timeout=15.0,
@@ -114,7 +111,7 @@ async def send_approval_email(
 
     if not resp.is_success:
         import sys
-        print(f"WARNING: Brevo email failed ({resp.status_code}): {resp.text}", file=sys.stderr)
+        print(f"WARNING: Resend email failed ({resp.status_code}): {resp.text}", file=sys.stderr)
 
 
 _RESET_HTML = """\
@@ -161,29 +158,26 @@ async def send_password_reset_email(
 ) -> None:
     """Send password reset link to the portal user."""
     settings = get_settings()
-    if not settings.BREVO_API_KEY or not settings.BREVO_SENDER_EMAIL:
+    if not settings.RESEND_API_KEY or not settings.RESEND_SENDER_EMAIL:
         import sys
-        print("WARNING: Brevo not configured — skipping password reset email", file=sys.stderr)
+        print("WARNING: Resend not configured — skipping password reset email", file=sys.stderr)
         return
 
     html = _RESET_HTML.format(contact_name=contact_name, reset_url=reset_url)
 
     payload = {
-        "sender": {
-            "name": settings.BREVO_SENDER_NAME,
-            "email": settings.BREVO_SENDER_EMAIL,
-        },
-        "to": [{"name": contact_name, "email": contact_email}],
+        "from": f"{settings.RESEND_SENDER_NAME} <{settings.RESEND_SENDER_EMAIL}>",
+        "to": [contact_email],
         "subject": "Reset your DS-MOZ Connect portal password",
-        "htmlContent": html,
+        "html": html,
     }
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            _BREVO_SEND_URL,
+            _RESEND_SEND_URL,
             json=payload,
             headers={
-                "api-key": settings.BREVO_API_KEY,
+                "Authorization": f"Bearer {settings.RESEND_API_KEY}",
                 "Content-Type": "application/json",
             },
             timeout=15.0,
@@ -191,4 +185,4 @@ async def send_password_reset_email(
 
     if not resp.is_success:
         import sys
-        print(f"WARNING: Brevo reset email failed ({resp.status_code}): {resp.text}", file=sys.stderr)
+        print(f"WARNING: Resend reset email failed ({resp.status_code}): {resp.text}", file=sys.stderr)
