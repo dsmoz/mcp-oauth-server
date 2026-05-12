@@ -89,6 +89,29 @@ class SupabaseUserProvider:
             "user_id", user_id
         ).execute()
 
+    def prune_allowed_mcps(self, user_id: str) -> list[str]:
+        """Drop slugs that are unpublished or above the user's tier. Writes back
+        only if the list changed. Returns the effective list."""
+        user = self.get_user(user_id)
+        if user is None:
+            return []
+        raw = user.allowed_mcp_resources or []
+        if not raw:
+            return []
+        query = (
+            self.db.table("mcp_catalogue")
+            .select("slug")
+            .in_("slug", raw)
+            .eq("is_published", True)
+        )
+        if getattr(user, "tier", "standard") != "super":
+            query = query.eq("tier", "standard")
+        valid = {r["slug"] for r in (query.execute().data or [])}
+        kept = [s for s in raw if s in valid]
+        if kept != raw:
+            self.set_allowed_mcps(user_id, kept)
+        return kept
+
     def set_credit_balance(self, user_id: str, balance: float) -> None:
         self.db.table("users").update({"credit_balance": balance}).eq(
             "user_id", user_id
