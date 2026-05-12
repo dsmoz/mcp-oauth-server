@@ -322,8 +322,6 @@ async def register_submit(
     company_name: str = Form(...),
     contact_name: str = Form(...),
     contact_email: str = Form(...),
-    use_case: str = Form(...),
-    redirect_uris_raw: str = Form(""),
     website: str = Form(""),
     form_loaded_at: str = Form(""),
     captcha_answer: str = Form(""),
@@ -357,8 +355,6 @@ async def register_submit(
                 "company_name": company_name,
                 "contact_name": contact_name,
                 "contact_email": contact_email,
-                "use_case": use_case,
-                "redirect_uris_raw": redirect_uris_raw,
             },
             status_code=422,
         )
@@ -366,9 +362,6 @@ async def register_submit(
     settings = get_settings()
     db = get_db()
     users = SupabaseUserProvider()
-
-    # Parse redirect URIs
-    redirect_uris = [u.strip() for u in redirect_uris_raw.splitlines() if u.strip()]
 
     # Pre-populate toolbox with all published MCPs
     published = db.table("mcp_catalogue").select("slug").eq("is_published", True).execute()
@@ -404,8 +397,6 @@ async def register_submit(
                 "company_name": company_name,
                 "contact_name": contact_name,
                 "contact_email": contact_email,
-                "use_case": use_case,
-                "redirect_uris_raw": redirect_uris_raw,
             },
             status_code=409,
         )
@@ -431,7 +422,7 @@ async def register_submit(
         "client_id": client_id,
         "client_secret_hash": secret_hash,
         "client_name": company_name,
-        "redirect_uris": redirect_uris,
+        "redirect_uris": [],
         "grant_types": ["authorization_code"],
         "scope": "mcp",
         "created_by": contact_email,
@@ -445,8 +436,8 @@ async def register_submit(
         "company_name": company_name,
         "contact_name": contact_name,
         "contact_email": contact_email,
-        "use_case": use_case,
-        "redirect_uris_raw": redirect_uris_raw.strip(),
+        "use_case": "",
+        "redirect_uris_raw": "",
         "status": "approved",
         "reviewed_at": __import__("datetime").datetime.utcnow().isoformat(),
         "reviewed_by": "self-service",
