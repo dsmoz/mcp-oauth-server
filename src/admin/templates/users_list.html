@@ -15,9 +15,19 @@
 </div>
 
 {% if users %}
+<form id="bulk-users-form" method="post" action="/admin/users/bulk-delete" style="margin:0"
+      onsubmit="return confirmBulkDelete(this);"></form>
+<div id="bulk-users-bar" style="display:none;position:sticky;top:0;z-index:10;background:var(--bg-card);border:1px solid var(--danger-border);border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem;align-items:center;gap:0.6rem;flex-wrap:wrap">
+  <span id="bulk-users-count" style="font-weight:600;color:var(--text-h);font-size:0.85rem"></span>
+  <button form="bulk-users-form" type="submit" class="btn btn-danger" style="font-size:0.8rem">
+    <i class="ph-light ph-trash"></i> Delete selected
+  </button>
+  <span style="color:var(--text-muted);font-size:0.75rem">Cascade removes devices + tokens. Irreversible.</span>
+</div>
 <table>
   <thead>
     <tr>
+      <th style="width:32px"><input type="checkbox" id="select-all-users" aria-label="Select all users"></th>
       <th>Name</th>
       <th>Email</th>
       <th>User ID</th>
@@ -31,6 +41,8 @@
   <tbody>
     {% for u in users %}
     <tr>
+      <td><input type="checkbox" form="bulk-users-form" class="user-check" name="user_ids" value="{{ u.user_id }}"
+                 data-label="{{ u.display_name or u.email }}" aria-label="Select {{ u.email }}"></td>
       <td>{{ u.display_name or "—" }}</td>
       <td style="font-size: 0.85rem;">{{ u.email }}</td>
       <td style="font-family: monospace; font-size: 0.8rem;">{{ u.user_id }}</td>
@@ -61,6 +73,34 @@
     {% endfor %}
   </tbody>
 </table>
+<script>
+(function() {
+  const bar = document.getElementById('bulk-users-bar');
+  const count = document.getElementById('bulk-users-count');
+  const all = document.getElementById('select-all-users');
+  const rows = Array.from(document.querySelectorAll('.user-check'));
+  function refresh() {
+    const checked = rows.filter(c => c.checked);
+    bar.style.display = checked.length ? 'flex' : 'none';
+    count.textContent = checked.length + ' selected';
+    all.checked = checked.length === rows.length && rows.length > 0;
+    all.indeterminate = checked.length > 0 && checked.length < rows.length;
+  }
+  all.addEventListener('change', () => { rows.forEach(c => c.checked = all.checked); refresh(); });
+  rows.forEach(c => c.addEventListener('change', refresh));
+  window.confirmBulkDelete = function(form) {
+    const picks = rows.filter(c => c.checked);
+    if (!picks.length) return false;
+    const names = picks.map(c => c.dataset.label).slice(0, 5).join(', ');
+    const extra = picks.length > 5 ? ` and ${picks.length - 5} more` : '';
+    return confirm(
+      `Delete ${picks.length} user${picks.length === 1 ? '' : 's'}?\n\n` +
+      `${names}${extra}\n\n` +
+      `This permanently removes the users, their OAuth devices, and all tokens. Cannot be undone.`
+    );
+  };
+})();
+</script>
 {% else %}
 <div class="card" style="text-align: center; color: var(--text-muted); padding: 3rem;">
   <p>No users yet. Approve a <a href="/admin/registrations" style="color: var(--accent-vivid);">pending registration</a> to create one.</p>

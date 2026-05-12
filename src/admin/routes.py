@@ -1236,6 +1236,23 @@ async def delete_user(
     return RedirectResponse(url="/admin/users/", status_code=303)
 
 
+@router.post("/users/bulk-delete", response_class=HTMLResponse)
+async def bulk_delete_users(
+    request: Request,
+    _: str = Depends(_require_admin),
+):
+    from src.users import SupabaseUserProvider
+    form = await request.form()
+    user_ids = [u for u in form.getlist("user_ids") if u]
+    if not user_ids:
+        return RedirectResponse(url="/admin/users/", status_code=303)
+    users = SupabaseUserProvider()
+    for uid in user_ids:
+        if users.get_user(uid) is not None:
+            users.delete_user(uid)
+    return RedirectResponse(url="/admin/users/", status_code=303)
+
+
 @router.post("/unclaimed/cleanup", response_class=HTMLResponse)
 async def cleanup_unclaimed(_: str = Depends(_require_admin)):
     """Delete DCR clients older than 24h that nobody ever claimed."""
