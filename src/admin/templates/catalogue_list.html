@@ -25,9 +25,19 @@
 {% endif %}
 
 {% if entries %}
+<form id="bulk-form" method="post" action="/admin/catalogue/bulk" style="margin:0"></form>
+<div id="bulk-bar" style="display:none;position:sticky;top:0;z-index:10;background:var(--bg-card);border:1px solid var(--secret-border);border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem;align-items:center;gap:0.6rem;flex-wrap:wrap">
+  <span id="bulk-count" style="font-weight:600;color:var(--text-h);font-size:0.85rem"></span>
+  <span style="color:var(--text-muted);font-size:0.8rem">Bulk:</span>
+  <button form="bulk-form" type="submit" name="action" value="publish" class="btn btn-primary" style="font-size:0.8rem"><i class="ph-light ph-eye"></i> Publish</button>
+  <button form="bulk-form" type="submit" name="action" value="unpublish" class="btn btn-secondary" style="font-size:0.8rem"><i class="ph-light ph-eye-slash"></i> Unpublish</button>
+  <button form="bulk-form" type="submit" name="action" value="tier-standard" class="btn btn-secondary" style="font-size:0.8rem">Set Standard</button>
+  <button form="bulk-form" type="submit" name="action" value="tier-super" class="btn btn-secondary" style="font-size:0.8rem">Set Super</button>
+</div>
 <table>
   <thead>
     <tr>
+      <th style="width:32px"><input type="checkbox" id="select-all" aria-label="Select all"></th>
       <th>Service</th>
       <th>Domain</th>
       <th>Tier</th>
@@ -38,6 +48,7 @@
   <tbody>
     {% for e in entries %}
     <tr>
+      <td><input type="checkbox" form="bulk-form" class="row-check" name="slugs" value="{{ e.slug }}" aria-label="Select {{ e.name }}"></td>
       <td>
         <div style="font-weight:700;color:var(--text-h)">{{ e.name }}</div>
         {% if e.description %}
@@ -98,6 +109,23 @@
     {% endfor %}
   </tbody>
 </table>
+<script>
+(function() {
+  const bar = document.getElementById('bulk-bar');
+  const count = document.getElementById('bulk-count');
+  const all = document.getElementById('select-all');
+  const rows = Array.from(document.querySelectorAll('.row-check'));
+  function refresh() {
+    const checked = rows.filter(c => c.checked);
+    bar.style.display = checked.length ? 'flex' : 'none';
+    count.textContent = checked.length + ' selected';
+    all.checked = checked.length === rows.length && rows.length > 0;
+    all.indeterminate = checked.length > 0 && checked.length < rows.length;
+  }
+  all.addEventListener('change', () => { rows.forEach(c => c.checked = all.checked); refresh(); });
+  rows.forEach(c => c.addEventListener('change', refresh));
+})();
+</script>
 {% else %}
 <div class="card" style="text-align:center;color:var(--text-muted);padding:3rem">
   {% if railway_configured %}

@@ -760,6 +760,17 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
             import logging
             logging.getLogger(__name__).warning("auto-publish failed for %s: %s", slug, exc)
 
+    from urllib.parse import urlparse
+
+    def _domain_from_url(url: str | None) -> str | None:
+        if not url:
+            return None
+        try:
+            host = urlparse(url).hostname
+            return host or None
+        except Exception:
+            return None
+
     entries = []
     for svc in railway_services:
         slug = svc["slug"]
@@ -772,6 +783,7 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
             "upstream_url": svc["upstream_url"] or (db_row["upstream_url"] if db_row else ""),
             "upstream_api_key": db_row["upstream_api_key"] if db_row else "",
             "is_published": db_row["is_published"] if db_row else False,
+            "tier": (db_row.get("tier") if db_row else None) or "standard",
             "from_railway": True,
             "railway_id": svc["id"],
             "domain": svc["domain"],
@@ -780,7 +792,13 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
     # Include DB-only entries (manually added, not on Railway)
     for slug, row in db_rows.items():
         if slug not in railway_slugs:
-            entries.append({**row, "from_railway": False, "railway_id": None, "domain": None})
+            entries.append({
+                **row,
+                "tier": row.get("tier") or "standard",
+                "from_railway": False,
+                "railway_id": None,
+                "domain": _domain_from_url(row.get("upstream_url")),
+            })
 
     entries.sort(key=lambda e: e["name"].lower())
 
@@ -793,8 +811,10 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
 
 @router.get("/catalogue/new", response_class=HTMLResponse)
 async def new_catalogue_form(request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
     return templates.TemplateResponse(
-        request=request, name="catalogue_form.html", context={"entry": None, "error": None}
+        request=request, name="catalogue_form.html",
+        context={"entry": None, "error": None, "categories": _list_categories(db)},
     )
 
 
@@ -805,6 +825,7 @@ async def create_catalogue(
     name: str = Form(...),
     description: str = Form(...),
     category: str = Form(...),
+    tier: str = Form("standard"),
     upstream_url: str = Form(...),
     upstream_api_key: str = Form(""),
     _: str = Depends(_require_admin),
@@ -815,9 +836,10 @@ async def create_catalogue(
             request=request, name="catalogue_form.html",
             context={"entry": None, "error": f"Slug '{slug}' already exists"}
         )
+    tier_value = tier if tier in ("standard", "super") else "standard"
     db.table("mcp_catalogue").insert({
         "slug": slug, "name": name, "description": description,
-        "category": category, "upstream_url": upstream_url,
+        "category": category, "tier": tier_value, "upstream_url": upstream_url,
         "upstream_api_key": upstream_api_key, "is_published": False,
     }).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
@@ -830,7 +852,8 @@ async def edit_catalogue_form(request: Request, slug: str, _: str = Depends(_req
     if entry is None:
         raise HTTPException(status_code=404, detail="Not found")
     return templates.TemplateResponse(
-        request=request, name="catalogue_form.html", context={"entry": entry, "error": None}
+        request=request, name="catalogue_form.html",
+        context={"entry": entry, "error": None, "categories": _list_categories(db)},
     )
 
 
@@ -841,6 +864,7 @@ async def save_catalogue(
     name: str = Form(...),
     description: str = Form(...),
     category: str = Form(...),
+    tier: str = Form("standard"),
     upstream_url: str = Form(...),
     upstream_api_key: str = Form(""),
     _: str = Depends(_require_admin),
@@ -850,6 +874,7 @@ async def save_catalogue(
         raise HTTPException(status_code=404, detail="Not found")
     update: dict = {
         "name": name, "description": description, "category": category,
+        "tier": tier if tier in ("standard", "super") else "standard",
         "upstream_url": upstream_url,
     }
     if upstream_api_key:
@@ -923,6 +948,126 @@ async def delete_catalogue(request: Request, slug: str, _: str = Depends(_requir
     db = get_db()
     db.table("mcp_catalogue").delete().eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+_BULK_ACTIONS = {
+    "tier-standard": ("tier", "standard"),
+    "tier-super": ("tier", "super"),
+    "publish": ("is_published", True),
+    "unpublish": ("is_published", False),
+}
+
+
+async def _upsert_railway_slug(db, slug: str) -> dict | None:
+    """Create a minimal catalogue row for a Railway-only slug. Returns the row or None."""
+    settings = get_settings()
+    if not settings.RAILWAY_API_TOKEN:
+        return None
+    from src.admin.railway import fetch_railway_services
+    services = await fetch_railway_services(
+        settings.RAILWAY_API_TOKEN,
+        project_id=settings.RAILWAY_PROJECT_ID,
+        project_ids=settings.RAILWAY_PROJECT_IDS,
+    )
+    svc = next((s for s in services if s["slug"] == slug), None)
+    if svc is None:
+        return None
+    upstream_url = svc["upstream_url"] or ""
+    description = await _auto_describe_mcp(upstream_url, "", svc["name"]) or ""
+    inserted = db.table("mcp_catalogue").insert({
+        "slug": slug,
+        "name": svc["name"],
+        "description": description,
+        "category": "MCP Server",
+        "upstream_url": upstream_url,
+        "upstream_api_key": "",
+        "is_published": False,
+    }).execute()
+    return inserted.data[0] if inserted.data else None
+
+
+@router.post("/catalogue/bulk", response_class=HTMLResponse)
+async def bulk_catalogue(
+    request: Request,
+    _: str = Depends(_require_admin),
+):
+    form = await request.form()
+    action = form.get("action", "")
+    slugs = [s for s in form.getlist("slugs") if s]
+    if action not in _BULK_ACTIONS or not slugs:
+        return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+    column, value = _BULK_ACTIONS[action]
+    db = get_db()
+    for slug in slugs:
+        row = _get_catalogue_row(db, slug)
+        if row is None:
+            row = await _upsert_railway_slug(db, slug)
+            if row is None:
+                continue
+        db.table("mcp_catalogue").update({column: value}).eq("slug", slug).execute()
+    return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+# ── Categories ───────────────────────────────────────────────────────────────
+
+
+def _list_categories(db) -> list[dict]:
+    result = (
+        db.table("mcp_categories")
+        .select("*")
+        .order("sort_order")
+        .order("name")
+        .execute()
+    )
+    return result.data or []
+
+
+@router.get("/categories", response_class=HTMLResponse)
+async def list_categories(request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
+    return templates.TemplateResponse(
+        request=request, name="categories_list.html",
+        context={"categories": _list_categories(db)},
+    )
+
+
+@router.get("/categories/new", response_class=HTMLResponse)
+async def new_category_form(request: Request, _: str = Depends(_require_admin)):
+    return templates.TemplateResponse(
+        request=request, name="categories_form.html", context={"error": None}
+    )
+
+
+@router.post("/categories", response_class=HTMLResponse)
+async def create_category(
+    request: Request,
+    name: str = Form(...),
+    sort_order: int = Form(0),
+    _: str = Depends(_require_admin),
+):
+    name = name.strip()
+    if not name:
+        return templates.TemplateResponse(
+            request=request, name="categories_form.html",
+            context={"error": "Name required"},
+        )
+    db = get_db()
+    existing = db.table("mcp_categories").select("name").eq("name", name).limit(1).execute()
+    if existing.data:
+        return templates.TemplateResponse(
+            request=request, name="categories_form.html",
+            context={"error": f"Category '{name}' already exists"},
+        )
+    db.table("mcp_categories").insert({"name": name, "sort_order": sort_order}).execute()
+    return RedirectResponse(url="/admin/categories", status_code=303)
+
+
+@router.post("/categories/{name}/delete", response_class=HTMLResponse)
+async def delete_category(request: Request, name: str, _: str = Depends(_require_admin)):
+    db = get_db()
+    db.table("mcp_categories").delete().eq("name", name).execute()
+    return RedirectResponse(url="/admin/categories", status_code=303)
 
 
 # ── Settings ─────────────────────────────────────────────────────────────────
