@@ -1148,19 +1148,8 @@ async def user_detail(
         .eq("user_id", user_id).gte("called_at", month_start).execute().count or 0
     )
 
-    # Effective allowed MCPs: intersection with published + tier-accessible
-    raw_slugs = user.allowed_mcp_resources or []
-    effective_allowed: list[str] = []
-    if raw_slugs:
-        query = (
-            db.table("mcp_catalogue")
-              .select("slug")
-              .in_("slug", raw_slugs)
-              .eq("is_published", True)
-        )
-        if getattr(user, "tier", "standard") != "super":
-            query = query.eq("tier", "standard")
-        effective_allowed = [r["slug"] for r in (query.execute().data or [])]
+    # Effective allowed MCPs: prune stored list, drop inaccessible slugs
+    effective_allowed = users.prune_allowed_mcps(user_id)
 
     return templates.TemplateResponse(
         request=request,

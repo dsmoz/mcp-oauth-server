@@ -641,16 +641,20 @@ async def portal_overview(
 
 @router.get("/mcps", response_class=HTMLResponse)
 async def portal_mcps_get(request: Request, user_id: str = Depends(_require_portal_user)):
-    user = _users().get_user(user_id)
+    users = _users()
+    user = users.get_user(user_id)
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
+
+    # Drop slugs that became inaccessible (unpublished or above tier)
+    pruned = users.prune_allowed_mcps(user_id)
 
     db = get_db()
     query = db.table("mcp_catalogue").select("*").eq("is_published", True).order("name")
     if getattr(user, "tier", "standard") != "super":
         query = query.eq("tier", "standard")
     catalogue = query.execute().data or []
-    enabled = set(user.allowed_mcp_resources or [])
+    enabled = set(pruned)
 
     client_ctx = {
         "client_id": user_id,
