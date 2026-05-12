@@ -73,10 +73,10 @@
     <div class="detail-value">{{ "%.2f"|format(user.credit_balance or 0) }}</div>
   </div>
   <div class="detail-row">
-    <div class="detail-label">Allowed MCPs</div>
+    <div class="detail-label">Allowed MCPs <small style="color:var(--text-muted)">(published + tier-accessible)</small></div>
     <div class="detail-value">
-      {% if user.allowed_mcp_resources %}
-        {{ user.allowed_mcp_resources|join(", ") }}
+      {% if effective_allowed_mcps %}
+        {{ effective_allowed_mcps|join(", ") }}
       {% else %}
         <span style="color: var(--text-muted);">None</span>
       {% endif %}
