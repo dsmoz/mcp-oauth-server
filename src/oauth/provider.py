@@ -5,6 +5,7 @@ import base64
 import json
 from typing import Optional
 
+from src.cache import TTLCache
 from src.config import get_settings
 from src.crypto import generate_token, hash_token, now_unix
 from src.db import get_db
@@ -13,6 +14,12 @@ from src.models import OAuthClient, AuthorizationCode, AccessToken, RefreshToken
 # Named constants for expiry magic numbers
 SESSION_EXPIRY_SECONDS = 1800  # 30 minutes for pending login sessions
 CODE_EXPIRY_SECONDS = 600      # 10 minutes for issued authorization codes
+
+# Hot path — every authenticated MCP request calls load_access_token. Cache
+# the row for at most 60s (or the remaining token lifetime, whichever is
+# shorter). Cleared/popped on revoke.
+ACCESS_TOKEN_CACHE_TTL = 60
+_access_token_cache: TTLCache[str, AccessToken] = TTLCache(ttl=ACCESS_TOKEN_CACHE_TTL, maxsize=4096)
 
 
 class SupabaseOAuthProvider:
@@ -283,12 +290,25 @@ class SupabaseOAuthProvider:
             raise ValueError("Authorization code exchange failed") from exc
 
     def load_access_token(self, token: str) -> Optional[AccessToken]:
-        row = self._single("oauth_access_tokens", token=hash_token(token))
+        hashed = hash_token(token)
+        cached = _access_token_cache.get(hashed)
+        if cached is not None:
+            return cached
+        row = self._single("oauth_access_tokens", token=hashed)
         if row is None:
             return None
         at = AccessToken(**row)
         # Return the raw presented token to the caller, not the hash
         at.token = token
+        # TTL = min(60s, remaining lifetime). Don't cache already-expired tokens.
+        if at.expires_at:
+            remaining = at.expires_at - now_unix()
+            if remaining <= 0:
+                return at
+            ttl = min(ACCESS_TOKEN_CACHE_TTL, remaining)
+        else:
+            ttl = ACCESS_TOKEN_CACHE_TTL
+        _access_token_cache.set(hashed, at, ttl=ttl)
         return at
 
     def load_refresh_token(self, token: str) -> Optional[RefreshToken]:
@@ -326,6 +346,7 @@ class SupabaseOAuthProvider:
             ).execute()
             if rt.access_token:
                 # rt.access_token stored in DB is already hashed; use it directly
+                _access_token_cache.pop(rt.access_token)
                 self.db.table("oauth_access_tokens").update({"is_revoked": True}).eq(
                     "token", rt.access_token
                 ).execute()
@@ -380,6 +401,7 @@ class SupabaseOAuthProvider:
         try:
             from src.crypto import hash_token as _hash_token
             hashed = _hash_token(token)
+            _access_token_cache.pop(hashed)
 
             # Try to revoke as access token first
             at_result = self.db.table("oauth_access_tokens").update({"is_revoked": True}).eq(
@@ -486,6 +508,7 @@ class SupabaseOAuthProvider:
     def delete_client(self, client_id: str) -> None:
         """Hard delete a client and all linked tokens (cascade handles DB side too)."""
         try:
+            _access_token_cache.clear()
             # Explicit deletes first in case FK cascade is not active
             self.db.table("oauth_refresh_tokens").delete().eq("client_id", client_id).execute()
             self.db.table("oauth_access_tokens").delete().eq("client_id", client_id).execute()
@@ -497,6 +520,8 @@ class SupabaseOAuthProvider:
     def revoke_client_tokens(self, client_id: str) -> None:
         """Revoke ALL tokens for a client."""
         try:
+            # Cache doesn't track client_id; clearing the lot is cheap and rare.
+            _access_token_cache.clear()
             self.db.table("oauth_access_tokens").update({"is_revoked": True}).eq(
                 "client_id", client_id
             ).execute()
