@@ -30,6 +30,7 @@ from src.cache import TTLCache
 from src.config import get_settings
 from src.db import get_db
 from src.gateway.upstream import (
+    _walk_exceptions,
     call_upstream_tool,
     call_upstream_tool_structured,
     fetch_tool_list,
@@ -37,6 +38,29 @@ from src.gateway.upstream import (
     read_upstream_resource,
     TOOL_CALL_TIMEOUT,
 )
+
+
+def _flatten_exception_message(exc: BaseException) -> str:
+    """Return the most informative leaf message from a (possibly nested
+    ExceptionGroup / chained) exception, instead of the opaque
+    "unhandled errors in a TaskGroup (1 sub-exception)" wrapper."""
+    leaves: list[str] = []
+    for e in _walk_exceptions(exc):
+        if isinstance(e, BaseExceptionGroup):
+            continue
+        msg = str(e).strip()
+        if msg:
+            leaves.append(f"{type(e).__name__}: {msg}")
+    if not leaves:
+        return f"{type(exc).__name__}: {exc}"
+    # Deduplicate while preserving order; cap to keep payload bounded.
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for m in leaves:
+        if m not in seen:
+            seen.add(m)
+            uniq.append(m)
+    return " | ".join(uniq[:5])
 from src.oauth.provider import SupabaseOAuthProvider
 from src.users.agent_tokens import AgentTokenProvider
 
@@ -499,9 +523,10 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                                     "inputSchema": {"type": "object"},
                                 },
                             },
-                        }
+                        },
+                        "error": {"type": "string"},
+                        "reason": {"type": "string"},
                     },
-                    "required": ["items"],
                 },
             ),
             types.Tool(
@@ -531,8 +556,11 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                 },
                 outputSchema={
                     "type": "object",
-                    "properties": {"items": {"type": "array", "items": _UPSTREAM_TOOL_SCHEMA}},
-                    "required": ["items"],
+                    "properties": {
+                        "items": {"type": "array", "items": _UPSTREAM_TOOL_SCHEMA},
+                        "error": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
                 },
             ),
             types.Tool(
@@ -692,12 +720,13 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         isError=True,
                     )
                 except Exception as exc:
-                    is_timeout = isinstance(exc, TimeoutError) or "timeout" in str(exc).lower()
+                    flat = _flatten_exception_message(exc)
+                    is_timeout = isinstance(exc, TimeoutError) or "timeout" in flat.lower()
                     msg = (
                         f"Upstream MCP '{slug}' timed out after retries."
-                        if is_timeout else str(exc)
+                        if is_timeout else flat
                     )
-                    print(f"GATEWAY: upstream error {slug}/{upstream_name}: {exc}", file=sys.stderr)
+                    print(f"GATEWAY: upstream error {slug}/{upstream_name}: {flat}", file=sys.stderr)
                     try:
                         import sentry_sdk; sentry_sdk.capture_exception(exc)
                     except Exception:
@@ -836,11 +865,16 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                 try:
                     structured = {"items": await _get_tools(slug)}
                 except Exception as exc:
+                    reason = _flatten_exception_message(exc)
                     print(
-                        f"GATEWAY: tool discovery failed for {slug}: {exc}",
+                        f"GATEWAY: tool discovery failed for {slug}: {reason}",
                         file=sys.stderr,
                     )
-                    structured = {"error": "tool_discovery_failed", "reason": str(exc)}
+                    try:
+                        import sentry_sdk; sentry_sdk.capture_exception(exc)
+                    except Exception:
+                        pass
+                    structured = {"error": "tool_discovery_failed", "reason": reason}
 
         elif name == "invoke_mcp_tool":
             slug = arguments.get("mcp_slug", "")
@@ -881,17 +915,18 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         pass
                     structured = {"error": str(exc)}
                 except (TimeoutError, Exception) as exc:
-                    is_timeout = isinstance(exc, TimeoutError) or "timeout" in str(exc).lower()
+                    flat = _flatten_exception_message(exc)
+                    is_timeout = isinstance(exc, TimeoutError) or "timeout" in flat.lower()
                     if is_timeout:
-                        print(f"GATEWAY: upstream timeout {slug}/{tool_name} after retries: {exc}", file=sys.stderr)
+                        print(f"GATEWAY: upstream timeout {slug}/{tool_name} after retries: {flat}", file=sys.stderr)
                         error_msg = (
                             f"Upstream MCP '{slug}' timed out after retries. "
                             f"The server may be overloaded or unreachable. "
                             f"Try again later or increase MCP_CALL_TIMEOUT (current: {TOOL_CALL_TIMEOUT}s)."
                         )
                     else:
-                        print(f"GATEWAY: upstream error {slug}/{tool_name}: {exc}", file=sys.stderr)
-                        error_msg = str(exc)
+                        print(f"GATEWAY: upstream error {slug}/{tool_name}: {flat}", file=sys.stderr)
+                        error_msg = flat
                     try:
                         import sentry_sdk
                         sentry_sdk.capture_exception(exc)
