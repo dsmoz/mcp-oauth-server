@@ -144,6 +144,21 @@ def _is_session_terminated_error(exc: Exception) -> bool:
     return False
 
 
+def _is_misdirected_error(exc: Exception) -> bool:
+    """Detect HTTP 421 Misdirected Request from upstream.
+
+    Railway's edge proxy returns 421 when HTTP connection coalescing
+    routes a request to the wrong backend pod (multiple
+    `*.up.railway.app` hostnames share IPs and a wildcard cert).
+    A retry on a fresh TCP connection typically succeeds.
+    """
+    for e in _walk_exceptions(exc):
+        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 421:
+            return True
+    msg = str(exc).lower()
+    return "421" in msg and "misdirected" in msg
+
+
 def _is_auth_error(exc: Exception) -> bool:
     """Check whether an exception indicates a 401 Unauthorized from upstream.
 
@@ -283,7 +298,11 @@ async def _do_upstream_call(
             if _is_auth_error(exc):
                 raise
             last_exc = exc
-            transient = _is_timeout_error(exc) or _is_session_terminated_error(exc)
+            transient = (
+                _is_timeout_error(exc)
+                or _is_session_terminated_error(exc)
+                or _is_misdirected_error(exc)
+            )
             if idx < len(candidates) - 1 and transient:
                 logger.warning(
                     "Upstream call to %s timed out (budget=%ds); trying next candidate %s",
@@ -371,8 +390,10 @@ async def call_upstream_tool(
                 logger.error(msg)
                 raise RuntimeError(msg) from exc
 
-            # Timeout — retry once with backoff
-            if _is_timeout_error(exc) and attempt < _RETRY_MAX_ATTEMPTS:
+            # Timeout or 421 (Railway edge connection-coalescing) — retry with backoff
+            if (
+                _is_timeout_error(exc) or _is_misdirected_error(exc)
+            ) and attempt < _RETRY_MAX_ATTEMPTS:
                 logger.warning(
                     "Upstream timeout on attempt %d/%d for %s/%s (timeout=%ds). "
                     "Retrying in %ds...",
@@ -483,10 +504,12 @@ async def call_upstream_tool_structured(
                     f"The upstream_api_key is expired or misconfigured."
                 ) from exc
             last_exc = exc
-            if idx < len(candidates) - 1 and _is_timeout_error(exc):
+            if idx < len(candidates) - 1 and (
+                _is_timeout_error(exc) or _is_misdirected_error(exc)
+            ):
                 logger.warning(
-                    "Structured upstream call to %s timed out; trying next candidate",
-                    url,
+                    "Structured upstream call to %s failed transiently (%s); trying next candidate",
+                    url, type(exc).__name__,
                 )
                 continue
             raise
