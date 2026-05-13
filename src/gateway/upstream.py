@@ -93,28 +93,9 @@ async def fetch_tool_list(
         headers["X-User-ID"] = user_id
     if client_id:
         headers["X-Client-ID"] = client_id
-    base = upstream_url.rstrip("/").removesuffix("/sse").removesuffix("/mcp")
-
-    # Build candidate URLs. The registered URL is tried first VERBATIM —
-    # never strip its trailing slash, because some upstreams (uvicorn behind
-    # Railway) respond 307 to /mcp and the SDK's SSE GET listener loses its
-    # Authorization header on the redirect, surfacing as a spurious 401.
-    normalised = upstream_url.rstrip("/")
-    if normalised.endswith("/sse"):
-        alternates = [f"{base}/mcp/", f"{base}/mcp"]
-    elif normalised.endswith("/mcp"):
-        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
-    else:
-        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
-    seen: set[str] = set()
-    candidates: list[str] = []
-    for u in [upstream_url, *alternates]:
-        if u not in seen:
-            seen.add(u)
-            candidates.append(u)
 
     last_exc: Exception | None = None
-    for url in candidates:
+    for url in _candidate_urls(upstream_url):
         try:
             return await _list_tools_via_url(url, headers)
         except Exception as exc:
@@ -206,19 +187,28 @@ def _candidate_urls(upstream_url: str) -> list[str]:
 
     The registered URL is always tried first; alternates are tried only
     if it fails with a transient connect/timeout error.
+
+    Transport rule: streamable-HTTP (`/mcp`) servers never fall back to
+    `/sse`, and SSE servers never fall back to `/mcp`. Mixing transports
+    masks the real failure as a 404 on the wrong endpoint instead of
+    surfacing the actual error from the correct one.
+
+    Trailing-slash rule: when the registered URL ends in `/mcp` without a
+    trailing slash, try `/mcp/` BEFORE the bare form. uvicorn's default
+    config 307-redirects `POST /mcp` → `/mcp/`, which the SDK does not
+    follow cleanly and which loses the Authorization header on
+    server-sent-event reconnects.
     """
     normalised = upstream_url.rstrip("/")
     base = normalised.removesuffix("/sse").removesuffix("/mcp")
     if normalised.endswith("/sse"):
-        alternates = [f"{base}/mcp/", f"{base}/mcp"]
+        alternates = [f"{base}/sse/", f"{base}/sse"]
     elif normalised.endswith("/mcp"):
-        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
+        alternates = [f"{base}/mcp/", f"{base}/mcp"]
     else:
-        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse"]
-    # Use the registered URL VERBATIM as the first candidate — preserving its
-    # trailing slash avoids a 307 redirect chain that drops the Authorization
-    # header on the SDK's SSE GET listener (manifests as a spurious 401).
-    seen = set()
+        # Unknown suffix — probe streamable-HTTP first, then SSE.
+        alternates = [f"{base}/mcp/", f"{base}/mcp", f"{base}/sse/", f"{base}/sse"]
+    seen: set[str] = set()
     ordered: list[str] = []
     for u in [upstream_url, *alternates]:
         if u not in seen:
