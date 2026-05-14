@@ -733,6 +733,13 @@ async def portal_mcp_credentials_get(
     ).data
     existing: dict = (existing_row[0]["credentials"] if existing_row else {}) or {}
 
+    import sys
+    print(
+        f"CREDS_GET: user_id={user_id!r} slug={slug!r} "
+        f"found={bool(existing_row)} keys={list(existing.keys())}",
+        file=sys.stderr,
+    )
+
     user = _users().get_user(user_id)
     client_ctx = {
         "client_id": user_id,
