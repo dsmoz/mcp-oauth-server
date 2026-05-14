@@ -70,6 +70,8 @@
         <div class="cat-rows">
           {% for mcp in group %}
             {% set is_on = mcp.slug in enabled %}
+            {% set has_creds_schema = mcp.credentials_schema and mcp.credentials_schema | length > 0 %}
+            {% set creds_saved = mcp.slug in user_creds %}
             <label class="tool-row{% if is_on %} on{% endif %}" data-slug="{{ mcp.slug }}" data-cat="{{ cat }}" data-name="{{ mcp.name | lower }}" data-desc="{{ (mcp.description or '') | lower }}">
               <input type="checkbox" name="mcps" value="{{ mcp.slug }}" {% if is_on %}checked{% endif %} class="mcp-toggle">
               <div class="tool-text">
@@ -77,6 +79,17 @@
                 <div class="tool-desc">{{ mcp.description }}</div>
               </div>
               <div class="tool-control">
+                {% if has_creds_schema %}
+                  <a href="/portal/mcps/{{ mcp.slug }}/credentials" class="creds-link {% if creds_saved %}creds-ok{% endif %}" title="{% if creds_saved %}Credentials saved — click to update{% else %}API credentials required{% endif %}">
+                    {% if creds_saved %}
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                      configured
+                    {% else %}
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      add credentials
+                    {% endif %}
+                  </a>
+                {% endif %}
                 <span class="on-pill" aria-hidden="true"><span class="chip-dot"></span>on</span>
                 <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
               </div>
@@ -209,6 +222,22 @@
 .tool-row.on .switch-knob { left: 18px; }
 
 #enabled-pill { padding: 4px 10px; }
+
+.creds-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  text-decoration: none;
+  border: 1px solid var(--line-2);
+  color: var(--fg-3);
+  background: var(--bg-card);
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  white-space: nowrap;
+}
+.creds-link:hover { border-color: var(--accent); color: var(--accent); }
+.creds-link.creds-ok { color: var(--success); border-color: var(--success-bg); background: var(--success-bg); }
+.creds-link.creds-ok:hover { border-color: var(--success); }
 </style>
 
 {% endblock %}
