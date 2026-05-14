@@ -8,7 +8,6 @@ Supports both transports:
 """
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import os
@@ -86,7 +85,7 @@ async def fetch_tool_list(
     api_key: str = "",
     user_id: str = "",
     client_id: str = "",
-    mcp_credentials: dict | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> list[dict]:
     headers: dict[str, str] = {}
     if api_key:
@@ -95,10 +94,8 @@ async def fetch_tool_list(
         headers["X-User-ID"] = user_id
     if client_id:
         headers["X-Client-ID"] = client_id
-    if mcp_credentials:
-        headers["X-MCP-Credentials"] = base64.b64encode(
-            json.dumps(mcp_credentials).encode()
-        ).decode()
+    if extra_headers:
+        headers.update(extra_headers)
 
     last_exc: Exception | None = None
     for url in _candidate_urls(upstream_url):
@@ -327,7 +324,7 @@ async def call_upstream_tool(
     api_key: str = "",
     user_id: str = "",
     client_id: str = "",
-    mcp_credentials: dict | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> str:
     """Call a tool on an upstream MCP server with retry and error handling.
 
@@ -343,9 +340,6 @@ async def call_upstream_tool(
             namespace key upstream MCPs use to isolate per-tenant state.
         client_id: Client (device) ID forwarded via X-Client-ID — telemetry
             only; upstream MCPs should NOT use this as a tenancy key.
-        mcp_credentials: Per-user credentials forwarded via X-MCP-Credentials
-            (base64-encoded JSON). Upstream MCPs decode and use these instead
-            of accepting credentials as tool parameters.
 
     Returns:
         The text result from the upstream tool.
@@ -362,10 +356,8 @@ async def call_upstream_tool(
         headers["X-User-ID"] = user_id
     if client_id:
         headers["X-Client-ID"] = client_id
-    if mcp_credentials:
-        headers["X-MCP-Credentials"] = base64.b64encode(
-            json.dumps(mcp_credentials).encode()
-        ).decode()
+    if extra_headers:
+        headers.update(extra_headers)
 
     sys.stderr.write(
         f"UPSTREAM: {tool_name} headers={list(headers.keys())} "
@@ -444,7 +436,7 @@ def _headers(
     api_key: str,
     user_id: str,
     client_id: str,
-    mcp_credentials: dict | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> dict[str, str]:
     h: dict[str, str] = {}
     if api_key:
@@ -453,10 +445,8 @@ def _headers(
         h["X-User-ID"] = user_id
     if client_id:
         h["X-Client-ID"] = client_id
-    if mcp_credentials:
-        h["X-MCP-Credentials"] = base64.b64encode(
-            json.dumps(mcp_credentials).encode()
-        ).decode()
+    if extra_headers:
+        h.update(extra_headers)
     return h
 
 
@@ -503,7 +493,7 @@ async def call_upstream_tool_structured(
     api_key: str = "",
     user_id: str = "",
     client_id: str = "",
-    mcp_credentials: dict | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> dict:
     """Call an upstream tool and return the full CallToolResult as a dict.
 
@@ -512,7 +502,7 @@ async def call_upstream_tool_structured(
     so MCP Apps UI pointers (`_meta.ui.resourceUri`) and per-call
     structuredContent survive the gateway hop.
     """
-    headers = _headers(api_key, user_id, client_id, mcp_credentials)
+    headers = _headers(api_key, user_id, client_id, extra_headers)
     candidates = _candidate_urls(upstream_url)
     last_exc: Exception | None = None
     for idx, url in enumerate(candidates):
@@ -579,10 +569,10 @@ async def list_upstream_resources(
     api_key: str = "",
     user_id: str = "",
     client_id: str = "",
-    mcp_credentials: dict | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> list[dict]:
     """List resources from an upstream MCP server. Returns [] on failure."""
-    headers = _headers(api_key, user_id, client_id, mcp_credentials)
+    headers = _headers(api_key, user_id, client_id, extra_headers)
     last_exc: Exception | None = None
     for url in _candidate_urls(upstream_url):
         try:
@@ -619,10 +609,10 @@ async def read_upstream_resource(
     api_key: str = "",
     user_id: str = "",
     client_id: str = "",
-    mcp_credentials: dict | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> dict:
     """Read a resource (e.g. `ui://...`) from an upstream MCP server."""
-    headers = _headers(api_key, user_id, client_id, mcp_credentials)
+    headers = _headers(api_key, user_id, client_id, extra_headers)
     last_exc: Exception | None = None
     for url in _candidate_urls(upstream_url):
         try:

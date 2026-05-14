@@ -867,8 +867,10 @@ async def save_catalogue(
     tier: str = Form("standard"),
     upstream_url: str = Form(...),
     upstream_api_key: str = Form(""),
+    config_schema: str = Form(""),
     _: str = Depends(_require_admin),
 ):
+    import json as _json
     db = get_db()
     if _get_catalogue_row(db, slug) is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -879,6 +881,23 @@ async def save_catalogue(
     }
     if upstream_api_key:
         update["upstream_api_key"] = upstream_api_key
+    schema_str = config_schema.strip()
+    if schema_str:
+        try:
+            parsed = _json.loads(schema_str)
+            if not isinstance(parsed, list):
+                raise ValueError("config_schema must be a JSON array")
+            update["config_schema"] = parsed
+        except (ValueError, _json.JSONDecodeError) as exc:
+            entry = _get_catalogue_row(db, slug)
+            return templates.TemplateResponse(
+                request=request, name="catalogue_form.html",
+                context={"entry": entry, "error": f"Invalid config_schema JSON: {exc}",
+                         "categories": db.table("mcp_categories").select("*").order("name").execute().data or []},
+                status_code=400,
+            )
+    else:
+        update["config_schema"] = None
     db.table("mcp_catalogue").update(update).eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 

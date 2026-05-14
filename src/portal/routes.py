@@ -656,18 +656,15 @@ async def portal_mcps_get(request: Request, user_id: str = Depends(_require_port
     catalogue = query.execute().data or []
     enabled = set(pruned)
 
-    # Slugs for which this user has credentials stored.
-    slugs_with_creds: set[str] = set()
-    try:
-        cred_rows = (
-            db.table("client_mcp_credentials")
-            .select("mcp_slug")
-            .eq("user_id", user_id)
-            .execute()
-        ).data or []
-        slugs_with_creds = {r["mcp_slug"] for r in cred_rows}
-    except Exception:
-        pass
+    # Load any saved credential configs for this user
+    config_rows = (
+        db.table("user_mcp_configs")
+        .select("mcp_slug, config")
+        .eq("user_id", user_id)
+        .execute()
+        .data or []
+    )
+    user_configs: dict = {r["mcp_slug"]: r["config"] for r in config_rows}
 
     client_ctx = {
         "client_id": user_id,
@@ -682,9 +679,48 @@ async def portal_mcps_get(request: Request, user_id: str = Depends(_require_port
             "active_nav": "mcps",
             "catalogue": catalogue,
             "enabled": enabled,
-            "user_creds": slugs_with_creds,
+            "user_configs": user_configs,
         }
     )
+
+
+@router.post("/mcps/{slug}/config")
+async def portal_mcp_config_save(
+    slug: str,
+    request: Request,
+    user_id: str = Depends(_require_portal_user),
+):
+    import json as _json
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Expected JSON object"}, status_code=400)
+
+    # Verify slug exists and user can access it
+    db = get_db()
+    row = db.table("mcp_catalogue").select("slug, config_schema").eq("slug", slug).eq("is_published", True).limit(1).execute()
+    if not row.data:
+        return JSONResponse({"error": "MCP not found"}, status_code=404)
+
+    # Upsert config
+    now = __import__("datetime").datetime.utcnow().isoformat() + "Z"
+    db.table("user_mcp_configs").upsert({
+        "user_id": user_id,
+        "mcp_slug": slug,
+        "config": body,
+        "updated_at": now,
+    }, on_conflict="user_id,mcp_slug").execute()
+
+    try:
+        from src.gateway.routes import _invalidate_user_config_cache
+        _invalidate_user_config_cache(user_id, slug)
+    except Exception:
+        pass
+
+    return JSONResponse({"ok": True})
 
 
 @router.post("/mcps", response_class=HTMLResponse)
