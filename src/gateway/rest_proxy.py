@@ -68,12 +68,12 @@ def _validate_token(token: str) -> Optional[Tuple[str, str]]:
 
 
 def _get_scholar_config() -> Optional[dict]:
-    """Look up mcp-scholar upstream_url and upstream_api_key from mcp_catalogue."""
+    """Look up mcp-scholar upstream_url, upstream_api_key, config_schema from mcp_catalogue."""
     try:
         db = get_db()
         result = (
             db.table("mcp_catalogue")
-            .select("upstream_url, upstream_api_key")
+            .select("upstream_url, upstream_api_key, config_schema")
             .eq("slug", _MCP_SCHOLAR_SLUG)
             .eq("is_published", True)
             .limit(1)
@@ -153,6 +153,16 @@ async def proxy_plugin_request(request: Request, path: str):
     }
     if scholar.get("upstream_api_key"):
         upstream_headers["Authorization"] = f"Bearer {scholar['upstream_api_key']}"
+
+    # Per-user credential headers (X-MCP-*) per catalogue config_schema.
+    try:
+        from src.gateway.routes import _user_config_headers, _load_user_mcp_config
+        schema = scholar.get("config_schema")
+        if schema:
+            cfg = _load_user_mcp_config(user_id, _MCP_SCHOLAR_SLUG)
+            upstream_headers.update(_user_config_headers(schema, cfg))
+    except Exception as exc:
+        print(f"REST_PROXY: user-config header injection failed: {exc}", file=sys.stderr)
 
     # Read request body
     body = await request.body()

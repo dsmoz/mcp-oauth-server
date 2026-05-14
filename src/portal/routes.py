@@ -714,6 +714,12 @@ async def portal_mcp_config_save(
         "updated_at": now,
     }, on_conflict="user_id,mcp_slug").execute()
 
+    try:
+        from src.gateway.routes import _invalidate_user_config_cache
+        _invalidate_user_config_cache(user_id, slug)
+    except Exception:
+        pass
+
     return JSONResponse({"ok": True})
 
 
