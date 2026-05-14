@@ -244,6 +244,54 @@ async def revoke(
 
 class IntrospectRequest(BaseModel):
     token: str
+    cost: float | None = None        # credits to deduct atomically; None = no deduction
+    upstream: str | None = None      # identifier of caller, e.g. "linguist", for usage log
+    units: int | None = None         # optional metric (e.g. char count) — logged only
+
+
+def _deduct_or_reject(user_id: str, amount: float) -> tuple[str, float | None]:
+    """Atomically deduct credits via Supabase RPC.
+
+    Mirrors :func:`src.gateway.routes._deduct_credits` (same ``deduct_credits_user``
+    RPC) but returns a richer status so the introspect endpoint can distinguish
+    "user is broke" from "billing system is down" — only the former is a clean
+    business decision; the latter should never be reported as success.
+
+    Args:
+        user_id: The user owning the token being introspected.
+        amount: Positive number of credits to deduct.
+
+    Returns:
+        Tuple of ``(status, new_balance)`` where ``status`` is one of:
+
+        * ``"ok"`` — deduction succeeded; ``new_balance`` is the post-deduction balance.
+        * ``"insufficient"`` — RPC returned -1 (user lacks credit); ``new_balance`` is ``None``.
+        * ``"error"`` — RPC raised; ``new_balance`` is ``None``. Treat as a hard fail.
+
+    Example:
+        >>> status, balance = _deduct_or_reject("user-123", 0.5)
+        >>> if status == "ok":
+        ...     print(f"Remaining: {balance}")
+
+    Raises:
+        Never raises — RPC exceptions are caught and reported via the
+        ``"error"`` status so callers can fail closed without try/except.
+    """
+    try:
+        result = get_db().rpc(
+            "deduct_credits_user", {"p_user_id": user_id, "p_amount": amount}
+        ).execute()
+        new_balance = float(result.data) if result.data is not None else -1.0
+    except Exception as exc:
+        import sys
+        print(
+            f"WARNING: credit deduction failed for user {user_id}: {exc}",
+            file=sys.stderr,
+        )
+        return "error", None
+    if new_balance < 0:
+        return "insufficient", None
+    return "ok", new_balance
 
 
 @router.post("/introspect")
@@ -267,23 +315,49 @@ async def introspect(
     if at.expires_at and at.expires_at < now_unix():
         return JSONResponse({"active": False})
 
-    # Log usage — fire and forget, never block the response
+    # Optional atomic credit deduction. When ``cost`` is None or <= 0 we keep
+    # the legacy behaviour (no deduction, no ``credits_remaining`` field) so
+    # existing callers — notably the MCP gateway — are unaffected.
+    credits_remaining: float | None = None
+    if body.cost is not None and body.cost > 0:
+        status, new_balance = _deduct_or_reject(at.user_id, body.cost)
+        if status == "insufficient":
+            return JSONResponse(
+                {"active": False, "reason": "insufficient_credits"},
+                status_code=200,
+            )
+        if status == "error":
+            # Fail closed on billing system failure — never grant a free call.
+            return JSONResponse(
+                {"active": False, "reason": "billing_error"},
+                status_code=200,
+            )
+        credits_remaining = new_balance
+
+    # Log usage — fire and forget, never block the response. We reuse the
+    # oauth_usage_logs schema the gateway already writes to.
     try:
-        get_db().table("oauth_usage_logs").insert(
-            {"client_id": at.client_id, "user_id": at.user_id}
-        ).execute()
+        log_row: dict = {
+            "client_id": at.client_id,
+            "user_id": at.user_id,
+            "credits_used": body.cost or 0,
+        }
+        if body.upstream:
+            log_row["endpoint"] = f"introspect/{body.upstream}"
+        get_db().table("oauth_usage_logs").insert(log_row).execute()
     except Exception:
         pass
 
-    return JSONResponse(
-        {
-            "active": True,
-            "client_id": at.client_id,
-            "user_id": at.user_id,
-            "scope": " ".join(at.scopes) if at.scopes else "mcp",
-            "exp": at.expires_at,
-        }
-    )
+    response: dict = {
+        "active": True,
+        "client_id": at.client_id,
+        "user_id": at.user_id,
+        "scope": " ".join(at.scopes) if at.scopes else "mcp",
+        "exp": at.expires_at,
+    }
+    if credits_remaining is not None:
+        response["credits_remaining"] = credits_remaining
+    return JSONResponse(response)
 
 
 # ── Self-service registration ─────────────────────────────────────────────────
