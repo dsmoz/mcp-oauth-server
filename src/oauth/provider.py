@@ -56,6 +56,11 @@ class SupabaseOAuthProvider:
         if row is None:
             raise ValueError("Client not found")
 
+        if row.get("is_public_client"):
+            # Public/shared clients are never "claimed" — each authorising user
+            # gets their own user-scoped tokens via consent capture instead.
+            raise ValueError("Cannot claim a public client")
+
         existing_user = row.get("user_id")
         if existing_user == user_id:
             return False
@@ -168,11 +173,21 @@ class SupabaseOAuthProvider:
         return row
 
     def complete_authorization(
-        self, session_id: str, client_id: str
+        self, session_id: str, client_id: str, user_id: Optional[str] = None
     ) -> tuple[str, Optional[str]]:
         """
         Phase 2: replace the session_id code with a real authorization code.
-        Returns (code, redirect_uri).
+
+        Args:
+            session_id: The pending session identifier from phase 1.
+            client_id: Client id being authorised — must match the session.
+            user_id: The authenticated user who just consented. Persisted on
+                the auth code row so that token exchange can bind tokens to
+                this user (critical for public/multi-user clients where the
+                client row carries no user_id).
+
+        Returns:
+            ``(code, redirect_uri)``.
         """
         try:
             pending = self.get_pending_session(session_id)
@@ -187,12 +202,16 @@ class SupabaseOAuthProvider:
             # Extract resource from parsed JSON session data (already decoded in get_pending_session)
             resource = pending.get("_resource")
 
+            update_row: dict = {
+                "code": real_code,
+                "expires_at": real_expires,
+                "resource": resource,
+            }
+            if user_id is not None:
+                update_row["user_id"] = user_id
+
             self.db.table("oauth_authorization_codes").update(
-                {
-                    "code": real_code,
-                    "expires_at": real_expires,
-                    "resource": resource,
-                }
+                update_row
             ).eq("code", session_id).execute()
 
             return real_code, pending.get("redirect_uri")
@@ -242,11 +261,25 @@ class SupabaseOAuthProvider:
                 # Code was already used (concurrent request beat us)
                 raise ValueError("Authorization code already used or expired")
 
-            # Resolve user_id from the claimed client (may be NULL for legacy clients
-            # issued before the users migration, but backfill ensured all existing
-            # rows are populated).
+            # Resolve user_id. For public/multi-user clients the row carries no
+            # user_id — instead we use the user_id captured on the auth code at
+            # consent time, so the token is bound to whoever actually authorised.
+            # For single-user clients we keep the historical behaviour of reading
+            # the claimed user off the client row.
             client_row = self._single("oauth_clients", client_id=client_id)
-            user_id = client_row.get("user_id") if client_row else None
+            is_public = bool((client_row or {}).get("is_public_client"))
+            if is_public:
+                user_id = auth_code.user_id
+                if not user_id:
+                    raise ValueError(
+                        "Public client authorization code missing user binding"
+                    )
+            else:
+                user_id = client_row.get("user_id") if client_row else None
+                # Prefer the consent-time user_id when present (forward-compat
+                # for any future single-user flow that captures it).
+                if auth_code.user_id:
+                    user_id = auth_code.user_id
 
             # Issue tokens — if inserts fail after deletion, caller gets a clear error
             access_token = generate_token(32)
@@ -440,17 +473,34 @@ class SupabaseOAuthProvider:
         except Exception:
             pass  # Non-fatal — approval still works without editing the message
 
-    def mark_session_approved(self, session_id: str) -> tuple[str, Optional[str]]:
+    def mark_session_approved(
+        self, session_id: str, user_id: Optional[str] = None
+    ) -> tuple[str, Optional[str]]:
         """
-        Called by Telegram webhook on Approve tap.
-        Reads client_id from the session row and calls complete_authorization.
-        Returns (code, redirect_uri).
+        Called by the portal (on consent) or by the Telegram webhook (on Approve).
+
+        Args:
+            session_id: The pending session identifier.
+            user_id: The authenticated user who consented. For portal logins
+                this is always set; for the legacy Telegram approval path it
+                is ``None`` and we fall back to the client's claimer (works
+                for single-user clients, never set for public clients).
+
+        Returns:
+            ``(code, redirect_uri)``.
         """
         row = self._single("oauth_authorization_codes", code=session_id)
         if row is None:
             raise ValueError("Session not found or expired")
         client_id = row["client_id"]
-        return self.complete_authorization(session_id=session_id, client_id=client_id)
+        if user_id is None:
+            # Telegram approval path — derive from the (non-public) client.
+            client_row = self._single("oauth_clients", client_id=client_id)
+            if client_row and not client_row.get("is_public_client"):
+                user_id = client_row.get("user_id")
+        return self.complete_authorization(
+            session_id=session_id, client_id=client_id, user_id=user_id
+        )
 
     def mark_session_denied(self, session_id: str) -> None:
         """Called by Telegram webhook on Deny tap. Deletes the pending session."""

@@ -262,6 +262,85 @@ async def create_client(
     )
 
 
+# ── Create public (multi-user) client ─────────────────────────────────────────
+
+@router.post("/clients/public-create")
+async def create_public_client(
+    request: Request,
+    _: str = Depends(_require_admin),
+):
+    """Provision a public OAuth client authorised by many distinct users.
+
+    Public clients are intended for shared web applications (e.g. the
+    dsmoz-academia portal) where a single ``client_id`` is consumed by many
+    end users. The client is NOT bound to any single user — at consent time
+    each authorising user gets tokens bound to *their* ``user_id``.
+
+    Body (JSON):
+        client_name (str): Human-readable name of the public application.
+        redirect_uris (list[str]): Whitelisted redirect URIs.
+        scope (str): Space-delimited scope string. Defaults to ``"mcp"``.
+
+    Returns:
+        ``{"client_id": ..., "client_secret": ..., "is_public_client": true}``
+        — the secret is shown once; the caller must store it.
+
+    Example:
+        >>> # curl -u admin:pw -X POST https://oauth.example.com/admin/clients/public-create \
+        ... #     -H 'Content-Type: application/json' \
+        ... #     -d '{"client_name":"dsmoz-academia","redirect_uris":["https://academia.example.com/callback"]}'
+
+    Raises:
+        HTTPException 400: When ``client_name`` or ``redirect_uris`` is missing.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid_json_body")
+
+    client_name = (body.get("client_name") or "").strip()
+    redirect_uris = body.get("redirect_uris") or []
+    scope = body.get("scope") or "mcp"
+
+    if not client_name:
+        raise HTTPException(status_code=400, detail="client_name is required")
+    if not isinstance(redirect_uris, list) or not redirect_uris:
+        raise HTTPException(status_code=400, detail="redirect_uris must be a non-empty list")
+
+    client_id = generate_client_id()
+    raw_secret = generate_token(32)
+    secret_hash = hash_secret(raw_secret)
+
+    db = get_db()
+    db.table("oauth_clients").insert(
+        {
+            "client_id": client_id,
+            "client_secret_hash": secret_hash,
+            "client_name": client_name,
+            "redirect_uris": redirect_uris,
+            "grant_types": ["authorization_code", "refresh_token"],
+            "scope": scope if isinstance(scope, str) else " ".join(scope),
+            "created_by": "admin:public",
+            "is_active": True,
+            "is_public_client": True,
+            "user_id": None,
+        }
+    ).execute()
+
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        {
+            "client_id": client_id,
+            "client_secret": raw_secret,
+            "client_name": client_name,
+            "redirect_uris": redirect_uris,
+            "scope": scope,
+            "is_public_client": True,
+        },
+        status_code=201,
+    )
+
+
 # ── Client detail ─────────────────────────────────────────────────────────────
 
 @router.get("/clients/{client_id}", response_class=HTMLResponse)
