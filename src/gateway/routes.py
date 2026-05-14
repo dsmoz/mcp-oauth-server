@@ -156,14 +156,19 @@ def _load_user_mcp_config(user_id: str, slug: str) -> dict:
 
 
 def _user_config_headers(config_schema, user_config: dict) -> dict[str, str]:
-    """Map saved config values to `X-MCP-{KEY}` headers per the catalogue schema.
+    """Pack saved config values into a single `X-MCP-Credentials` header.
 
-    Header name: `X-MCP-` + key uppercased + underscores → dashes.
-    Empty/missing values are skipped. Returns {} if schema is null/empty.
+    The header value is base64-encoded JSON of the field-key → value dict.
+    Schema keys must match the upstream MCP's internal credential field names
+    (the MCP merges this dict directly into its credential config).
+
+    Returns {} when schema is empty, user has saved no values, or all
+    values are blank — so the header is omitted entirely and the MCP falls
+    back to its env-var defaults.
     """
     if not config_schema or not isinstance(config_schema, list) or not user_config:
         return {}
-    out: dict[str, str] = {}
+    payload: dict[str, str] = {}
     for field in config_schema:
         if not isinstance(field, dict):
             continue
@@ -173,9 +178,12 @@ def _user_config_headers(config_schema, user_config: dict) -> dict[str, str]:
         val = user_config.get(key)
         if val is None or val == "":
             continue
-        header_name = "X-MCP-" + key.upper().replace("_", "-")
-        out[header_name] = str(val)
-    return out
+        payload[key] = str(val)
+    if not payload:
+        return {}
+    import base64 as _b64, json as _json
+    encoded = _b64.b64encode(_json.dumps(payload).encode()).decode()
+    return {"X-MCP-Credentials": encoded}
 
 
 def _extra_headers_for(mcp: dict, user_id: str) -> dict[str, str]:

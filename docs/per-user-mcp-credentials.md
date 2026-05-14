@@ -8,7 +8,9 @@ Some upstream MCPs (mcp-scholar, mcp-kobotoolbox, mcp-docuseal) need credentials
 
 ## Decision
 
-**Gateway header injection.** Per-user credentials are stored in `user_mcp_configs`, the gateway reads them on each call, and forwards them to the upstream MCP as `X-MCP-{KEY}` request headers. Upstream MCPs read those headers per request and fall back to env vars when the headers are absent (preserves stdio/local mode).
+**Gateway header injection.** Per-user credentials are stored in `user_mcp_configs`, the gateway reads them on each call, and forwards them to the upstream MCP as a single `X-MCP-Credentials` request header (base64-encoded JSON of the catalogue-schema field-key → value dict). Upstream MCPs decode it per request and merge into their credential config, falling back to env vars when the header is absent (preserves stdio/local mode).
+
+mcp-scholar already implements this exact transport — its `BearerAuthMiddleware` decodes `X-MCP-Credentials` and merges into `ClientInfo.provider_config`. New MCPs follow the same pattern.
 
 Rejected alternatives:
 - **MCP reads DB itself** — secret sprawl (every MCP needs Supabase service key), per-call DB latency, schema coupling.
@@ -30,7 +32,7 @@ Trust boundary: gateway → upstream traffic is on Railway's private network. Pl
 
 `src/gateway/routes.py`:
 - `_load_user_mcp_config(user_id, slug) -> dict` — reads `user_mcp_configs.config`, 60s TTL cache keyed `(user_id, slug)`. Invalidate on `add_mcp` / `remove_mcp` / portal config save.
-- `_user_config_headers(config_schema, user_config) -> dict[str,str]` — for each field in schema, emits `X-MCP-{KEY}: value` (key uppercased, dashes preserved). Skips empty values; preserves order; never emits if `config_schema` is null.
+- `_user_config_headers(config_schema, user_config) -> dict[str,str]` — packs schema-key → value pairs into a single `X-MCP-Credentials` header (base64-encoded JSON). Skips empty values; emits no header when payload is empty.
 - Patch all four upstream call sites to pass `extra_headers=`:
   - `invoke_mcp_tool` handler (line ~903)
   - `search_tools` fan-out (line ~706)
@@ -47,7 +49,7 @@ Trust boundary: gateway → upstream traffic is on Railway's private network. Pl
 
 For each MCP that needs user credentials:
 
-1. **ASGI middleware** (sits next to `BearerAuthMiddleware`) — reads any header matching `X-MCP-*` from `scope["headers"]`, stashes the dict in a `contextvars.ContextVar` for the duration of the request.
+1. **ASGI middleware** (sits next to `BearerAuthMiddleware`) — reads `X-MCP-Credentials` from `scope["headers"]`, base64-decodes, JSON-parses, stashes the dict in a `contextvars.ContextVar` for the duration of the request. (mcp-scholar already does this — copy that pattern.)
 2. **Config helper** — replace `os.getenv("KOBO_API_KEY")` with `get_user_credential("kobo_api_key")`, which:
    - Reads from the contextvar first (per-request, per-tenant)
    - Falls back to `os.getenv("KOBO_API_KEY")` (stdio / local dev)
@@ -55,31 +57,38 @@ For each MCP that needs user credentials:
 3. **Drop `@lru_cache`** on any config singleton that holds credentials. Process-level singletons leak across tenants.
 4. **Connection objects** (e.g. `httpx.Client`, `KoboClient`) must build per-request — or rebuild headers per request — never cache headers at construction time.
 
+**Schema-key naming:** the catalogue `config_schema[].key` values are forwarded verbatim into the JSON payload, so they must match the upstream MCP's internal credential field names (e.g. mcp-scholar uses `api_key` / `user_id` / `library_type` to merge into `ClientInfo.provider_config`).
+
 ### Catalogue seed — TODO
 
+Schema keys must match each MCP's internal credential field names (the values get merged directly into the upstream's credential config dict).
+
 ```sql
+-- mcp-scholar: keys map to ClientInfo.provider_config (zotero)
 UPDATE mcp_catalogue SET config_schema = '[
-  {"key":"zotero_api_key","label":"Zotero API Key","type":"password","required":true,"placeholder":"Get from zotero.org/settings/keys"},
-  {"key":"zotero_user_id","label":"Zotero User ID","type":"text","required":true,"placeholder":"Numeric user ID"},
-  {"key":"zotero_library_type","label":"Library Type","type":"text","required":false,"placeholder":"user (default) or group"}
+  {"key":"api_key","label":"Zotero API Key","type":"password","required":true,"placeholder":"Get from zotero.org/settings/keys"},
+  {"key":"user_id","label":"Zotero User ID","type":"text","required":true,"placeholder":"Numeric user ID"},
+  {"key":"library_type","label":"Library Type","type":"text","required":false,"placeholder":"user (default) or group"}
 ]'::jsonb WHERE slug = 'mcp-scholar';
 
+-- mcp-kobotoolbox: keys map to KoboConfig fields
 UPDATE mcp_catalogue SET config_schema = '[
-  {"key":"kobo_api_key","label":"KoboToolbox API Token","type":"password","required":true,"placeholder":"Account Settings → Security → API Key"},
-  {"key":"kobo_server_url","label":"KoboToolbox Server","type":"url","required":false,"placeholder":"https://kf.kobotoolbox.org (or eu.kobotoolbox.org)"}
+  {"key":"api_key","label":"KoboToolbox API Token","type":"password","required":true,"placeholder":"Account Settings → Security → API Key"},
+  {"key":"server_url","label":"KoboToolbox Server","type":"url","required":false,"placeholder":"https://kf.kobotoolbox.org (or eu.kobotoolbox.org)"}
 ]'::jsonb WHERE slug = 'mcp-kobotoolbox';
 
+-- mcp-docuseal: keys map to DocusealConfig fields
 UPDATE mcp_catalogue SET config_schema = '[
-  {"key":"docuseal_api_key","label":"DocuSeal API Key","type":"password","required":true,"placeholder":"app.docuseal.com/settings/api"},
-  {"key":"docuseal_region","label":"Region","type":"text","required":false,"placeholder":"US (default) or EU"}
+  {"key":"api_key","label":"DocuSeal API Key","type":"password","required":true,"placeholder":"app.docuseal.com/settings/api"},
+  {"key":"region","label":"Region","type":"text","required":false,"placeholder":"US (default) or EU"}
 ]'::jsonb WHERE slug = 'mcp-docuseal';
 ```
 
-## Header naming convention
+## Header convention
 
-- Field key: lowercase snake_case (`zotero_api_key`)
-- Header name: `X-MCP-` + key uppercased + underscores → dashes (`X-MCP-ZOTERO-API-KEY`)
-- Multiple fields = multiple headers, no JSON blob (lets MCPs route to the right config slot without parsing)
+- Single header: `X-MCP-Credentials: <base64(json({key1: val1, key2: val2}))>`
+- JSON keys are catalogue `config_schema[].key` values, used verbatim — they must match the upstream MCP's internal credential field names.
+- Header omitted entirely when the user has saved no values (no opaque empty payload).
 
 ## Phases
 
