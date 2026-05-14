@@ -70,17 +70,56 @@
         <div class="cat-rows">
           {% for mcp in group %}
             {% set is_on = mcp.slug in enabled %}
-            <label class="tool-row{% if is_on %} on{% endif %}" data-slug="{{ mcp.slug }}" data-cat="{{ cat }}" data-name="{{ mcp.name | lower }}" data-desc="{{ (mcp.description or '') | lower }}">
-              <input type="checkbox" name="mcps" value="{{ mcp.slug }}" {% if is_on %}checked{% endif %} class="mcp-toggle">
-              <div class="tool-text">
-                <div class="tool-name">{{ mcp.name }}</div>
-                <div class="tool-desc">{{ mcp.description }}</div>
+            {% set has_cfg = mcp.config_schema and mcp.config_schema | length > 0 %}
+            <div class="tool-wrap" data-slug="{{ mcp.slug }}" data-cat="{{ cat }}" data-name="{{ mcp.name | lower }}" data-desc="{{ (mcp.description or '') | lower }}">
+              <label class="tool-row{% if is_on %} on{% endif %}">
+                <input type="checkbox" name="mcps" value="{{ mcp.slug }}" {% if is_on %}checked{% endif %} class="mcp-toggle">
+                <div class="tool-text">
+                  <div class="tool-name">{{ mcp.name }}</div>
+                  <div class="tool-desc">{{ mcp.description }}</div>
+                </div>
+                <div class="tool-control">
+                  <span class="on-pill" aria-hidden="true"><span class="chip-dot"></span>on</span>
+                  {% if has_cfg %}
+                  <button type="button" class="cfg-toggle-btn" aria-label="Configure {{ mcp.name }}" data-slug="{{ mcp.slug }}" onclick="event.preventDefault();event.stopPropagation();toggleCfg('{{ mcp.slug }}')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+                  </button>
+                  {% endif %}
+                  <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
+                </div>
+              </label>
+              {% if has_cfg %}
+              <div class="cfg-panel" id="cfg-{{ mcp.slug }}" style="display:none" aria-hidden="true">
+                <div class="cfg-panel-inner">
+                  <div class="cfg-title">Configuration — {{ mcp.name }}</div>
+                  <div class="cfg-fields">
+                    {% for field in mcp.config_schema %}
+                    {% set saved_val = (user_configs.get(mcp.slug) or {}).get(field.key, '') %}
+                    <div class="cfg-field">
+                      <label class="cfg-label" for="cfg-{{ mcp.slug }}-{{ field.key }}">
+                        {{ field.label }}{% if field.required %}<span class="cfg-req">*</span>{% endif %}
+                      </label>
+                      <input
+                        id="cfg-{{ mcp.slug }}-{{ field.key }}"
+                        class="cfg-input"
+                        type="{{ field.type if field.type in ('text','password','email','url') else 'text' }}"
+                        data-key="{{ field.key }}"
+                        value="{{ saved_val }}"
+                        placeholder="{{ field.placeholder if field.placeholder else '' }}"
+                        autocomplete="off"
+                        spellcheck="false"
+                      >
+                    </div>
+                    {% endfor %}
+                  </div>
+                  <div class="cfg-actions">
+                    <button type="button" class="btn-cfg-save" onclick="saveCfg('{{ mcp.slug }}')">Save</button>
+                    <span class="cfg-status" id="cfg-status-{{ mcp.slug }}"></span>
+                  </div>
+                </div>
               </div>
-              <div class="tool-control">
-                <span class="on-pill" aria-hidden="true"><span class="chip-dot"></span>on</span>
-                <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
-              </div>
-            </label>
+              {% endif %}
+            </div>
           {% endfor %}
         </div>
       </section>
@@ -156,7 +195,7 @@
   cursor: pointer;
   transition: background 0.12s;
 }
-.tool-row:last-child { border-bottom: none; }
+
 .tool-row:hover { background: rgba(7,43,49,0.02); }
 .tool-row .mcp-toggle { display: none; }
 
@@ -209,6 +248,87 @@
 .tool-row.on .switch-knob { left: 18px; }
 
 #enabled-pill { padding: 4px 10px; }
+
+/* ── Config toggle button ── */
+.cfg-toggle-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  flex-shrink: 0;
+  padding: 0;
+}
+.cfg-toggle-btn:hover { color: var(--bg-deep-alt); border-color: var(--bg-deep-alt); background: rgba(17,94,103,0.06); }
+.cfg-toggle-btn.active { color: var(--bg-deep-alt); border-color: var(--bg-deep-alt); background: rgba(17,94,103,0.10); }
+
+/* ── Config panel ── */
+.tool-wrap { display: flex; flex-direction: column; border-bottom: 1px solid var(--line); }
+.tool-wrap .tool-row { border-bottom: none; }
+.tool-wrap:last-child { border-bottom: none; }
+
+.cfg-panel {
+  background: var(--bg-deep, rgba(7,43,49,0.03));
+  border-top: 1px solid var(--line);
+  padding: 0;
+  overflow: hidden;
+}
+.cfg-panel-inner {
+  padding: 14px 16px 16px;
+}
+.cfg-title {
+  font-size: 12px; font-weight: 600;
+  color: var(--fg-2);
+  margin-bottom: 10px;
+  font-family: 'Inter', sans-serif;
+}
+.cfg-fields { display: flex; flex-direction: column; gap: 10px; }
+.cfg-field { display: flex; flex-direction: column; gap: 4px; }
+.cfg-label {
+  font-size: 11px; font-weight: 600;
+  color: var(--fg-3);
+  font-family: 'Inter', sans-serif;
+}
+.cfg-req { color: var(--danger, #c0392b); margin-left: 2px; }
+.cfg-input {
+  padding: 7px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  color: var(--fg-1);
+  font-family: monospace;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%; box-sizing: border-box;
+}
+.cfg-input:focus { border-color: var(--bg-deep-alt); box-shadow: 0 0 0 3px rgba(17,94,103,0.08); }
+.cfg-actions {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 12px;
+}
+.btn-cfg-save {
+  padding: 6px 16px;
+  background: var(--bg-deep-alt, #115e67);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  font-family: 'Inter', sans-serif;
+}
+.btn-cfg-save:hover { opacity: 0.88; }
+.btn-cfg-save:disabled { opacity: 0.5; cursor: default; }
+.cfg-status {
+  font-size: 11px;
+  color: var(--success);
+  font-family: 'Inter', sans-serif;
+}
+.cfg-status.err { color: var(--danger, #c0392b); }
 </style>
 
 {% endblock %}
@@ -251,6 +371,7 @@
     }, 250);
   }
 
+  // Toggle click is on the label; config button stops propagation itself.
   document.querySelectorAll('.tool-row').forEach(function(row) {
     row.addEventListener('click', function(e) {
       if (e.target.tagName === 'A') return;
@@ -269,10 +390,11 @@
       let anyVisible = false;
       document.querySelectorAll('.cat-section').forEach(function(sec) {
         let visibleInSec = 0;
-        sec.querySelectorAll('.tool-row').forEach(function(row) {
-          const hay = (row.dataset.name || '') + ' ' + (row.dataset.desc || '');
+        // Search on tool-wrap (holds data attrs) instead of tool-row
+        sec.querySelectorAll('.tool-wrap').forEach(function(wrap) {
+          const hay = (wrap.dataset.name || '') + ' ' + (wrap.dataset.desc || '');
           const match = !q || hay.indexOf(q) !== -1;
-          row.style.display = match ? '' : 'none';
+          wrap.style.display = match ? '' : 'none';
           if (match) visibleInSec++;
         });
         sec.style.display = visibleInSec > 0 ? '' : 'none';
@@ -282,5 +404,53 @@
     });
   }
 })();
+
+function toggleCfg(slug) {
+  const panel = document.getElementById('cfg-' + slug);
+  const btn = document.querySelector('.cfg-toggle-btn[data-slug="' + slug + '"]');
+  if (!panel) return;
+  const open = panel.style.display === 'none' || panel.style.display === '';
+  panel.style.display = open ? 'block' : 'none';
+  panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+  if (btn) btn.classList.toggle('active', open);
+}
+
+async function saveCfg(slug) {
+  const panel = document.getElementById('cfg-' + slug);
+  const statusEl = document.getElementById('cfg-status-' + slug);
+  const saveBtn = panel ? panel.querySelector('.btn-cfg-save') : null;
+  if (!panel || !statusEl) return;
+
+  const payload = {};
+  panel.querySelectorAll('.cfg-input[data-key]').forEach(function(inp) {
+    payload[inp.dataset.key] = inp.value;
+  });
+
+  if (saveBtn) saveBtn.disabled = true;
+  statusEl.textContent = 'Saving…';
+  statusEl.className = 'cfg-status';
+
+  try {
+    const resp = await fetch('/portal/mcps/' + slug + '/config', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (resp.ok && data.ok) {
+      statusEl.textContent = 'Saved';
+      setTimeout(function() { statusEl.textContent = ''; }, 2500);
+    } else {
+      statusEl.textContent = data.error || 'Save failed';
+      statusEl.className = 'cfg-status err';
+    }
+  } catch(e) {
+    statusEl.textContent = 'Network error';
+    statusEl.className = 'cfg-status err';
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
 </script>
 {% endblock %}
