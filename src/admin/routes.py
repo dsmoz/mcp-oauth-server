@@ -1140,6 +1140,79 @@ async def list_users(request: Request, _: str = Depends(_require_admin)):
     )
 
 
+@router.get("/users/new", response_class=HTMLResponse)
+async def new_user_form(request: Request, _: str = Depends(_require_admin)):
+    return templates.TemplateResponse(
+        request=request, name="user_create.html", context={"error": None}
+    )
+
+
+@router.post("/users", response_class=HTMLResponse)
+async def create_user_admin(
+    request: Request,
+    email: str = Form(...),
+    display_name: str = Form(""),
+    initial_credits: float = Form(0.0),
+    _: str = Depends(_require_admin),
+):
+    from src.users import SupabaseUserProvider
+    users = SupabaseUserProvider()
+    try:
+        user = users.create_user(
+            email=email,
+            display_name=display_name or None,
+            credit_balance=initial_credits,
+            is_active=False,
+        )
+    except ValueError as exc:
+        return templates.TemplateResponse(
+            request=request,
+            name="user_create.html",
+            context={"error": str(exc)},
+            status_code=400,
+        )
+
+    db = get_db()
+    client_id = generate_client_id()
+    raw_secret = generate_token(32)
+    secret_hash = hash_secret(raw_secret)
+    db.table("oauth_clients").insert({
+        "client_id": client_id,
+        "client_secret_hash": secret_hash,
+        "client_name": display_name or email,
+        "redirect_uris": [],
+        "grant_types": ["authorization_code"],
+        "scope": "mcp",
+        "allowed_mcp_resources": [],
+        "created_by": email,
+        "is_active": True,
+        "user_id": user.user_id,
+        "claimed_at": "now()",
+    }).execute()
+
+    from src.portal.routes import create_setup_token
+    setup_token = create_setup_token(user.user_id)
+
+    import asyncio
+    try:
+        asyncio.create_task(em.send_approval_email(
+            contact_name=display_name or email,
+            contact_email=email,
+            company_name=display_name or email,
+            user_id=user.user_id,
+            issuer_url=get_settings().OAUTH_ISSUER_URL,
+            setup_token=setup_token,
+        ))
+    except Exception as exc:
+        import sys
+        print(f"WARNING: setup email failed: {exc}", file=sys.stderr)
+
+    return RedirectResponse(
+        url=f"/admin/users/{user.user_id}?secret={raw_secret}&client_id={client_id}",
+        status_code=303,
+    )
+
+
 @router.get("/users/{user_id}", response_class=HTMLResponse)
 async def user_detail(
     request: Request,
@@ -1197,6 +1270,42 @@ async def user_add_credits(
         raise HTTPException(status_code=404, detail="User not found")
     users.add_credits(user_id, amount)
     return RedirectResponse(url=f"/admin/users/{user_id}", status_code=303)
+
+
+@router.post("/users/{user_id}/set-tier", response_class=HTMLResponse)
+async def user_set_tier(
+    user_id: str,
+    tier: str = Form(...),
+    _: str = Depends(_require_admin),
+):
+    from src.users import SupabaseUserProvider
+    users = SupabaseUserProvider()
+    if users.get_user(user_id) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if tier not in ("standard", "super"):
+        raise HTTPException(status_code=400, detail="Invalid tier")
+    get_db().table("users").update({"tier": tier}).eq("user_id", user_id).execute()
+    return RedirectResponse(url=f"/admin/users/{user_id}", status_code=303)
+
+
+@router.post("/users/{user_id}/rekey-device", response_class=HTMLResponse)
+async def user_rekey_device(
+    user_id: str,
+    client_id: str = Form(...),
+    _: str = Depends(_require_admin),
+):
+    db = get_db()
+    row = _get_client_row(db, client_id)
+    if row is None or row.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Device not found for this user")
+    raw_secret = generate_token(32)
+    db.table("oauth_clients").update(
+        {"client_secret_hash": hash_secret(raw_secret)}
+    ).eq("client_id", client_id).execute()
+    return RedirectResponse(
+        url=f"/admin/users/{user_id}?secret={raw_secret}&client_id={client_id}",
+        status_code=303,
+    )
 
 
 @router.post("/users/{user_id}/revoke-device", response_class=HTMLResponse)

@@ -170,6 +170,13 @@
             <i class="ph-light ph-eye"></i> View
           </a>
           {% if d.is_active %}
+          <form method="post" action="/admin/users/{{ user.user_id }}/rekey-device"
+                onsubmit="return confirm('Generate a new secret for {{ d.client_name }}? The old secret will stop working immediately.')">
+            <input type="hidden" name="client_id" value="{{ d.client_id }}">
+            <button type="submit" class="btn btn-secondary">
+              <i class="ph-light ph-key"></i> New Secret
+            </button>
+          </form>
           <form method="post" action="/admin/users/{{ user.user_id }}/revoke-device"
                 onsubmit="return confirm('Revoke {{ d.client_name }}? The device will be signed out.')">
             <input type="hidden" name="client_id" value="{{ d.client_id }}">

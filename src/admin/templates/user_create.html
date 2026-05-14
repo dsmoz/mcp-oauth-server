@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Register User — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Register User</h1>
+  <div class="actions">
+    <a href="/admin/users/" class="btn btn-secondary">
+      <i class="ph-light ph-arrow-left"></i> Back
+    </a>
+  </div>
+</div>
+
+{% if error %}
+<div style="margin-bottom:1rem;padding:0.75rem 1rem;background:var(--danger-bg,#fee2e2);border:1px solid var(--danger-border,#fca5a5);border-radius:6px;color:var(--text-h);font-size:0.875rem">
+  <i class="ph-light ph-warning"></i> {{ error }}
+</div>
+{% endif %}
+
+<div class="card">
+  <form method="post" action="/admin/users">
+    <div class="form-group">
+      <label for="email">Email <span style="color:var(--danger-border,#f87171)">*</span></label>
+      <input type="email" name="email" id="email" required placeholder="user@example.com">
+    </div>
+    <div class="form-group">
+      <label for="display_name">Display Name</label>
+      <input type="text" name="display_name" id="display_name" placeholder="Org or person name">
+    </div>
+    <div class="form-group">
+      <label for="initial_credits">Initial Credits</label>
+      <input type="number" name="initial_credits" id="initial_credits" value="0" min="0" step="0.01">
+    </div>
+    <div style="display:flex;gap:0.75rem;margin-top:1.5rem;align-items:center">
+      <button type="submit" class="btn btn-primary">
+        <i class="ph-light ph-user-plus"></i> Create User
+      </button>
+      <a href="/admin/users/" class="btn btn-secondary">Cancel</a>
+    </div>
+    <p style="margin-top:1rem;font-size:0.8rem;color:var(--text-muted)">
+      A device credential and setup link will be generated automatically. The user will receive an email to complete account setup.
+    </p>
+  </form>
+</div>
+{% endblock %}
