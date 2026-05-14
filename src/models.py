@@ -36,6 +36,10 @@ class OAuthClient(BaseModel):
     # New tenancy binding. NULL = unclaimed DCR client awaiting first-login adoption.
     user_id: Optional[str] = None
     claimed_at: Optional[str] = None
+    # Public/shared clients (e.g. multi-user web apps) are exempt from the
+    # one-user-claim flow. Tokens are bound to the user who consents, not the
+    # client's claimer. ``user_id`` stays NULL on these rows.
+    is_public_client: bool = False
     portal_username: Optional[str] = None
     portal_password_hash: Optional[str] = None
     created_at: Optional[str] = None
@@ -52,6 +56,9 @@ class AuthorizationCode(BaseModel):
     code_challenge_method: Optional[str] = None
     resource: Optional[str] = None
     expires_at: int
+    # Captured at consent completion for public/multi-user clients. NULL during
+    # phase 1 (pending session) and on legacy rows.
+    user_id: Optional[str] = None
     created_at: Optional[str] = None
 
 

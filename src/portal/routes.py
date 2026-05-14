@@ -151,15 +151,20 @@ def _complete_oauth_session(next_session: str, user_id: str) -> Optional[Redirec
 
     pending_client_id = pending.get("client_id")
     if pending_client_id:
-        try:
-            provider.claim_unclaimed_client(pending_client_id, user_id)
-        except ValueError as exc:
-            print(f"PORTAL: claim conflict on {pending_client_id} → {exc}", file=sys.stderr)
-            return HTMLResponse(
-                f"<h1>Device already connected to another account</h1>"
-                f"<p>This device is linked to a different user. Please sign out and retry on a fresh device.</p>",
-                status_code=409,
-            )
+        # Public/multi-user clients (e.g. dsmoz-academia) skip the claim step
+        # entirely — tokens bind to each authorising user via the auth code,
+        # not to a single client-row owner.
+        client_row = provider.get_client(pending_client_id)
+        if client_row is not None and not client_row.is_public_client:
+            try:
+                provider.claim_unclaimed_client(pending_client_id, user_id)
+            except ValueError as exc:
+                print(f"PORTAL: claim conflict on {pending_client_id} → {exc}", file=sys.stderr)
+                return HTMLResponse(
+                    f"<h1>Device already connected to another account</h1>"
+                    f"<p>This device is linked to a different user. Please sign out and retry on a fresh device.</p>",
+                    status_code=409,
+                )
 
     try:
         session_data = _json.loads(pending.get("resource") or "{}")
@@ -168,7 +173,7 @@ def _complete_oauth_session(next_session: str, user_id: str) -> Optional[Redirec
     state = session_data.get("state")
 
     try:
-        code, redirect_uri = provider.mark_session_approved(next_session)
+        code, redirect_uri = provider.mark_session_approved(next_session, user_id=user_id)
     except ValueError:
         return None
 
