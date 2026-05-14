@@ -205,6 +205,28 @@ def _load_enabled_mcps(user_id: str) -> list[dict]:
     return query.execute().data or []
 
 
+def _load_mcp_credentials(user_id: str, slugs: list[str]) -> dict[str, dict]:
+    """Return per-user credentials for each slug from client_mcp_credentials.
+
+    Returns {slug: credentials_dict}. Missing rows → empty dict for that slug.
+    """
+    if not slugs:
+        return {}
+    try:
+        rows = (
+            get_db()
+            .table("client_mcp_credentials")
+            .select("mcp_slug, credentials")
+            .eq("user_id", user_id)
+            .in_("mcp_slug", slugs)
+            .execute()
+        ).data or []
+        return {r["mcp_slug"]: r["credentials"] or {} for r in rows}
+    except Exception as exc:
+        print(f"WARNING: failed to load MCP credentials for {user_id}: {exc}", file=sys.stderr)
+        return {}
+
+
 def _get_credit_cost(mcp_slug: str) -> float:
     """Return credit_cost_per_call for an MCP slug (0 if not set).
 
@@ -366,8 +388,14 @@ _MUTATION_SCHEMA = {
 }
 
 
-def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) -> Server:
+def _build_mcp_server(
+    user_id: str,
+    client_id: str,
+    enabled_mcps: list[dict],
+    mcp_creds_by_slug: dict[str, dict] | None = None,
+) -> Server:
     mcp_by_slug = {m["slug"]: m for m in enabled_mcps}
+    mcp_creds_by_slug = mcp_creds_by_slug or {}
     # Promoted UI tools: promoted_name -> {slug, upstream_name, descriptor}
     _ui_tools: dict[str, dict] = {}
     # Resource origins: uri -> slug (populated lazily by list_resources_handler)
@@ -665,6 +693,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
             mcp.get("upstream_api_key", ""),
             user_id=user_id,
             client_id=client_id,
+            mcp_credentials=mcp_creds_by_slug.get(slug) or None,
         )
         _tool_cache.set(cache_key, tools)
         return tools
@@ -708,6 +737,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         api_key=mcp.get("upstream_api_key", ""),
                         user_id=user_id,
                         client_id=client_id,
+                        mcp_credentials=mcp_creds_by_slug.get(slug) or None,
                     )
                 except RuntimeError as exc:
                     print(f"GATEWAY: upstream auth/config error {slug}/{upstream_name}: {exc}", file=sys.stderr)
@@ -905,6 +935,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         mcp.get("upstream_api_key", ""),
                         user_id=user_id,
                         client_id=client_id,
+                        mcp_credentials=mcp_creds_by_slug.get(slug) or None,
                     )
                 except RuntimeError as exc:
                     print(f"GATEWAY: upstream auth/config error {slug}/{tool_name}: {exc}", file=sys.stderr)
@@ -984,6 +1015,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                     api_key=mcp.get("upstream_api_key", ""),
                     user_id=user_id,
                     client_id=client_id,
+                    mcp_credentials=mcp_creds_by_slug.get(slug) or None,
                 )
             except Exception as exc:
                 print(f"GATEWAY: list_resources failed for {slug}: {exc}", file=sys.stderr)
@@ -1027,6 +1059,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
             api_key=mcp.get("upstream_api_key", ""),
             user_id=user_id,
             client_id=client_id,
+            mcp_credentials=mcp_creds_by_slug.get(slug) or None,
         )
         out: list[ReadResourceContents] = []
         for c in raw.get("contents") or []:
@@ -1190,7 +1223,10 @@ async def _gateway_asgi(scope, receive, send):
         )
         await error(scope, receive, send)
         return
-    mcp_server = _build_mcp_server(token_user_id, client_id, enabled_mcps)
+    mcp_creds_by_slug = _load_mcp_credentials(
+        token_user_id, [m["slug"] for m in enabled_mcps]
+    )
+    mcp_server = _build_mcp_server(token_user_id, client_id, enabled_mcps, mcp_creds_by_slug)
     transport = StreamableHTTPServerTransport(mcp_session_id=None)
 
     response_started = False
