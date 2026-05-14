@@ -107,6 +107,8 @@ def _ensure_agent_client(user_id: str) -> str:
 _credit_cost_cache: TTLCache[str, float] = TTLCache(ttl=300, maxsize=256)
 _published_mcps_cache: TTLCache[str, list[dict]] = TTLCache(ttl=60, maxsize=4)
 _tool_cache: TTLCache[tuple[str, str], list[dict]] = TTLCache(ttl=300, maxsize=4096)
+# Per-user MCP credential config — short TTL; invalidated on portal save.
+_user_config_cache: TTLCache[tuple[str, str], dict] = TTLCache(ttl=60, maxsize=4096)
 
 
 def _invalidate_user_tool_cache(user_id: str) -> None:
@@ -114,6 +116,83 @@ def _invalidate_user_tool_cache(user_id: str) -> None:
     keys = [k for k in list(_tool_cache._store.keys()) if k[1] == user_id]
     for k in keys:
         _tool_cache.pop(k)
+
+
+def _invalidate_user_config_cache(user_id: str, slug: str | None = None) -> None:
+    """Drop cached user MCP config. If slug given, drop only that entry; else all for user."""
+    if slug is not None:
+        _user_config_cache.pop((user_id, slug))
+        # Also drop tool cache entry — config change may affect what tools surface.
+        _tool_cache.pop((slug, user_id))
+        return
+    keys = [k for k in list(_user_config_cache._store.keys()) if k[0] == user_id]
+    for k in keys:
+        _user_config_cache.pop(k)
+
+
+def _load_user_mcp_config(user_id: str, slug: str) -> dict:
+    """Return the user's saved per-MCP credential config (60s TTL). Empty dict if none."""
+    cache_key = (user_id, slug)
+    cached = _user_config_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        row = (
+            get_db().table("user_mcp_configs")
+            .select("config")
+            .eq("user_id", user_id)
+            .eq("mcp_slug", slug)
+            .limit(1)
+            .execute()
+        )
+        cfg = (row.data or [{}])[0].get("config") or {}
+        if not isinstance(cfg, dict):
+            cfg = {}
+    except Exception as exc:
+        print(f"WARNING: _load_user_mcp_config failed {user_id}/{slug}: {exc}", file=sys.stderr)
+        cfg = {}
+    _user_config_cache.set(cache_key, cfg)
+    return cfg
+
+
+def _user_config_headers(config_schema, user_config: dict) -> dict[str, str]:
+    """Pack saved config values into a single `X-MCP-Credentials` header.
+
+    The header value is base64-encoded JSON of the field-key → value dict.
+    Schema keys must match the upstream MCP's internal credential field names
+    (the MCP merges this dict directly into its credential config).
+
+    Returns {} when schema is empty, user has saved no values, or all
+    values are blank — so the header is omitted entirely and the MCP falls
+    back to its env-var defaults.
+    """
+    if not config_schema or not isinstance(config_schema, list) or not user_config:
+        return {}
+    payload: dict[str, str] = {}
+    for field in config_schema:
+        if not isinstance(field, dict):
+            continue
+        key = field.get("key")
+        if not key or not isinstance(key, str):
+            continue
+        val = user_config.get(key)
+        if val is None or val == "":
+            continue
+        payload[key] = str(val)
+    if not payload:
+        return {}
+    import base64 as _b64, json as _json
+    encoded = _b64.b64encode(_json.dumps(payload).encode()).decode()
+    return {"X-MCP-Credentials": encoded}
+
+
+def _extra_headers_for(mcp: dict, user_id: str) -> dict[str, str]:
+    """Combined per-MCP user-credential headers. Returns {} when MCP has no config_schema."""
+    schema = mcp.get("config_schema")
+    if not schema:
+        return {}
+    cfg = _load_user_mcp_config(user_id, mcp["slug"])
+    return _user_config_headers(schema, cfg)
 
 
 GATEWAY_INSTRUCTIONS = """\
@@ -665,6 +744,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
             mcp.get("upstream_api_key", ""),
             user_id=user_id,
             client_id=client_id,
+            extra_headers=_extra_headers_for(mcp, user_id),
         )
         _tool_cache.set(cache_key, tools)
         return tools
@@ -708,6 +788,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         api_key=mcp.get("upstream_api_key", ""),
                         user_id=user_id,
                         client_id=client_id,
+                        extra_headers=_extra_headers_for(mcp, user_id),
                     )
                 except RuntimeError as exc:
                     print(f"GATEWAY: upstream auth/config error {slug}/{upstream_name}: {exc}", file=sys.stderr)
@@ -905,6 +986,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         mcp.get("upstream_api_key", ""),
                         user_id=user_id,
                         client_id=client_id,
+                        extra_headers=_extra_headers_for(mcp, user_id),
                     )
                 except RuntimeError as exc:
                     print(f"GATEWAY: upstream auth/config error {slug}/{tool_name}: {exc}", file=sys.stderr)
@@ -984,6 +1066,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                     api_key=mcp.get("upstream_api_key", ""),
                     user_id=user_id,
                     client_id=client_id,
+                    extra_headers=_extra_headers_for(mcp, user_id),
                 )
             except Exception as exc:
                 print(f"GATEWAY: list_resources failed for {slug}: {exc}", file=sys.stderr)
@@ -1027,6 +1110,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
             api_key=mcp.get("upstream_api_key", ""),
             user_id=user_id,
             client_id=client_id,
+            extra_headers=_extra_headers_for(mcp, user_id),
         )
         out: list[ReadResourceContents] = []
         for c in raw.get("contents") or []:
