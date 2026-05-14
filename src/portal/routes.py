@@ -739,6 +739,111 @@ async def portal_mcps_post(request: Request, user_id: str = Depends(_require_por
     return RedirectResponse(url="/portal/mcps", status_code=303)
 
 
+@router.get("/mcps/{slug}/credentials", response_class=HTMLResponse)
+async def portal_mcp_credentials_get(
+    slug: str, request: Request, user_id: str = Depends(_require_portal_user)
+):
+    db = get_db()
+    mcp_row = (
+        db.table("mcp_catalogue")
+        .select("slug, name, credentials_schema")
+        .eq("slug", slug)
+        .eq("is_published", True)
+        .limit(1)
+        .execute()
+    ).data
+    if not mcp_row:
+        raise HTTPException(status_code=404, detail="MCP not found")
+    mcp = mcp_row[0]
+    schema: dict = mcp.get("credentials_schema") or {}
+    if not schema:
+        raise HTTPException(status_code=404, detail="This MCP requires no credentials")
+
+    existing_row = (
+        db.table("client_mcp_credentials")
+        .select("credentials")
+        .eq("user_id", user_id)
+        .eq("mcp_slug", slug)
+        .limit(1)
+        .execute()
+    ).data
+    existing: dict = (existing_row[0]["credentials"] if existing_row else {}) or {}
+
+    import sys
+    print(
+        f"CREDS_GET: user_id={user_id!r} slug={slug!r} "
+        f"found={bool(existing_row)} keys={list(existing.keys())}",
+        file=sys.stderr,
+    )
+
+    user = _users().get_user(user_id)
+    client_ctx = {
+        "client_id": user_id,
+        "client_name": getattr(user, "display_name", None) or getattr(user, "email", ""),
+        "portal_username": getattr(user, "email", ""),
+    }
+    return templates.TemplateResponse(
+        request=request,
+        name="portal_credentials.html",
+        context={
+            "client": client_ctx,
+            "user": user,
+            "active_nav": "mcps",
+            "mcp": mcp,
+            "schema": schema,
+            "existing": existing,
+        },
+    )
+
+
+@router.post("/mcps/{slug}/credentials", response_class=HTMLResponse)
+async def portal_mcp_credentials_post(
+    slug: str, request: Request, user_id: str = Depends(_require_portal_user)
+):
+    db = get_db()
+    mcp_row = (
+        db.table("mcp_catalogue")
+        .select("slug, credentials_schema")
+        .eq("slug", slug)
+        .eq("is_published", True)
+        .limit(1)
+        .execute()
+    ).data
+    if not mcp_row:
+        raise HTTPException(status_code=404, detail="MCP not found")
+    schema: dict = mcp_row[0].get("credentials_schema") or {}
+    if not schema:
+        raise HTTPException(status_code=404, detail="This MCP requires no credentials")
+
+    form = await request.form()
+
+    # For password-type fields, a blank submission means "keep existing value".
+    existing_row = (
+        db.table("client_mcp_credentials")
+        .select("credentials")
+        .eq("user_id", user_id)
+        .eq("mcp_slug", slug)
+        .limit(1)
+        .execute()
+    ).data
+    existing: dict = (existing_row[0]["credentials"] if existing_row else {}) or {}
+
+    credentials: dict = {}
+    for key, field in schema.items():
+        val = form.get(key, "").strip()
+        if not val and (field.get("secret") or field.get("type") == "password") and key in existing:
+            credentials[key] = existing[key]
+        else:
+            credentials[key] = val
+
+    db.table("client_mcp_credentials").upsert(
+        {"user_id": user_id, "mcp_slug": slug, "credentials": credentials},
+        on_conflict="user_id,mcp_slug",
+    ).execute()
+
+    return RedirectResponse(url="/portal/mcps", status_code=303)
+
+
 # ── Setup guide ───────────────────────────────────────────────────────────────
 
 @router.get("/setup", response_class=HTMLResponse)
