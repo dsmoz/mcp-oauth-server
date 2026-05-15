@@ -5,7 +5,8 @@
       "name": "dev",
       "runtimeExecutable": "/Users/danilodasilva/Documents/Programming/mcp-oauth-server/.venv/bin/uvicorn",
       "runtimeArgs": ["main:app", "--reload", "--port", "8100"],
-      "port": 8100
+      "port": 8100,
+      "cwd": "/Users/danilodasilva/Documents/Programming/mcp-oauth-server"
     },
     {
       "name": "mockup",

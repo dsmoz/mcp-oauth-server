@@ -434,12 +434,21 @@ async def introspect(
     except Exception:
         pass
 
+    user_is_admin = False
+    try:
+        user_row = get_db().table("users").select("is_admin").eq("user_id", at.user_id).limit(1).execute()
+        if user_row.data:
+            user_is_admin = bool(user_row.data[0].get("is_admin", False))
+    except Exception:
+        pass
+
     response: dict = {
         "active": True,
         "client_id": at.client_id,
         "user_id": at.user_id,
         "scope": " ".join(at.scopes) if at.scopes else "mcp",
         "exp": at.expires_at,
+        "is_admin": user_is_admin,
     }
     if credits_remaining is not None:
         response["credits_remaining"] = credits_remaining
