@@ -140,6 +140,9 @@ nav {
   border-radius: 6px;
   padding: 28px;
   backdrop-filter: blur(8px);
+  justify-self: center;
+  max-width: 360px;
+  width: 100%;
 }
 .hero-stat-row {
   display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;
@@ -317,6 +320,7 @@ nav {
 }
 .test-inner {
   max-width: 880px; margin: 0 auto; padding: 0 48px;
+  text-align: center;
 }
 .test-slide { display: none; }
 .test-slide.active { display: block; }
@@ -327,11 +331,13 @@ nav {
   line-height: 1.45;
   color: #fff;
   letter-spacing: -0.01em;
-  margin: 20px 0 30px;
+  margin: 20px auto 30px;
   max-width: 760px;
 }
 .test-author {
   display: flex; align-items: center; gap: 14px;
+  justify-content: center;
+  text-align: left;
 }
 .test-avatar {
   width: 44px; height: 44px;
@@ -356,6 +362,7 @@ nav {
 .test-role { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 2px; }
 .test-nav {
   display: flex; align-items: center; gap: 10px; margin-top: 36px;
+  justify-content: center;
 }
 .test-nav-btn {
   width: 34px; height: 34px;
@@ -392,9 +399,11 @@ nav {
   color: var(--fg3);
   margin-bottom: 28px;
   font-weight: 600;
+  text-align: center;
 }
 .partners-logos {
   display: flex; align-items: center; gap: 40px; flex-wrap: wrap;
+  justify-content: center;
 }
 .partner-logo-img {
   height: 32px;
@@ -499,13 +508,13 @@ footer {
           Open my toolbox
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </a>
-        <a href="/portal/catalog" class="btn-ghost">See catalogue</a>
+        <a href="/catalog" class="btn-ghost">See catalogue</a>
         {% else %}
         <a href="/portal/login" class="btn-primary">
           Get started
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </a>
-        <a href="#catalogue" class="btn-ghost">See catalogue</a>
+        <a href="/catalog" class="btn-ghost">See catalogue</a>
         {% endif %}
       </div>
     </div>
@@ -535,7 +544,7 @@ footer {
         <div class="eyebrow">Available tools</div>
         <h2 class="display">Built for the work you do.</h2>
       </div>
-      <a href="{% if is_authenticated %}/portal/catalog{% else %}/portal/login?next=/portal/catalog{% endif %}" class="see-catalogue-link">
+      <a href="/catalog" class="see-catalogue-link">
         See full catalogue
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </a>
@@ -569,7 +578,7 @@ footer {
             <span class="cost-chip">
               {% if mcp.credit_cost_per_call %}{{ mcp.credit_cost_per_call }} cr / call{% else %}Free{% endif %}
             </span>
-            <a href="{% if is_authenticated %}/portal/catalog{% else %}/portal/login?next=/portal/catalog{% endif %}" class="btn-add">
+            <a href="/catalog" class="btn-add">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               See catalogue
             </a>
@@ -662,7 +671,7 @@ footer {
   <div class="footer-links">
     {% if is_authenticated %}
     <a href="/portal/mcps">My toolbox</a>
-    <a href="/portal/catalog">Catalogue</a>
+    <a href="/catalog">Catalogue</a>
     <a href="/portal/logout">Sign out</a>
     {% else %}
     <a href="/portal/login">Sign in</a>

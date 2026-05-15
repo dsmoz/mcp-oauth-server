@@ -1346,3 +1346,23 @@ async def public_landing(request: Request):
             "is_authenticated": is_authenticated,
         },
     )
+
+
+@landing_router.get("/catalog", response_class=HTMLResponse)
+async def public_catalog(request: Request):
+    """Public catalogue — all published standard-tier MCPs.
+
+    Accessible to anyone; super-tier MCPs not shown. Logged-in users see
+    'Add to toolbox' CTAs, anonymous visitors see 'Sign in to add'.
+    """
+    is_authenticated = bool(_verify_session(request.cookies.get(_COOKIE_NAME) or ""))
+
+    from src.portal.landing import get_public_catalogue
+    catalogue = get_public_catalogue()
+
+    return templates.TemplateResponse(
+        request=request, name="public_catalog.html", context={
+            "catalogue": catalogue,
+            "is_authenticated": is_authenticated,
+        },
+    )
