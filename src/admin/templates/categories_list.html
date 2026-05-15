@@ -10,20 +10,37 @@
 
 <div class="card" style="padding:0;overflow:hidden">
   {% if categories %}
-  <table>
+  <table id="cat-table">
     <thead>
       <tr>
+        <th style="width:32px"></th>
+        <th style="width:48px">Icon</th>
         <th>Name</th>
-        <th>Sort Order</th>
         <th></th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="cat-tbody">
       {% for cat in categories %}
-      <tr>
+      <tr draggable="true" data-name="{{ cat.name }}" style="cursor:default">
+        <td style="text-align:center;color:var(--text-muted);cursor:grab;padding:0 0.5rem" class="drag-handle">
+          <i class="ph-light ph-dots-six-vertical" style="font-size:1.1rem;vertical-align:middle"></i>
+        </td>
+        <td style="text-align:center">
+          {% if cat.icon %}
+          <i data-lucide="{{ cat.icon }}" style="width:18px;height:18px;color:var(--accent)"></i>
+          {% else %}
+          <span style="color:var(--text-muted)">—</span>
+          {% endif %}
+        </td>
         <td style="font-weight:600;color:var(--text-h)">{{ cat.name }}</td>
-        <td style="color:var(--text-muted)">{{ cat.sort_order }}</td>
-        <td class="actions" style="justify-content:flex-end">
+        <td class="actions" style="justify-content:flex-end;gap:0.5rem">
+          <button type="button" class="btn btn-secondary"
+                  style="font-size:0.75rem;padding:0.3rem 0.7rem"
+                  data-cat="{{ cat.name }}"
+                  data-icon="{{ cat.icon or '' }}"
+                  onclick="openIconModal(this.dataset.cat, this.dataset.icon)">
+            <i class="ph-light ph-image-square"></i> Set Icon
+          </button>
           <form method="post" action="/admin/categories/{{ cat.name }}/delete"
                 onsubmit="return confirm('Delete category {{ cat.name }}?')">
             <button type="submit" class="btn btn-danger" style="font-size:0.75rem;padding:0.3rem 0.7rem">
@@ -39,4 +56,183 @@
   <div style="padding:2rem;text-align:center;color:var(--text-muted)">No categories yet.</div>
   {% endif %}
 </div>
+
+<!-- Icon picker modal -->
+<dialog id="icon-modal" style="
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:0;
+  width:min(560px,95vw);
+  color:var(--text-h);
+  box-shadow:0 24px 64px rgba(0,0,0,0.5);
+">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid var(--border)">
+    <span style="font-weight:600;font-size:1rem">Pick Icon</span>
+    <button onclick="document.getElementById('icon-modal').close()"
+            style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1.25rem;line-height:1;padding:0.25rem">×</button>
+  </div>
+  <div style="padding:1rem 1.25rem 0.5rem">
+    <input id="icon-search" type="text" placeholder="Search icons…" class="form-input"
+           style="width:100%;margin-bottom:0.75rem"
+           oninput="filterIcons(this.value)">
+    <div id="icon-grid" style="
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(72px,1fr));
+      gap:0.5rem;
+      max-height:360px;
+      overflow-y:auto;
+      padding-bottom:0.5rem;
+    "></div>
+  </div>
+  <div style="padding:0.75rem 1.25rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end">
+    <button onclick="document.getElementById('icon-modal').close()" class="btn btn-secondary" style="font-size:0.875rem">Cancel</button>
+  </div>
+</dialog>
+
+<form id="icon-form" method="post" style="display:none">
+  <input type="hidden" name="icon" id="icon-input">
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>
+// ── Icon picker ───────────────────────────────────────────────────────────────
+const ICONS = [
+  'Activity','Archive','Award','AlignLeft','BarChart2','Bookmark','Box',
+  'BookOpen','Camera','Clipboard','Cloud','Code','Cpu','Database',
+  'Download','Edit','ExternalLink','Feather','File','FileText','Flag',
+  'Folder','Gift','Globe','Grid','Heart','Image','Key','Layers','Layout',
+  'Link','List','Lock','Mail','Map','MessageSquare','Mic','Music',
+  'Navigation','Package','PenTool','PieChart','RefreshCw','Search',
+  'Settings','Shield','Sliders','Star','Tag','Terminal','Tool',
+  'TrendingUp','Truck','Type','Upload','User','Users','Video',
+  'Wrench','Zap','Workflow','Gauge','Lightbulb','Microscope',
+  'FlaskConical','Brain','Puzzle','Rocket','Satellite',
+];
+
+let currentCategory = '';
+
+function buildIconBtn(name, isSelected) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.dataset.icon = name;
+  btn.title = name;
+  btn.style.cssText = [
+    'display:flex','flex-direction:column','align-items:center','justify-content:center',
+    'gap:0.3rem','padding:0.6rem 0.25rem','border-radius:8px','cursor:pointer',
+    'background:' + (isSelected ? 'var(--accent-muted,#0e3a4a)' : 'var(--bg)'),
+    'border:1px solid ' + (isSelected ? 'var(--accent)' : 'var(--border)'),
+    'color:' + (isSelected ? 'var(--accent)' : 'var(--text-muted)'),
+    'transition:background 0.15s,color 0.15s',
+  ].join(';');
+  btn.addEventListener('mouseover', () => {
+    btn.style.background = 'var(--bg-hover,#1e2d38)';
+    btn.style.color = 'var(--accent)';
+  });
+  btn.addEventListener('mouseout', () => {
+    if (btn.dataset.icon !== document.getElementById('icon-input').value) {
+      btn.style.background = 'var(--bg)';
+      btn.style.color = 'var(--text-muted)';
+    }
+  });
+  btn.addEventListener('click', () => selectIcon(name));
+
+  const iconEl = document.createElement('i');
+  iconEl.dataset.lucide = name;
+  iconEl.style.cssText = 'width:20px;height:20px';
+  btn.appendChild(iconEl);
+
+  const label = document.createElement('span');
+  label.style.fontSize = '0.65rem';
+  label.textContent = name;
+  btn.appendChild(label);
+
+  return btn;
+}
+
+function buildGrid(filter) {
+  const grid = document.getElementById('icon-grid');
+  const q = (filter || '').toLowerCase();
+  const filtered = ICONS.filter(n => n.toLowerCase().includes(q));
+  const current = document.getElementById('icon-input').value;
+  grid.replaceChildren(...filtered.map(n => buildIconBtn(n, n === current)));
+  lucide.createIcons();
+}
+
+function filterIcons(val) { buildGrid(val); }
+
+function openIconModal(catName, currentIcon) {
+  currentCategory = catName;
+  document.getElementById('icon-search').value = '';
+  document.getElementById('icon-input').value = currentIcon || '';
+  buildGrid('');
+  document.getElementById('icon-modal').showModal();
+}
+
+function selectIcon(iconName) {
+  const form = document.getElementById('icon-form');
+  document.getElementById('icon-input').value = iconName;
+  form.action = '/admin/categories/' + encodeURIComponent(currentCategory) + '/set-icon';
+  document.getElementById('icon-modal').close();
+  form.submit();
+}
+
+// ── Drag-to-reorder ───────────────────────────────────────────────────────────
+(function () {
+  const tbody = document.getElementById('cat-tbody');
+  if (!tbody) return;
+
+  let dragging = null;
+
+  tbody.addEventListener('dragstart', (e) => {
+    dragging = e.target.closest('tr');
+    if (!dragging) return;
+    dragging.style.opacity = '0.4';
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  tbody.addEventListener('dragend', () => {
+    if (dragging) dragging.style.opacity = '';
+    dragging = null;
+    // Clear any drop indicators
+    tbody.querySelectorAll('tr').forEach(r => r.style.borderTop = '');
+  });
+
+  tbody.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const target = e.target.closest('tr');
+    if (!target || target === dragging) return;
+    // Visual indicator
+    tbody.querySelectorAll('tr').forEach(r => r.style.borderTop = '');
+    const rect = target.getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    target.style.borderTop = e.clientY < mid ? '2px solid var(--accent)' : '';
+    if (e.clientY >= mid) target.nextElementSibling && (target.nextElementSibling.style.borderTop = '2px solid var(--accent)');
+  });
+
+  tbody.addEventListener('drop', (e) => {
+    e.preventDefault();
+    tbody.querySelectorAll('tr').forEach(r => r.style.borderTop = '');
+    const target = e.target.closest('tr');
+    if (!target || target === dragging || !dragging) return;
+
+    const rect = target.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    tbody.insertBefore(dragging, before ? target : target.nextSibling);
+
+    // Persist new order
+    const order = Array.from(tbody.querySelectorAll('tr[data-name]')).map(r => r.dataset.name);
+    fetch('/admin/categories/reorder', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({order}),
+    });
+  });
+})();
+
+document.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+</script>
 {% endblock %}
