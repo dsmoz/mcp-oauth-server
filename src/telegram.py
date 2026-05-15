@@ -56,6 +56,58 @@ async def _send(text: str) -> None:
         )
 
 
+async def _send_topup_with_buttons(text: str, request_id: str) -> None:
+    token = _bot_token()
+    chat_id = _chat_id()
+    if not token or not chat_id:
+        return
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            _url("sendMessage"),
+            json={
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "Markdown",
+                "reply_markup": {
+                    "inline_keyboard": [[
+                        {"text": "✅ Approve", "callback_data": f"topup_approve:{request_id}"},
+                        {"text": "❌ Reject",  "callback_data": f"topup_reject:{request_id}"},
+                    ]]
+                },
+            },
+            timeout=10.0,
+        )
+
+
+async def answer_callback_query(callback_query_id: str, text: str) -> None:
+    token = _bot_token()
+    if not token:
+        return
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            _url("answerCallbackQuery"),
+            json={"callback_query_id": callback_query_id, "text": text},
+            timeout=10.0,
+        )
+
+
+async def edit_topup_message(chat_id: int | str, message_id: int, text: str) -> None:
+    token = _bot_token()
+    if not token:
+        return
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            _url("editMessageText"),
+            json={
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "text": text,
+                "parse_mode": "Markdown",
+            },
+            timeout=10.0,
+        )
+
+
 async def send_dynamic_registration_notice(
     client_id: str,
     client_name: str,
@@ -90,12 +142,14 @@ async def send_topup_request_notice(
     note: str,
     request_id: str,
 ) -> None:
-    await _send(
+    base_url = get_settings().OAUTH_ISSUER_URL.rstrip("/")
+    await _send_topup_with_buttons(
         f"💳 *Credit Top-up Request*\n\n"
         f"User: `{user_email}` (`{user_id}`)\n"
         f"Amount: *{amount:.0f} credits*\n"
         f"Note: {note or '—'}\n\n"
-        f"Review: /admin/topup-requests/{request_id}"
+        f"Review: {base_url}/admin/topup-requests/{request_id}",
+        request_id=request_id,
     )
 
 
