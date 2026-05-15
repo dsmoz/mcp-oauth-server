@@ -34,6 +34,14 @@
       <input id="catalog-search" type="text" placeholder="Search catalog…" autocomplete="off">
     </div>
     <span class="chip"><span id="avail-count">{{ available | length }}</span>&nbsp;available</span>
+    <div class="view-toggle" role="group" aria-label="View mode">
+      <button type="button" class="view-btn" data-view="grid" aria-label="Grid view" title="Grid">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      </button>
+      <button type="button" class="view-btn" data-view="list" aria-label="List view" title="List">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -45,7 +53,7 @@
 {% endif %}
 
 {% if available %}
-<div class="catalog-grid">
+<div class="catalog-grid view-grid" id="catalog-grid">
   {% for mcp in available %}
     {% set cat = mcp.category or 'Other' %}
     <div class="cat-card" data-name="{{ mcp.name | lower }}" data-desc="{{ (mcp.description or '') | lower }}" data-cat="{{ cat | lower }}">
@@ -239,6 +247,41 @@
   word-wrap: break-word;
 }
 
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.view-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: transparent;
+  border: none;
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.view-btn + .view-btn { border-left: 1px solid var(--line-2); }
+.view-btn:hover { background: var(--bg); color: var(--fg-2); }
+.view-btn.active { background: var(--bg-deep-alt); color: #fff; }
+
+.catalog-grid.view-list { grid-template-columns: 1fr; gap: 4px; }
+.catalog-grid.view-list .cat-card {
+  flex-direction: row; align-items: center;
+  padding: 10px 14px; gap: 12px;
+}
+.catalog-grid.view-list .cat-card:hover { box-shadow: none; }
+.catalog-grid.view-list .cat-card-head { flex-shrink: 0; order: 2; }
+.catalog-grid.view-list .cat-card-name { flex: 1; order: 1; font-size: 13px; margin: 0; }
+.catalog-grid.view-list .cat-card-desc,
+.catalog-grid.view-list .read-more-btn { display: none !important; }
+.catalog-grid.view-list .cat-card-foot {
+  flex-shrink: 0; order: 3; margin: 0; border: none; padding: 0;
+}
+.catalog-grid.view-list .cat-card-foot .btn { width: auto; }
+
 @media (max-width: 767px) {
   .page-header { flex-direction: column; align-items: flex-start; }
   .page-header > div:last-child { width: 100%; }
@@ -267,6 +310,25 @@
 {% block extra_scripts %}
 <script>
 (function() {
+  const grid = document.getElementById('catalog-grid');
+  const viewBtns = document.querySelectorAll('.view-btn');
+  const STORAGE_KEY = 'portal.catalog.view';
+  function setView(v) {
+    if (!grid) return;
+    grid.classList.toggle('view-list', v === 'list');
+    grid.classList.toggle('view-grid', v !== 'list');
+    viewBtns.forEach(function(b) { b.classList.toggle('active', b.dataset.view === v); });
+    try { localStorage.setItem(STORAGE_KEY, v); } catch(e) {}
+  }
+  viewBtns.forEach(function(b) {
+    b.addEventListener('click', function() { setView(b.dataset.view); });
+  });
+  (function() {
+    var saved = 'grid';
+    try { saved = localStorage.getItem(STORAGE_KEY) || 'grid'; } catch(e) {}
+    setView(saved);
+  })();
+
   const search = document.getElementById('catalog-search');
   const empty = document.getElementById('empty-search');
   const cards = document.querySelectorAll('.cat-card');

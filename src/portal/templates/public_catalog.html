@@ -168,10 +168,12 @@ h1 {
   font-size: 11px;
   font-weight: 600;
   color: var(--fg2);
-  padding: 4px 8px;
+  padding: 2px 7px;
   background: rgba(7,43,49,0.05);
   border-radius: 999px;
+  white-space: nowrap;
 }
+.cost-chip.free { color: #086d4f; background: rgba(8,109,79,0.08); }
 .btn-cta {
   padding: 7px 14px;
   background: var(--deep);
@@ -203,8 +205,46 @@ footer {
 }
 footer a { text-decoration: none; margin-left: 16px; }
 
+.toolbar {
+  max-width: 1160px; margin: 0 auto;
+  padding: 0 48px 16px;
+  display: flex; justify-content: flex-end;
+}
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.view-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: transparent;
+  border: none;
+  color: var(--fg3);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.view-btn + .view-btn { border-left: 1px solid var(--line); }
+.view-btn:hover { background: var(--card); color: var(--fg2); }
+.view-btn.active { background: var(--deep); color: #fff; }
+
+.grid.view-list { grid-template-columns: 1fr; gap: 4px; padding-bottom: 80px; }
+.grid.view-list .card {
+  flex-direction: row; align-items: center;
+  padding: 10px 16px; gap: 14px;
+  transform: none !important;
+}
+.grid.view-list .card-head { flex-shrink: 0; }
+.grid.view-list .cat-pill { display: none; }
+.grid.view-list .card-name { flex: 1; font-size: 13px; margin: 0; }
+.grid.view-list .card-desc { display: none; }
+.grid.view-list .card-foot {
+  flex-shrink: 0; border: none; padding: 0; margin: 0;
+}
+
 @media (max-width: 768px) {
-  nav, .page-head, .grid, footer { padding-left: 24px; padding-right: 24px; }
+  nav, .page-head, .grid, .toolbar, footer { padding-left: 24px; padding-right: 24px; }
   .grid { grid-template-columns: 1fr; }
 }
 </style>
@@ -228,7 +268,17 @@ footer a { text-decoration: none; margin-left: 16px; }
 </div>
 
 {% if catalogue %}
-<div class="grid">
+<div class="toolbar">
+  <div class="view-toggle" role="group" aria-label="View mode">
+    <button type="button" class="view-btn" data-view="grid" aria-label="Grid view" title="Grid">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    </button>
+    <button type="button" class="view-btn" data-view="list" aria-label="List view" title="List">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    </button>
+  </div>
+</div>
+<div class="grid view-grid" id="pub-grid">
   {% for mcp in catalogue %}
   <div class="card">
     <div class="card-head">
@@ -252,9 +302,11 @@ footer a { text-decoration: none; margin-left: 16px; }
     <div class="card-name">{{ mcp.name }}</div>
     <p class="card-desc">{{ mcp.description or '' }}</p>
     <div class="card-foot">
-      <span class="cost-chip">
-        {% if mcp.credit_cost_per_call %}{{ mcp.credit_cost_per_call }} cr / call{% else %}Free{% endif %}
-      </span>
+      {% if mcp.credit_cost_per_call and mcp.credit_cost_per_call > 0 %}
+      <span class="cost-chip">{{ "%.1f"|format(mcp.credit_cost_per_call) }} cr/call</span>
+      {% else %}
+      <span class="cost-chip free">Free</span>
+      {% endif %}
       {% if is_authenticated %}
       <a href="/portal/catalog" class="btn-cta add">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -289,6 +341,24 @@ footer a { text-decoration: none; margin-left: 16px; }
 <script src="https://unpkg.com/lucide@latest"></script>
 <script>
   if (window.lucide) lucide.createIcons();
+  (function() {
+    var grid = document.getElementById('pub-grid');
+    var btns = document.querySelectorAll('.view-btn');
+    var KEY = 'pub.catalog.view';
+    function setView(v) {
+      if (!grid) return;
+      grid.classList.toggle('view-list', v === 'list');
+      grid.classList.toggle('view-grid', v !== 'list');
+      btns.forEach(function(b) { b.classList.toggle('active', b.dataset.view === v); });
+      try { localStorage.setItem(KEY, v); } catch(e) {}
+    }
+    btns.forEach(function(b) {
+      b.addEventListener('click', function() { setView(b.dataset.view); });
+    });
+    var saved = 'grid';
+    try { saved = localStorage.getItem(KEY) || 'grid'; } catch(e) {}
+    setView(saved);
+  })();
 </script>
 </body>
 </html>

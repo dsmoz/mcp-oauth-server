@@ -1720,6 +1720,7 @@ async def list_topup_requests(request: Request, _: str = Depends(_require_admin)
     rows = (
         db.table("credit_topup_requests")
         .select("*")
+        .neq("status", "rejected")
         .order("created_at", desc=True)
         .limit(200)
         .execute()
