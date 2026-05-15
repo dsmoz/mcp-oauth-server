@@ -25,7 +25,7 @@
     <h1>Overview</h1>
     <p style="font-size:13px;color:var(--fg-3);margin-top:4px">Your gateway to MCP tools for Claude, ChatGPT and Cursor.</p>
   </div>
-  <div style="display:flex;gap:8px;flex-shrink:0">
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
     <a href="/portal/setup" class="btn btn-ghost">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
       Open Setup guide
@@ -64,7 +64,7 @@
     {% endif %}
   </h2>
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-    <div class="copy-pill" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.12);color:#fff;margin-top:0;flex:1;min-width:240px">
+    <div class="copy-pill" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.12);color:#fff;margin-top:0;flex:1;min-width:0">
       <span class="pill-value" style="color:rgba(255,255,255,0.85)">{{ gateway_url }}</span>
       <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)">Copy</button>
     </div>

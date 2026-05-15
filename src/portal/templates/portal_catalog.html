@@ -1,0 +1,193 @@
+{% extends "portal_base.html" %}
+{% block title %}Catalog — DS-MOZ Connect{% endblock %}
+
+{% block content %}
+
+{% set cat_icons = {
+  'Research': '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  'Writing':  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+  'Data':     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+  'Other':    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+} %}
+{% set cat_bg = {
+  'Research': 'rgba(17,94,103,0.10)',
+  'Writing':  'rgba(8,109,79,0.10)',
+  'Data':     'rgba(255,94,0,0.10)',
+  'Other':    'rgba(228,213,211,0.6)',
+} %}
+{% set cat_fg = {
+  'Research': 'var(--bg-deep-alt)',
+  'Writing':  'var(--success)',
+  'Data':     'var(--accent)',
+  'Other':    'var(--fg-3)',
+} %}
+
+<!-- ── Page header ── -->
+<div class="page-header" style="align-items:flex-start">
+  <div>
+    <h1>Catalog</h1>
+    <p style="font-size:13px;color:var(--fg-3);margin-top:4px">Browse available MCP servers and add the ones you need to your toolbox.</p>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+    <div class="search-wrap">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="catalog-search" type="text" placeholder="Search catalog…" autocomplete="off">
+    </div>
+    <span class="chip"><span id="avail-count">{{ available | length }}</span>&nbsp;available</span>
+  </div>
+</div>
+
+{% if added_name %}
+<div class="alert success" style="margin-bottom:20px">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  <span><strong>{{ added_name }}</strong> added to your toolbox.</span>
+</div>
+{% endif %}
+
+{% if available %}
+<div class="catalog-grid">
+  {% for mcp in available %}
+    {% set cat = mcp.category or 'Other' %}
+    <div class="cat-card" data-name="{{ mcp.name | lower }}" data-desc="{{ (mcp.description or '') | lower }}" data-cat="{{ cat | lower }}">
+      <div class="cat-card-head">
+        <span class="cat-pill" style="background:{{ cat_bg.get(cat, cat_bg['Other']) }};color:{{ cat_fg.get(cat, cat_fg['Other']) }}">
+          {{ cat_icons.get(cat, cat_icons['Other']) | safe }}
+          <span>{{ cat }}</span>
+        </span>
+        {% if mcp.credit_cost_per_call and mcp.credit_cost_per_call > 0 %}
+        <span class="cost-chip" title="Credits deducted per tool call">{{ "%.1f"|format(mcp.credit_cost_per_call) }} cr/call</span>
+        {% else %}
+        <span class="cost-chip free">Free</span>
+        {% endif %}
+      </div>
+      <div class="cat-card-name">{{ mcp.name }}</div>
+      <p class="cat-card-desc">{{ mcp.description or 'No description available.' }}</p>
+      <form method="post" action="/portal/catalog/add" class="cat-card-foot">
+        <input type="hidden" name="slug" value="{{ mcp.slug }}">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add to my toolbox
+        </button>
+      </form>
+    </div>
+  {% endfor %}
+</div>
+<div id="empty-search" class="card" style="text-align:center;padding:32px;color:var(--fg-3);display:none;margin-top:16px">
+  No servers match your search.
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:40px;color:var(--fg-3)">
+  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--fg-3);margin:0 auto 14px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  <p style="font-size:14px;color:var(--fg-2);font-weight:600;margin-bottom:6px">All available servers are already in your toolbox</p>
+  <p style="font-size:13px;color:var(--fg-3);margin-bottom:14px">Manage them from My toolbox.</p>
+  <a href="/portal/mcps" class="btn btn-primary">Open toolbox</a>
+</div>
+{% endif %}
+
+<style>
+.search-wrap { position: relative; display: flex; align-items: center; }
+.search-wrap svg { position: absolute; left: 10px; color: var(--fg-3); pointer-events: none; }
+.search-wrap input {
+  width: 240px;
+  padding: 7px 12px 7px 30px;
+  background: var(--bg-card);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  color: var(--fg-1);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.search-wrap input:focus { border-color: var(--bg-deep-alt); box-shadow: 0 0 0 3px rgba(17,94,103,0.08); }
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.cat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.cat-card:hover { border-color: var(--line-2); box-shadow: 0 2px 8px rgba(7,43,49,0.04); }
+
+.cat-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cat-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+}
+
+.cost-chip {
+  font-size: 11px; font-weight: 600;
+  color: var(--fg-2);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.cost-chip.free { color: var(--success); border-color: var(--success-bg); background: var(--success-bg); }
+
+.cat-card-name {
+  font-family: 'Raleway', sans-serif;
+  font-size: 15px; font-weight: 700;
+  color: var(--fg-1);
+  line-height: 1.3;
+}
+.cat-card-desc {
+  font-size: 12px; color: var(--fg-3);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+  margin: 0;
+}
+.cat-card-foot { margin: 0; margin-top: auto; }
+.cat-card-foot .btn { width: 100%; justify-content: center; }
+
+@media (max-width: 767px) {
+  .page-header { flex-direction: column; align-items: flex-start; }
+  .page-header > div:last-child { width: 100%; }
+  .search-wrap { flex: 1; width: 100%; }
+  .search-wrap input { width: 100%; }
+}
+@media (max-width: 480px) {
+  .catalog-grid { grid-template-columns: 1fr; }
+}
+</style>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+  const search = document.getElementById('catalog-search');
+  const empty = document.getElementById('empty-search');
+  const cards = document.querySelectorAll('.cat-card');
+  if (!search) return;
+  search.addEventListener('input', function() {
+    const q = search.value.trim().toLowerCase();
+    let visible = 0;
+    cards.forEach(function(card) {
+      const hay = (card.dataset.name || '') + ' ' + (card.dataset.desc || '') + ' ' + (card.dataset.cat || '');
+      const match = !q || hay.indexOf(q) !== -1;
+      card.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    if (empty) empty.style.display = (q && visible === 0) ? 'block' : 'none';
+  });
+})();
+</script>
+{% endblock %}

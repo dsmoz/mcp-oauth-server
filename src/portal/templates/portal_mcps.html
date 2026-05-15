@@ -38,11 +38,19 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input id="tool-search" type="text" placeholder="Search tools…" autocomplete="off">
     </div>
+    <div class="view-toggle" role="group" aria-label="View mode">
+      <button type="button" class="view-btn" data-view="list" aria-label="List view" title="List">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      </button>
+      <button type="button" class="view-btn" data-view="grid" aria-label="Grid view" title="Grid">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      </button>
+    </div>
     <span id="enabled-pill" class="chip orange"><span class="chip-dot"></span><span id="enabled-count">{{ on_count }}</span>&nbsp;enabled</span>
   </div>
 </div>
 
-<form id="mcps-form" method="post" action="/portal/mcps">
+<form id="mcps-form" method="post" action="/portal/mcps" class="view-list">
 
   {% if catalogue %}
     {% set cat_order = ['Research', 'Writing', 'Data', 'Other'] %}
@@ -161,6 +169,13 @@
   transition: border-color 0.15s;
 }
 .search-wrap input:focus { border-color: var(--bg-deep-alt); box-shadow: 0 0 0 3px rgba(17,94,103,0.08); }
+
+@media (max-width: 767px) {
+  .page-header { flex-direction: column; align-items: flex-start; }
+  .page-header > div:last-child { width: 100%; }
+  .search-wrap { flex: 1; width: 100%; }
+  .search-wrap input { width: 100%; }
+}
 
 .cat-section { margin-bottom: 8px; }
 .cat-head {
@@ -329,6 +344,61 @@
   font-family: 'Inter', sans-serif;
 }
 .cfg-status.err { color: var(--danger, #c0392b); }
+
+/* ── View toggle ── */
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg-card);
+}
+.view-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  border: none; background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  padding: 0;
+}
+.view-btn + .view-btn { border-left: 1px solid var(--line-2); }
+.view-btn:hover { color: var(--fg-1); }
+.view-btn.active { background: var(--bg-deep-alt); color: #fff; }
+
+/* ── Grid view layout ── */
+.view-grid .cat-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+.view-grid .tool-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+.view-grid .tool-row {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: none;
+}
+.view-grid .tool-row:hover { background: rgba(7,43,49,0.03); }
+.view-grid .tool-text { width: 100%; }
+.view-grid .tool-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.view-grid .tool-control { width: 100%; justify-content: space-between; }
+
+@media (max-width: 480px) {
+  .view-grid .cat-rows { grid-template-columns: 1fr; }
+}
 </style>
 
 {% endblock %}
@@ -340,6 +410,22 @@
   const enabledCount = document.getElementById('enabled-count');
   const search = document.getElementById('tool-search');
   const empty = document.getElementById('empty-search');
+
+  // View toggle (list/grid) — persisted in localStorage
+  const VIEW_KEY = 'portal.toolbox.view';
+  const viewBtns = document.querySelectorAll('.view-btn');
+  function applyView(view) {
+    form.classList.remove('view-list', 'view-grid');
+    form.classList.add('view-' + view);
+    viewBtns.forEach(function(b) { b.classList.toggle('active', b.dataset.view === view); });
+    try { localStorage.setItem(VIEW_KEY, view); } catch(e) {}
+  }
+  let initial = 'list';
+  try { initial = localStorage.getItem(VIEW_KEY) || 'list'; } catch(e) {}
+  applyView(initial);
+  viewBtns.forEach(function(b) {
+    b.addEventListener('click', function() { applyView(b.dataset.view); });
+  });
 
   function recountAll() {
     let total = 0;

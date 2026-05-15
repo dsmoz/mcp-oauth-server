@@ -10,6 +10,7 @@
 </div>
 
 {% if tokens %}
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
@@ -52,6 +53,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <div class="card" style="text-align: center; color: var(--text-muted); padding: 3rem;">
   <p>No tokens issued for this client yet.</p>

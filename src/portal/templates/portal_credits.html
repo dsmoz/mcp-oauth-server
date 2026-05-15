@@ -33,23 +33,100 @@
 <div style="font-family:'Raleway',sans-serif;font-size:18px;font-weight:700;color:var(--fg-1);margin-bottom:6px">Request Top-up</div>
 <p style="font-size:13px;color:var(--fg-3);margin-bottom:20px">Submit a request and the admin will add credits to your account manually.</p>
 
-<form method="post" action="/portal/credits/request" style="max-width:480px">
-  <div class="form-group" style="margin-bottom:16px">
-    <label class="form-label" style="font-size:13px;font-weight:600;color:var(--fg-2);display:block;margin-bottom:6px">Credits requested</label>
-    <input type="number" name="amount" min="10" max="10000" step="10" required
-           class="form-input" style="width:160px"
-           placeholder="e.g. 100">
+<form method="post" action="/portal/credits/request" id="topup-form">
+  <input type="hidden" name="amount" id="topup-amount" value="50">
+
+  <div class="plan-grid">
+    {% for plan in [
+      {'id':'starter','name':'Starter','price':'$10','credits':10,'tag':'~5 days of use'},
+      {'id':'pro','name':'Pro','price':'$40','credits':50,'tag':'most popular','featured':true},
+      {'id':'enterprise','name':'Enterprise','price':'$150','credits':200,'tag':'best value'},
+    ] %}
+    <label class="plan-card{% if plan.featured %} plan-card-featured{% endif %}" data-credits="{{ plan.credits }}">
+      <input type="radio" name="plan" value="{{ plan.id }}" {% if plan.featured %}checked{% endif %}>
+      <div class="plan-head">
+        <div class="plan-name">{{ plan.name }}</div>
+        <span class="plan-radio"></span>
+      </div>
+      <div class="plan-price">{{ plan.price }}</div>
+      <div class="plan-credits">{{ plan.credits }} credits</div>
+      <div class="plan-tag">{{ plan.tag }}</div>
+    </label>
+    {% endfor %}
   </div>
-  <div class="form-group" style="margin-bottom:20px">
+
+  <div class="form-group" style="margin:20px 0 20px;max-width:480px">
     <label class="form-label" style="font-size:13px;font-weight:600;color:var(--fg-2);display:block;margin-bottom:6px">Note <span style="font-weight:400;color:var(--fg-3)">(optional)</span></label>
     <input type="text" name="note" maxlength="500"
            class="form-input" style="width:100%"
            placeholder="e.g. Monthly subscription renewal">
   </div>
-  <button type="submit" class="btn btn-primary" style="padding:10px 22px;font-size:14px">
-    Submit Request
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-  </button>
+
+  <div style="display:flex;justify-content:flex-end">
+    <button type="submit" class="btn btn-primary" style="padding:10px 22px;font-size:14px">
+      Submit Request
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+    </button>
+  </div>
 </form>
+
+<style>
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.plan-card {
+  position: relative;
+  display: block;
+  background: var(--bg-card);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--radius);
+  padding: 18px 18px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.plan-card input { position: absolute; opacity: 0; pointer-events: none; }
+.plan-card:hover { border-color: var(--fg-3); }
+.plan-card:has(input:checked) {
+  border-color: var(--accent);
+  background: rgba(255, 94, 0, 0.05);
+}
+.plan-card-featured { border-color: var(--accent); }
+.plan-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 8px;
+}
+.plan-name { font-family: 'Raleway', sans-serif; font-weight: 700; font-size: 14px; color: var(--fg-1); }
+.plan-radio {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 1.5px solid var(--line-2); background: var(--bg-card);
+  flex-shrink: 0;
+}
+.plan-card:has(input:checked) .plan-radio {
+  border-color: var(--accent);
+  background: radial-gradient(circle, var(--accent) 0 4px, var(--bg-card) 5px);
+}
+.plan-price { font-family: 'Raleway', sans-serif; font-weight: 800; font-size: 28px; color: var(--fg-1); line-height: 1.1; }
+.plan-credits { font-size: 13px; color: var(--fg-2); margin-top: 6px; }
+.plan-tag { font-size: 11px; color: var(--fg-3); margin-top: 2px; }
+
+@media (max-width: 767px) {
+  .plan-grid { grid-template-columns: 1fr; }
+}
+</style>
+
+<script>
+(function() {
+  const form = document.getElementById('topup-form');
+  const amount = document.getElementById('topup-amount');
+  form.addEventListener('change', (e) => {
+    if (e.target.name === 'plan') {
+      const card = e.target.closest('.plan-card');
+      if (card) amount.value = card.dataset.credits;
+    }
+  });
+})();
+</script>
 
 {% endblock %}

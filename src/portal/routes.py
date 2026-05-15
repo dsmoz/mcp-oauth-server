@@ -728,6 +728,72 @@ async def portal_mcp_config_save(
     return JSONResponse({"ok": True})
 
 
+# ── Catalog (browse + add to toolbox) ────────────────────────────────────────
+
+def _catalog_query(db, user):
+    q = db.table("mcp_catalogue").select("*").eq("is_published", True).order("name")
+    if getattr(user, "tier", "standard") != "super":
+        q = q.eq("tier", "standard")
+    return q
+
+
+@router.get("/catalog", response_class=HTMLResponse)
+async def portal_catalog_get(
+    request: Request,
+    user_id: str = Depends(_require_portal_user),
+    added: str = "",
+):
+    users = _users()
+    user = users.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    db = get_db()
+    catalogue = _catalog_query(db, user).execute().data or []
+    enabled = set(user.allowed_mcp_resources or [])
+    available = [m for m in catalogue if m["slug"] not in enabled]
+    added_name = ""
+    if added:
+        match = next((m for m in catalogue if m["slug"] == added), None)
+        if match:
+            added_name = match.get("name") or added
+    client_ctx = {
+        "client_id": user_id,
+        "client_name": user.display_name or user.email,
+        "portal_username": user.email,
+    }
+    return templates.TemplateResponse(
+        request=request, name="portal_catalog.html", context={
+            "client": client_ctx,
+            "user": user,
+            "active_nav": "catalog",
+            "available": available,
+            "added_name": added_name,
+        }
+    )
+
+
+@router.post("/catalog/add", response_class=HTMLResponse)
+async def portal_catalog_add(
+    request: Request,
+    slug: str = Form(...),
+    user_id: str = Depends(_require_portal_user),
+):
+    users = _users()
+    user = users.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    db = get_db()
+    catalogue = _catalog_query(db, user).execute().data or []
+    valid_slugs = {row["slug"] for row in catalogue}
+    if slug not in valid_slugs:
+        raise HTTPException(status_code=400, detail="Server not available")
+    current = list(user.allowed_mcp_resources or [])
+    if slug not in current:
+        current.append(slug)
+        users.set_allowed_mcps(user_id, current)
+    return RedirectResponse(url=f"/portal/catalog?added={slug}", status_code=303)
+
+
 @router.post("/mcps", response_class=HTMLResponse)
 async def portal_mcps_post(request: Request, user_id: str = Depends(_require_portal_user)):
     db = get_db()
@@ -1145,3 +1211,83 @@ async def portal_credits_request(
             "success": f"Top-up request for {amount:.0f} credits submitted. Admin will review shortly.",
         }
     )
+
+
+# ── Settings ──────────────────────────────────────────────────────────────────
+
+def _settings_ctx(request, user, *, success: str = "", error: str = ""):
+    client_ctx = {
+        "client_id": user.user_id,
+        "client_name": user.display_name or user.email,
+        "credit_balance": user.credit_balance,
+    }
+    return templates.TemplateResponse(
+        request=request, name="portal_settings.html", context={
+            "client": client_ctx,
+            "user": user,
+            "active_nav": "settings",
+            "success": success,
+            "error": error,
+        }
+    )
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def portal_settings_get(
+    request: Request,
+    user_id: str = Depends(_require_portal_user),
+):
+    user = _users().get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return _settings_ctx(request, user)
+
+
+@router.post("/settings/email", response_class=HTMLResponse)
+async def portal_settings_email(
+    request: Request,
+    email: str = Form(...),
+    current_password: str = Form(...),
+    user_id: str = Depends(_require_portal_user),
+):
+    users = _users()
+    user = users.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    new_email = email.strip().lower()
+    if not new_email or "@" not in new_email:
+        return _settings_ctx(request, user, error="Enter a valid email address.")
+    if not users.verify_password(user, current_password):
+        return _settings_ctx(request, user, error="Current password is incorrect.")
+    if new_email == (user.email or "").lower():
+        return _settings_ctx(request, user, error="That is already your email.")
+    existing = users.get_user_by_email(new_email)
+    if existing is not None and existing.user_id != user_id:
+        return _settings_ctx(request, user, error="That email is already in use.")
+    users.update_email(user_id, new_email)
+    user = users.get_user(user_id)
+    return _settings_ctx(request, user, success="Email updated.")
+
+
+@router.post("/settings/password", response_class=HTMLResponse)
+async def portal_settings_password(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    user_id: str = Depends(_require_portal_user),
+):
+    users = _users()
+    user = users.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    if not users.verify_password(user, current_password):
+        return _settings_ctx(request, user, error="Current password is incorrect.")
+    if len(new_password) < 8:
+        return _settings_ctx(request, user, error="New password must be at least 8 characters.")
+    if new_password != confirm_password:
+        return _settings_ctx(request, user, error="New passwords do not match.")
+    if new_password == current_password:
+        return _settings_ctx(request, user, error="New password must differ from current.")
+    users.set_password(user_id, new_password)
+    return _settings_ctx(request, user, success="Password changed.")
