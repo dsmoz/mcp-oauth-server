@@ -91,6 +91,11 @@
                       <span>{{ mcp.tool_count }}</span>
                     </span>
                     {% endif %}
+                    {% if mcp.credit_cost_per_call and mcp.credit_cost_per_call > 0 %}
+                    <span class="cost-chip" title="Credits deducted per tool call">{{ "%.1f"|format(mcp.credit_cost_per_call) }} cr/call</span>
+                    {% else %}
+                    <span class="cost-chip free">Free</span>
+                    {% endif %}
                   </div>
                   <div class="tool-desc" data-full="{{ mcp.description }}">{{ mcp.description }}</div>
                   <button type="button" class="read-more-btn" style="display:none"
@@ -180,6 +185,20 @@
 </div>
 
 <style>
+.cost-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  color: var(--fg-2);
+  background: var(--bg-card);
+  white-space: nowrap;
+}
+.cost-chip.free { color: var(--success); border-color: var(--success-bg); background: var(--success-bg); }
 .search-wrap {
   position: relative;
   display: flex; align-items: center;
