@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catalogue — DS-MOZ Connect</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@600;700;800&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --deep:   #072B31;
+  --deep-2: #0A3942;
+  --orange: #FF5E00;
+  --bg:     #FAF6F4;
+  --card:   #FFFFFF;
+  --fg:     #072B31;
+  --fg2:    #2A4449;
+  --fg3:    #6B7E81;
+  --line:   rgba(7,43,49,0.12);
+  --r:      4px;
+}
+html, body { background: var(--bg); color: var(--fg); font-family: 'Inter', sans-serif; }
+a { color: inherit; }
+.inner { max-width: 1160px; margin: 0 auto; padding: 0 48px; }
+
+nav {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 48px;
+  background: rgba(250,246,244,0.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.nav-logo {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--deep);
+  text-decoration: none;
+}
+.nav-logo span { color: var(--orange); }
+.btn-nav {
+  padding: 9px 18px;
+  background: var(--orange);
+  color: #fff;
+  border-radius: var(--r);
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.page-head {
+  padding: 56px 48px 32px;
+  max-width: 1160px;
+  margin: 0 auto;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--orange);
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+h1 {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 800;
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: -0.02em;
+  color: var(--deep);
+  margin-bottom: 12px;
+}
+.lede {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--fg3);
+  max-width: 640px;
+}
+.count-chip {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 5px 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg2);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  padding: 8px 48px 80px;
+  max-width: 1160px;
+  margin: 0 auto;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 22px;
+  display: flex; flex-direction: column;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.card:hover {
+  border-color: rgba(7,43,49,0.25);
+  transform: translateY(-2px);
+}
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.card-icon {
+  width: 38px; height: 38px;
+  background: rgba(7,43,49,0.06);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--deep);
+}
+.card-icon svg, .card-icon i { width: 20px; height: 20px; }
+.tool-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  background: rgba(7,43,49,0.06);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg2);
+}
+.cat-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(255,94,0,0.10);
+  color: var(--orange);
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.card-name {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--deep);
+  margin-bottom: 6px;
+}
+.card-desc {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--fg3);
+  flex: 1;
+  margin-bottom: 16px;
+}
+.card-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.cost-chip {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg2);
+  padding: 4px 8px;
+  background: rgba(7,43,49,0.05);
+  border-radius: 999px;
+}
+.btn-cta {
+  padding: 7px 14px;
+  background: var(--deep);
+  color: #fff;
+  border-radius: var(--r);
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 5px;
+  transition: opacity 0.15s;
+}
+.btn-cta:hover { opacity: 0.88; }
+.btn-cta.add { background: var(--orange); }
+
+.empty {
+  text-align: center;
+  padding: 80px 24px;
+  color: var(--fg3);
+}
+
+footer {
+  border-top: 1px solid var(--line);
+  padding: 32px 48px;
+  display: flex; justify-content: space-between; align-items: center;
+  max-width: 1160px; margin: 0 auto;
+  font-size: 12px;
+  color: var(--fg3);
+}
+footer a { text-decoration: none; margin-left: 16px; }
+
+@media (max-width: 768px) {
+  nav, .page-head, .grid, footer { padding-left: 24px; padding-right: 24px; }
+  .grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">DS&#8209;MOZ <span>Connect</span></a>
+  {% if is_authenticated %}
+  <a href="/portal/mcps" class="btn-nav">My toolbox →</a>
+  {% else %}
+  <a href="/portal/login" class="btn-nav">Sign in →</a>
+  {% endif %}
+</nav>
+
+<div class="page-head">
+  <div class="eyebrow">Catalogue</div>
+  <h1>Every MCP server, in one place.</h1>
+  <p class="lede">Browse the full DS-MOZ Connect catalogue. {% if is_authenticated %}Add any server to your toolbox with one click.{% else %}Sign up to add servers to your toolbox.{% endif %}</p>
+  <span class="count-chip">{{ catalogue | length }} server{{ '' if catalogue | length == 1 else 's' }} available</span>
+</div>
+
+{% if catalogue %}
+<div class="grid">
+  {% for mcp in catalogue %}
+  <div class="card">
+    <div class="card-head">
+      <div class="card-icon">
+        {% if mcp.icon %}
+        <i data-lucide="{{ mcp.icon }}"></i>
+        {% else %}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        {% endif %}
+      </div>
+      {% if mcp.tool_count %}
+      <span class="tool-chip">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        {{ mcp.tool_count }} tools
+      </span>
+      {% endif %}
+    </div>
+    {% if mcp.category %}
+    <div class="cat-pill">{{ mcp.category }}</div>
+    {% endif %}
+    <div class="card-name">{{ mcp.name }}</div>
+    <p class="card-desc">{{ mcp.description or '' }}</p>
+    <div class="card-foot">
+      <span class="cost-chip">
+        {% if mcp.credit_cost_per_call %}{{ mcp.credit_cost_per_call }} cr / call{% else %}Free{% endif %}
+      </span>
+      {% if is_authenticated %}
+      <a href="/portal/catalog" class="btn-cta add">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add to toolbox
+      </a>
+      {% else %}
+      <a href="/portal/login?next=/portal/catalog" class="btn-cta">
+        Sign in to add
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+  <p>No MCP servers published yet. Check back soon.</p>
+</div>
+{% endif %}
+
+<footer>
+  <div>DS-MOZ Consultancy Services · Maputo</div>
+  <div>
+    <a href="/">Home</a>
+    {% if not is_authenticated %}
+    <a href="/portal/login">Sign in</a>
+    <a href="/register">Create account</a>
+    {% endif %}
+  </div>
+</footer>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+  if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>

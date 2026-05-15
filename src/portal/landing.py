@@ -45,6 +45,23 @@ def get_partners() -> list[dict]:
     return result.data or []
 
 
+def get_public_catalogue() -> list[dict]:
+    """Return all published standard-tier MCPs for the public catalogue page.
+
+    Excludes super-tier MCPs (only available to super users).
+    """
+    db = get_db()
+    result = (
+        db.table("mcp_catalogue")
+        .select("slug, name, description, icon, category, tool_count, credit_cost_per_call, tier")
+        .eq("is_published", True)
+        .eq("tier", "standard")
+        .order("name")
+        .execute()
+    )
+    return result.data or []
+
+
 def get_landing_stats() -> dict:
     """Return aggregate counts for the hero stat card."""
     db = get_db()
@@ -56,5 +73,7 @@ def get_landing_stats() -> dict:
     )
     rows = servers_result.data or []
     server_count = len(rows)
-    tool_count = sum(r.get("tool_count") or 0 for r in rows)
+    # Fallback to 5 tools per MCP when tool_count not yet introspected.
+    # Most MCPs in catalogue expose 3–15 tools; 5 is conservative midpoint.
+    tool_count = sum((r.get("tool_count") or 5) for r in rows)
     return {"server_count": server_count, "tool_count": tool_count}
