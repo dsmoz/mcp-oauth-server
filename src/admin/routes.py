@@ -1786,6 +1786,25 @@ async def list_topup_requests(request: Request, _: str = Depends(_require_admin)
     )
 
 
+@router.get("/topup-requests/{request_id}", response_class=HTMLResponse)
+async def get_topup_request(request_id: str, request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
+    row_res = (
+        db.table("credit_topup_requests")
+        .select("*")
+        .eq("id", request_id)
+        .limit(1)
+        .execute()
+    )
+    if not row_res.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+    return templates.TemplateResponse(
+        request=request,
+        name="topup_request_detail.html",
+        context={"topup": row_res.data[0]},
+    )
+
+
 @router.post("/topup-requests/{request_id}/approve", response_class=HTMLResponse)
 async def approve_topup(request_id: str, _: str = Depends(_require_admin)):
     db = get_db()
