@@ -45,8 +45,8 @@
 </div>
 
 {# ── Stepper card ────────────────────────────────────────────────────────── #}
-<div class="card" style="margin-bottom:20px;padding:18px 28px">
-  <div style="display:flex;align-items:center;gap:0">
+<div class="card" style="margin-bottom:20px;padding:18px 28px;overflow-x:auto">
+  <div style="display:flex;align-items:center;gap:0;min-width:max-content">
     {% for s_num, s_label in [(1, 'Choose a client'), (2, 'Copy configuration'), (3, 'Verify connection')] %}
       {% set is_done = step > s_num %}
       {% set is_active = step == s_num %}

@@ -63,8 +63,9 @@
 </div>
 
 {% if perf_stats %}
-<div class="card">
-  <h2>Endpoint Performance <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 400;">(last 30 days)</span></h2>
+<details class="card collapsible">
+  <summary><h2 style="display:inline">Endpoint Performance <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: 400;">(last 30 days)</span></h2></summary>
+  <div class="table-wrap">
   <table>
     <thead>
       <tr>
@@ -109,12 +110,14 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
+  </div>
+</details>
 {% endif %}
 
-<div class="card">
-  <h2>Recent Clients</h2>
+<details class="card collapsible">
+  <summary><h2 style="display:inline">Recent Clients</h2></summary>
   {% if recent_clients %}
+  <div class="table-wrap">
   <table>
     <thead>
       <tr>
@@ -149,8 +152,9 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}
   <p style="color: var(--text-muted); font-size: 0.875rem;">No clients yet.</p>
   {% endif %}
-</div>
+</details>
 {% endblock %}

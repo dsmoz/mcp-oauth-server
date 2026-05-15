@@ -367,7 +367,35 @@
     .brand-short { display: none; }
 
     /* ---- Mobile: icon rail ---- */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    details.collapsible { padding: 0; }
+    details.collapsible > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      user-select: none;
+    }
+    details.collapsible > summary::-webkit-details-marker { display: none; }
+    details.collapsible > summary h2 { margin: 0; }
+    details.collapsible > summary::after {
+      content: "▸";
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      transition: transform 0.15s;
+    }
+    details.collapsible[open] > summary::after { transform: rotate(90deg); }
+    details.collapsible > summary + * { margin: 0 1.25rem 1.25rem; }
+    details.collapsible > .table-wrap { margin: 0 1.25rem 1.25rem; }
+
     @media (max-width: 767px) {
+      .detail-row  { flex-direction: column; gap: 0.25rem; }
+      .detail-label { flex: none; width: auto; }
+      .page-header { flex-wrap: wrap; gap: 0.5rem; }
+      .actions     { flex-wrap: wrap; }
       .sidebar {
         width: 40px;
         overflow-y: visible;
