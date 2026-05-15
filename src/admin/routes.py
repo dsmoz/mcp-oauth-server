@@ -789,8 +789,29 @@ def _get_catalogue_row(db, slug: str) -> dict | None:
     return result.data[0] if result.data else None
 
 
+def _count_code_exec_functions(run_description: str) -> int:
+    """Count callable functions from a code-execution MCP's run tool description.
+
+    Handles two formats:
+    - Explicit list: lines starting with '- FunctionName(' (MS365, Design Engine)
+    - Inline list: 'func_name(params), func_name2(params)' (Nexus style)
+    """
+    import re
+    # Format 1: each function on its own line "- Name("
+    explicit = re.findall(r"^-\s+\w+\(", run_description, re.MULTILINE)
+    if explicit:
+        return len(explicit)
+    # Format 2: inline comma-separated — count unique snake_case names before "("
+    names = set(re.findall(r"\b[a-z][a-z0-9_]+(?=\()", run_description))
+    return len(names)
+
+
 async def _sync_tools_for_slug(slug: str, upstream_url: str, api_key: str) -> int:
-    """Fetch tool list from upstream and upsert into mcp_tools. Returns tool count (0 on failure)."""
+    """Fetch tool list from upstream and upsert into mcp_tools. Returns tool count (0 on failure).
+
+    For code-execution MCPs (those exposing a 'run' tool), the returned count reflects
+    the number of callable functions described in the run tool, not the number of MCP tools.
+    """
     try:
         from src.gateway.upstream import fetch_tool_list
         tools = await fetch_tool_list(upstream_url, api_key, user_id="admin")
@@ -810,6 +831,13 @@ async def _sync_tools_for_slug(slug: str, upstream_url: str, api_key: str) -> in
         # Delete stale tools no longer exposed by the upstream
         current_names = [t["name"] for t in tools]
         db.table("mcp_tools").delete().eq("mcp_slug", slug).not_.in_("tool_name", current_names).execute()
+        # Code-execution MCPs expose a 'run' tool whose description lists all callable
+        # functions — use that count rather than the (always tiny) MCP tool count.
+        run_tool = next((t for t in tools if t["name"] == "run"), None)
+        if run_tool and run_tool.get("description"):
+            fn_count = _count_code_exec_functions(run_tool["description"])
+            if fn_count > len(tools):
+                return fn_count
         return len(tools)
     except Exception as exc:
         import logging
