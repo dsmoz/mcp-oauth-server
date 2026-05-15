@@ -1860,11 +1860,18 @@ async def telegram_reregister_webhook(_: str = Depends(_require_admin)):
     from src import telegram as tg
     from src.config import get_settings
     settings = get_settings()
+    issuer = (settings.OAUTH_ISSUER_URL or "").rstrip("/")
+    webhook_url = f"{issuer}/telegram/webhook" if issuer else ""
     delete_result = await tg.delete_webhook()
-    webhook_url = f"{settings.OAUTH_ISSUER_URL}/telegram/webhook"
-    await tg.register_webhook(webhook_url)
+    set_result = await tg.register_webhook(webhook_url)
     info = await tg.get_webhook_info()
-    return {"deleted": delete_result, "webhook_info": info}
+    return {
+        "issuer_url": issuer,
+        "webhook_url": webhook_url,
+        "deleted": delete_result,
+        "set_result": set_result,
+        "webhook_info": info,
+    }
 
 
 # ── Landing testimonials ───────────────────────────────────────────────────────
