@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Top-up Request — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header" style="display:flex;align-items:center;gap:1rem">
+  <a href="/admin/topup-requests" class="btn btn-secondary btn-sm">
+    <i class="ph-light ph-arrow-left"></i> All Requests
+  </a>
+  <h1 style="margin:0">Credit Top-up Request</h1>
+</div>
+
+<div class="card" style="max-width:560px;margin-top:1.5rem">
+  <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
+    <tr>
+      <td style="padding:0.6rem 0;color:var(--text-muted);width:140px">Status</td>
+      <td>
+        {% if topup.status == 'pending' %}
+        <span class="badge badge-warning">pending</span>
+        {% elif topup.status == 'approved' %}
+        <span class="badge badge-success">approved</span>
+        {% else %}
+        <span class="badge badge-danger">rejected</span>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:0.6rem 0;color:var(--text-muted)">User ID</td>
+      <td><code>{{ topup.user_id }}</code></td>
+    </tr>
+    <tr>
+      <td style="padding:0.6rem 0;color:var(--text-muted)">Amount</td>
+      <td style="font-weight:600">{{ topup.amount | int }} credits</td>
+    </tr>
+    <tr>
+      <td style="padding:0.6rem 0;color:var(--text-muted)">Note</td>
+      <td>{{ topup.note or '—' }}</td>
+    </tr>
+    <tr>
+      <td style="padding:0.6rem 0;color:var(--text-muted)">Requested</td>
+      <td style="font-size:0.8rem">{{ topup.created_at[:19] if topup.created_at else '—' }}</td>
+    </tr>
+    {% if topup.reviewed_at %}
+    <tr>
+      <td style="padding:0.6rem 0;color:var(--text-muted)">Reviewed</td>
+      <td style="font-size:0.8rem">{{ topup.reviewed_at[:19] }} by {{ topup.reviewed_by or '—' }}</td>
+    </tr>
+    {% endif %}
+  </table>
+
+  {% if topup.status == 'pending' %}
+  <div style="margin-top:1.5rem;display:flex;gap:0.75rem">
+    <form method="post" action="/admin/topup-requests/{{ topup.id }}/approve">
+      <button type="submit" class="btn btn-primary"
+              onclick="return confirm('Add {{ topup.amount | int }} credits to this user?')">
+        <i class="ph-light ph-check"></i> Approve
+      </button>
+    </form>
+    <form method="post" action="/admin/topup-requests/{{ topup.id }}/reject">
+      <button type="submit" class="btn btn-secondary">
+        <i class="ph-light ph-x"></i> Reject
+      </button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
