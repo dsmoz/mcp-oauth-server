@@ -27,13 +27,23 @@
       <input type="text" name="name" class="form-input" required value="{{ entry.name if entry else '' }}">
     </div>
     <div class="form-group">
-      <label class="form-label">Description</label>
-      <textarea name="description" id="description" class="form-input" rows="3" required>{{ entry.description if entry else '' }}</textarea>
+      <label class="form-label">Human Description
+        <small style="color:var(--text-muted)">Shown in the portal toolbox and catalog (short, plain language).</small>
+      </label>
+      <textarea name="description" id="description" class="form-input" rows="2" required
+                placeholder="e.g. Translate text and documents across 30+ languages with glossary and formality control.">{{ entry.description if entry else '' }}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Agent Description
+        <small style="color:var(--text-muted)">Fed to LLMs via browse_mcps/list_mcps. Technical, includes tool list and usage hints.</small>
+      </label>
+      <textarea name="description_agent" id="description_agent" class="form-input" rows="6"
+                placeholder="Server overview, list of tools, when to use it…">{{ entry.description_agent if entry else '' }}</textarea>
       {% if entry %}
       <div style="margin-top:0.4rem">
         <button type="button" id="gen-desc-btn" class="btn btn-secondary" onclick="generateDescription('{{ entry.slug }}')"
                 style="font-size:0.8rem">
-          <i class="ph-light ph-sparkle"></i> Generate Description
+          <i class="ph-light ph-sparkle"></i> Generate Agent Description
         </button>
         <span id="gen-desc-status" style="font-size:0.8rem;color:var(--text-muted);margin-left:0.5rem"></span>
       </div>
@@ -116,7 +126,7 @@ async function generateDescription(slug) {
     const resp = await fetch(`/admin/catalogue/${slug}/generate-description`, {method: 'POST'});
     const data = await resp.json();
     if (data.description) {
-      document.getElementById('description').value = data.description;
+      document.getElementById('description_agent').value = data.description;
       status.textContent = 'Generated — review and save.';
     } else {
       status.textContent = data.error || 'Failed.';

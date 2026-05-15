@@ -6,7 +6,7 @@ import secrets
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 
@@ -711,17 +711,20 @@ async def reject_registration(
 
 # ── MCP Catalogue ─────────────────────────────────────────────────────────────
 
-async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str | None:
+async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> tuple[str | None, int | None]:
     """
     Fetch tool list from upstream MCP and use Claude to generate an AI-agent-friendly
     catalogue description. Falls back to a structured plain-text summary if Claude
     is unavailable or the upstream is unreachable.
+
+    Returns (description, tool_count). Either may be None on failure.
     """
     try:
         from src.gateway.upstream import fetch_tool_list
         tools = await fetch_tool_list(upstream_url, api_key)
         if not tools:
-            return None
+            return None, None
+        tool_count = len(tools)
 
         # Build a compact tool manifest to send to Claude
         tool_manifest = "\n".join(
@@ -762,7 +765,7 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
                     data = resp.json()
                     description = data["content"][0]["text"].strip()
                     if description:
-                        return description
+                        return description, tool_count
 
         # Fallback: structured plain-text summary
         tool_lines = "; ".join(
@@ -774,11 +777,11 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> str 
             f"Use when the task requires any of these capabilities. "
             f"Call search_tools with a keyword or list_tools with this MCP's slug "
             f"to discover the full tool list before calling any tool."
-        )
+        ), tool_count
     except Exception as exc:
         import logging
         logging.getLogger(__name__).warning("_auto_describe_mcp failed for %s: %s", upstream_url, exc)
-        return None
+        return None, None
 
 
 def _get_catalogue_row(db, slug: str) -> dict | None:
@@ -823,11 +826,13 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
         if not upstream_url:
             continue
         try:
-            description = await _auto_describe_mcp(upstream_url, "", svc["name"]) or ""
+            description, tool_count = await _auto_describe_mcp(upstream_url, "", svc["name"])
             inserted = db.table("mcp_catalogue").insert({
                 "slug": slug,
                 "name": svc["name"],
-                "description": description,
+                "description": svc["name"],
+                "description_agent": description or "",
+                "tool_count": tool_count,
                 "category": "MCP Server",
                 "upstream_url": upstream_url,
                 "upstream_api_key": "",
@@ -903,6 +908,7 @@ async def create_catalogue(
     slug: str = Form(...),
     name: str = Form(...),
     description: str = Form(...),
+    description_agent: str = Form(""),
     category: str = Form(...),
     tier: str = Form("standard"),
     upstream_url: str = Form(...),
@@ -918,6 +924,7 @@ async def create_catalogue(
     tier_value = tier if tier in ("standard", "super") else "standard"
     db.table("mcp_catalogue").insert({
         "slug": slug, "name": name, "description": description,
+        "description_agent": description_agent or description,
         "category": category, "tier": tier_value, "upstream_url": upstream_url,
         "upstream_api_key": upstream_api_key, "is_published": False,
     }).execute()
@@ -942,6 +949,7 @@ async def save_catalogue(
     slug: str,
     name: str = Form(...),
     description: str = Form(...),
+    description_agent: str = Form(""),
     category: str = Form(...),
     tier: str = Form("standard"),
     upstream_url: str = Form(...),
@@ -955,7 +963,9 @@ async def save_catalogue(
     if _get_catalogue_row(db, slug) is None:
         raise HTTPException(status_code=404, detail="Not found")
     update: dict = {
-        "name": name, "description": description, "category": category,
+        "name": name, "description": description,
+        "description_agent": description_agent or description,
+        "category": category,
         "tier": tier if tier in ("standard", "super") else "standard",
         "upstream_url": upstream_url,
         "credit_cost_per_call": max(0.0, credit_cost_per_call),
@@ -1002,11 +1012,13 @@ async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_
             if svc is None:
                 raise HTTPException(status_code=404, detail="Not found")
             upstream_url = svc["upstream_url"] or ""
-            description = await _auto_describe_mcp(upstream_url, "", svc["name"]) or ""
+            description, tool_count = await _auto_describe_mcp(upstream_url, "", svc["name"])
             db.table("mcp_catalogue").insert({
                 "slug": slug,
                 "name": svc["name"],
-                "description": description,
+                "description": svc["name"],
+                "description_agent": description or "",
+                "tool_count": tool_count,
                 "category": "MCP Server",
                 "upstream_url": upstream_url,
                 "upstream_api_key": "",
@@ -1019,14 +1031,33 @@ async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_
         update: dict = {"is_published": new_published}
         # Auto-refresh description when publishing (not unpublishing)
         if new_published:
-            description = await _auto_describe_mcp(
+            description, tool_count = await _auto_describe_mcp(
                 entry["upstream_url"], entry.get("upstream_api_key", ""), entry["name"]
             )
             if description:
-                update["description"] = description
+                update["description_agent"] = description
+            if tool_count is not None:
+                update["tool_count"] = tool_count
         db.table("mcp_catalogue").update(update).eq("slug", slug).execute()
 
     return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+@router.post("/catalogue/{slug}/generate-description")
+async def generate_description(slug: str, _: str = Depends(_require_admin)):
+    """Generate agent-facing description from upstream tools. Returns JSON — does NOT persist."""
+    db = get_db()
+    entry = _get_catalogue_row(db, slug)
+    if entry is None:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    description, tool_count = await _auto_describe_mcp(
+        entry["upstream_url"], entry.get("upstream_api_key", ""), entry["name"]
+    )
+    if not description:
+        return JSONResponse({"error": "Failed to generate description"}, status_code=502)
+    if tool_count is not None:
+        db.table("mcp_catalogue").update({"tool_count": tool_count}).eq("slug", slug).execute()
+    return JSONResponse({"description": description, "tool_count": tool_count})
 
 
 @router.post("/catalogue/{slug}/refresh-description", response_class=HTMLResponse)
@@ -1035,11 +1066,16 @@ async def refresh_description(request: Request, slug: str, _: str = Depends(_req
     entry = _get_catalogue_row(db, slug)
     if entry is None:
         raise HTTPException(status_code=404, detail="Not found")
-    description = await _auto_describe_mcp(
+    description, tool_count = await _auto_describe_mcp(
         entry["upstream_url"], entry.get("upstream_api_key", ""), entry["name"]
     )
+    update: dict = {}
     if description:
-        db.table("mcp_catalogue").update({"description": description}).eq("slug", slug).execute()
+        update["description_agent"] = description
+    if tool_count is not None:
+        update["tool_count"] = tool_count
+    if update:
+        db.table("mcp_catalogue").update(update).eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
 
@@ -1073,11 +1109,13 @@ async def _upsert_railway_slug(db, slug: str) -> dict | None:
     if svc is None:
         return None
     upstream_url = svc["upstream_url"] or ""
-    description = await _auto_describe_mcp(upstream_url, "", svc["name"]) or ""
+    description, tool_count = await _auto_describe_mcp(upstream_url, "", svc["name"])
     inserted = db.table("mcp_catalogue").insert({
         "slug": slug,
         "name": svc["name"],
-        "description": description,
+        "description": svc["name"],
+        "description_agent": description or "",
+        "tool_count": tool_count,
         "category": "MCP Server",
         "upstream_url": upstream_url,
         "upstream_api_key": "",
