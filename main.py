@@ -80,9 +80,9 @@ async def startup_checks():
     from src.gateway.upstream import TOOL_CALL_TIMEOUT
     print(f"INFO: Upstream MCP call timeout: {TOOL_CALL_TIMEOUT}s (set MCP_CALL_TIMEOUT env var to override)", file=sys.stderr)
 
-    # Register Telegram webhook if configured
-    if settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_OWNER_CHAT_ID:
-        from src import telegram as tg
+    # Register Telegram webhook if configured (use resolved values — token may be DB-managed)
+    from src import telegram as tg
+    if tg._bot_token() and tg._chat_id():
         webhook_url = f"{settings.OAUTH_ISSUER_URL}/telegram/webhook"
         await tg.register_webhook(webhook_url)
         print(f"INFO: Telegram webhook registered at {webhook_url}", file=sys.stderr)

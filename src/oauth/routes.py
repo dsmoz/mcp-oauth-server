@@ -200,18 +200,20 @@ def _do_approve_topup(request_id: str) -> str:
             return "already_done"
         user_id = row["user_id"]
         amount = float(row["amount"])
-        user_res = db.table("users").select("credit_balance").eq("id", user_id).limit(1).execute()
+        user_res = db.table("users").select("credit_balance").eq("user_id", user_id).limit(1).execute()
         if not user_res.data:
             return "error"
         current = float(user_res.data[0].get("credit_balance") or 0)
-        db.table("users").update({"credit_balance": current + amount}).eq("id", user_id).execute()
+        db.table("users").update({"credit_balance": current + amount}).eq("user_id", user_id).execute()
         db.table("credit_topup_requests").update({
             "status": "approved",
             "reviewed_at": datetime.datetime.utcnow().isoformat(),
             "reviewed_by": "telegram",
         }).eq("id", request_id).execute()
         return "approved"
-    except Exception:
+    except Exception as exc:
+        import sys
+        print(f"ERROR: topup approve failed for {request_id}: {exc}", file=sys.stderr)
         return "error"
 
 
@@ -231,7 +233,9 @@ def _do_reject_topup(request_id: str) -> str:
             "reviewed_by": "telegram",
         }).eq("id", request_id).execute()
         return "rejected"
-    except Exception:
+    except Exception as exc:
+        import sys
+        print(f"ERROR: topup reject failed for {request_id}: {exc}", file=sys.stderr)
         return "error"
 
 

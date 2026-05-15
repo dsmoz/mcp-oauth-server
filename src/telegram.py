@@ -157,7 +157,7 @@ async def register_webhook(webhook_url: str) -> None:
     """Register the webhook URL with Telegram on startup."""
     if not _bot_token():
         return
-    payload: dict = {"url": webhook_url}
+    payload: dict = {"url": webhook_url, "allowed_updates": ["message", "callback_query"]}
     secret = _webhook_secret()
     if secret:
         payload["secret_token"] = secret
@@ -167,3 +167,21 @@ async def register_webhook(webhook_url: str) -> None:
     if not data.get("ok"):
         import sys
         print(f"WARNING: Telegram webhook registration failed: {data}", file=sys.stderr)
+
+
+async def get_webhook_info() -> dict:
+    """Return current webhook info from Telegram API."""
+    if not _bot_token():
+        return {"error": "bot token not configured"}
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(_url("getWebhookInfo"), timeout=10.0)
+    return resp.json()
+
+
+async def delete_webhook() -> dict:
+    """Delete the current webhook (clears any Telegram error state)."""
+    if not _bot_token():
+        return {"error": "bot token not configured"}
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(_url("deleteWebhook"), json={"drop_pending_updates": False}, timeout=10.0)
+    return resp.json()
