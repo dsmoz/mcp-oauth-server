@@ -142,6 +142,12 @@ async def authorize(
     return RedirectResponse(url=f"/portal/login?next_session={session_id}", status_code=302)
 
 
+@router.get("/telegram/webhook-diag")
+async def telegram_webhook_diag():
+    """Marker endpoint to confirm latest diagnostic build is live."""
+    return JSONResponse({"build": "diag-v3-2026-05-15", "secret_present": bool(tg._webhook_secret())})
+
+
 @router.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
     """Receive Telegram webhook updates."""
@@ -150,7 +156,7 @@ async def telegram_webhook(request: Request):
     print(f"[telegram_webhook] hit from {client_host}", file=sys.stderr, flush=True)
     try:
         import sentry_sdk
-        sentry_sdk.capture_message(f"telegram_webhook hit from {client_host}", level="info")
+        sentry_sdk.capture_message(f"telegram_webhook hit from {client_host}", level="warning")
     except Exception:
         pass
 
@@ -189,7 +195,7 @@ async def telegram_webhook(request: Request):
         import sentry_sdk
         sentry_sdk.capture_message(
             f"telegram_webhook body keys={list(body.keys())} cq_data={body.get('callback_query', {}).get('data')!r}",
-            level="info",
+            level="warning",
         )
     except Exception:
         pass
