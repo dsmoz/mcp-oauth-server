@@ -869,7 +869,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                 {
                     "slug": m["slug"],
                     "name": m["name"],
-                    "description": m["description"],
+                    "description": m.get("description_agent") or m.get("description", ""),
                     "category": m["category"],
                     "credit_cost_per_call": float(m.get("credit_cost_per_call") or 0),
                 }
@@ -883,7 +883,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                 {
                     "slug": m["slug"],
                     "name": m["name"],
-                    "description": m["description"],
+                    "description": m.get("description_agent") or m.get("description", ""),
                     "category": m["category"],
                     "credit_cost_per_call": float(m.get("credit_cost_per_call") or 0),
                     "enabled": m["slug"] in enabled_slugs,

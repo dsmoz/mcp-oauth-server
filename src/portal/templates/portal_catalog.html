@@ -54,11 +54,19 @@
           {{ cat_icons.get(cat, cat_icons['Other']) | safe }}
           <span>{{ cat }}</span>
         </span>
-        {% if mcp.credit_cost_per_call and mcp.credit_cost_per_call > 0 %}
-        <span class="cost-chip" title="Credits deducted per tool call">{{ "%.1f"|format(mcp.credit_cost_per_call) }} cr/call</span>
-        {% else %}
-        <span class="cost-chip free">Free</span>
-        {% endif %}
+        <div style="display:flex;align-items:center;gap:6px">
+          {% if mcp.tool_count %}
+          <span class="tool-count-chip" title="{{ mcp.tool_count }} tools">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            <span>{{ mcp.tool_count }}</span>
+          </span>
+          {% endif %}
+          {% if mcp.credit_cost_per_call and mcp.credit_cost_per_call > 0 %}
+          <span class="cost-chip" title="Credits deducted per tool call">{{ "%.1f"|format(mcp.credit_cost_per_call) }} cr/call</span>
+          {% else %}
+          <span class="cost-chip free">Free</span>
+          {% endif %}
+        </div>
       </div>
       <div class="cat-card-name">{{ mcp.name }}</div>
       <p class="cat-card-desc">{{ mcp.description or 'No description available.' }}</p>
@@ -130,6 +138,16 @@
 .cost-chip {
   font-size: 11px; font-weight: 600;
   color: var(--fg-2);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.tool-count-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11px; font-weight: 600;
+  color: var(--fg-3);
   background: var(--bg);
   border: 1px solid var(--line);
   padding: 3px 8px;
