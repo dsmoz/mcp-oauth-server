@@ -36,6 +36,12 @@
       <li>Save settings, then redeploy or restart the server — webhook is registered on startup against <code>OAUTH_ISSUER_URL/telegram/webhook</code>.</li>
     </ol>
     <p style="margin:0;color:var(--text-muted);font-size:0.8rem">Leaving Bot Token blank disables all Telegram notifications silently.</p>
+    <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.6rem">
+      <button type="button" id="tg-test-btn" onclick="testTelegram()" class="btn btn-secondary" style="padding:0.45rem 0.8rem;font-size:0.85rem">
+        <i class="ph-light ph-paper-plane-tilt"></i> Send Test Message
+      </button>
+      <span id="tg-test-status" style="font-size:0.85rem;color:var(--text-muted)"></span>
+    </div>
   </div>
   {% endif %}
 
@@ -114,6 +120,30 @@ function toggleSecret(btn) {
   } else {
     input.type = 'password';
     icon.className = 'ph-light ph-eye';
+  }
+}
+
+async function testTelegram() {
+  const btn = document.getElementById('tg-test-btn');
+  const status = document.getElementById('tg-test-status');
+  btn.disabled = true;
+  status.textContent = 'Sending…';
+  status.style.color = 'var(--text-muted)';
+  try {
+    const resp = await fetch('/admin/telegram/test', {method: 'POST'});
+    const data = await resp.json();
+    if (data.ok) {
+      status.textContent = data.message || 'Sent.';
+      status.style.color = 'var(--success-fg, #4ade80)';
+    } else {
+      status.textContent = 'Failed: ' + (data.error || 'unknown');
+      status.style.color = 'var(--danger-fg, #f87171)';
+    }
+  } catch (e) {
+    status.textContent = 'Request failed: ' + e.message;
+    status.style.color = 'var(--danger-fg, #f87171)';
+  } finally {
+    btn.disabled = false;
   }
 }
 
