@@ -77,6 +77,13 @@
       </div>
     </div>
     <div class="form-group">
+      <label class="form-label">Credit Cost Per Call</label>
+      <input type="number" step="0.5" min="0" name="credit_cost_per_call"
+             class="form-input" style="width:140px"
+             value="{{ entry.credit_cost_per_call or 0 }}">
+      <div class="form-text">Credits deducted per LLM call inside this upstream MCP (0 = no deduction).</div>
+    </div>
+    <div class="form-group">
       <label class="form-label">Config Schema
         <small style="color:var(--text-muted)">JSON array of credential fields users must fill in, e.g. <code>[{"key":"api_key","label":"API Key","type":"password","required":true}]</code>. Leave blank if MCP needs no user credentials.</small>
       </label>

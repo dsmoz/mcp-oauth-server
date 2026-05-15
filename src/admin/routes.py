@@ -947,6 +947,7 @@ async def save_catalogue(
     upstream_url: str = Form(...),
     upstream_api_key: str = Form(""),
     config_schema: str = Form(""),
+    credit_cost_per_call: float = Form(0.0),
     _: str = Depends(_require_admin),
 ):
     import json as _json
@@ -957,6 +958,7 @@ async def save_catalogue(
         "name": name, "description": description, "category": category,
         "tier": tier if tier in ("standard", "super") else "standard",
         "upstream_url": upstream_url,
+        "credit_cost_per_call": max(0.0, credit_cost_per_call),
     }
     if upstream_api_key:
         update["upstream_api_key"] = upstream_api_key
