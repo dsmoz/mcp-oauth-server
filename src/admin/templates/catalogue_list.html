@@ -42,6 +42,7 @@
       <th>Service</th>
       <th>Domain</th>
       <th>Tier</th>
+      <th>Credits</th>
       <th>Status</th>
       <th>Actions</th>
     </tr>
@@ -68,6 +69,23 @@
         {% else %}
           <span class="badge badge-inactive">Standard</span>
         {% endif %}
+      </td>
+      <td>
+        <form method="post" action="/admin/catalogue/{{ e.slug }}/credits" style="display:inline">
+          {% set cc = (e.credit_cost_per_call or 0) | float %}
+          <select name="credit_cost_per_call" class="form-input" style="width:130px;font-size:0.78rem;padding:0.25rem 0.4rem"
+                  onchange="this.form.submit()">
+            <option value="0"  {% if cc == 0  %}selected{% endif %}>0 — Free</option>
+            <option value="1"  {% if cc == 1  %}selected{% endif %}>1 — Light</option>
+            <option value="2"  {% if cc == 2  %}selected{% endif %}>2 — Standard</option>
+            <option value="3"  {% if cc == 3  %}selected{% endif %}>3 — Premium</option>
+            <option value="5"  {% if cc == 5  %}selected{% endif %}>5 — Heavy</option>
+            <option value="10" {% if cc == 10 %}selected{% endif %}>10 — Super-heavy</option>
+            {% if cc not in [0,1,2,3,5,10] %}
+            <option value="{{ cc }}" selected>{{ cc }} — Custom</option>
+            {% endif %}
+          </select>
+        </form>
       </td>
       <td>
         {% if e.is_published %}

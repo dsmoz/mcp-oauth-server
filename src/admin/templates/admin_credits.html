@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Credit Costs — DS-MOZ MCP OAuth{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Credit Costs Manager</h1>
+  <a href="/admin/catalogue" class="btn btn-secondary">
+    <i class="ph-light ph-arrow-left"></i> Catalogue
+  </a>
+</div>
+
+{% if saved %}
+<div class="card" style="background:#d1fae5;border:1px solid #10b981;color:#065f46;padding:0.75rem 1rem;margin-bottom:1rem;border-radius:8px;font-size:0.85rem">
+  <i class="ph-light ph-check-circle"></i> Credit costs updated.
+</div>
+{% endif %}
+
+<div class="card" style="background:var(--bg-card);padding:0.85rem 1rem;margin-bottom:1.25rem;border-radius:8px;font-size:0.85rem;color:var(--text-muted);line-height:1.55">
+  <strong style="color:var(--text-h)">Credit tier reference</strong><br>
+  <span style="display:inline-block;margin-right:1.2rem"><strong>0</strong> — Free (e.g. simple lookups)</span>
+  <span style="display:inline-block;margin-right:1.2rem"><strong>1</strong> — Light (small LLM call)</span>
+  <span style="display:inline-block;margin-right:1.2rem"><strong>2</strong> — Standard (medium LLM call)</span>
+  <span style="display:inline-block;margin-right:1.2rem"><strong>3</strong> — Premium (large LLM call)</span>
+  <span style="display:inline-block;margin-right:1.2rem"><strong>5</strong> — Heavy (multi-step / RAG)</span>
+  <span style="display:inline-block"><strong>10</strong> — Super-heavy (long agentic tasks)</span>
+</div>
+
+{% if entries %}
+<form method="post" action="/admin/credits">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>MCP</th>
+          <th>Category</th>
+          <th>Tier</th>
+          <th>Status</th>
+          <th style="width:240px">Credit Cost / Call</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td style="font-weight:700;color:var(--text-h)">{{ e.name }}</td>
+          <td style="color:var(--text-muted);font-size:0.8rem">{{ e.category or '—' }}</td>
+          <td>
+            {% if e.tier == 'super' %}
+              <span class="badge" style="background:var(--secret-bg);color:var(--accent-vivid);border:1px solid var(--secret-border)">Super</span>
+            {% else %}
+              <span class="badge badge-inactive">Standard</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if e.is_published %}
+              <span class="badge badge-active">Published</span>
+            {% else %}
+              <span class="badge badge-inactive">Unpublished</span>
+            {% endif %}
+          </td>
+          <td>
+            {% set cc = e.credit_cost_per_call %}
+            <select name="cost_{{ e.slug }}" class="form-input" style="width:220px;font-size:0.82rem">
+              {% for t in tiers %}
+              <option value="{{ t.value }}" {% if cc == t.value %}selected{% endif %}>
+                {{ t.value }} — {{ t.label }}
+              </option>
+              {% endfor %}
+              {% if cc not in [0,1,2,3,5,10] %}
+              <option value="{{ cc }}" selected>{{ cc }} — Custom</option>
+              {% endif %}
+            </select>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div style="margin-top:1rem;display:flex;gap:0.5rem;align-items:center">
+    <button type="submit" class="btn btn-primary">
+      <i class="ph-light ph-floppy-disk"></i> Save all
+    </button>
+    <span style="color:var(--text-muted);font-size:0.8rem">Updates every MCP in one shot.</span>
+  </div>
+</form>
+{% else %}
+<div class="card" style="text-align:center;color:var(--text-muted);padding:3rem">
+  <p>No MCP entries yet.</p>
+</div>
+{% endif %}
+{% endblock %}

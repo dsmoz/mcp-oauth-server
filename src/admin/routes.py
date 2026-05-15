@@ -869,6 +869,7 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
             "is_published": db_row["is_published"] if db_row else False,
             "is_featured": bool(db_row.get("is_featured")) if db_row else False,
             "icon": (db_row.get("icon") if db_row else None),
+            "credit_cost_per_call": (db_row.get("credit_cost_per_call") if db_row else 0) or 0,
             "tier": (db_row.get("tier") if db_row else None) or "standard",
             "from_railway": True,
             "railway_id": svc["id"],
@@ -1107,6 +1108,77 @@ async def delete_catalogue(request: Request, slug: str, _: str = Depends(_requir
     db = get_db()
     db.table("mcp_catalogue").delete().eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+# ── Credit cost management ──────────────────────────────────────────────────
+
+CREDIT_TIERS = [
+    {"value": 0,  "label": "Free",         "desc": "0 credits — no cost"},
+    {"value": 1,  "label": "Light",        "desc": "1 credit"},
+    {"value": 2,  "label": "Standard",     "desc": "2 credits"},
+    {"value": 3,  "label": "Premium",      "desc": "3 credits"},
+    {"value": 5,  "label": "Heavy",        "desc": "5 credits"},
+    {"value": 10, "label": "Super-heavy",  "desc": "10 credits"},
+]
+
+
+@router.post("/catalogue/{slug}/credits", response_class=HTMLResponse)
+async def update_credit_cost(
+    request: Request,
+    slug: str,
+    credit_cost_per_call: float = Form(0.0),
+    _: str = Depends(_require_admin),
+):
+    """Inline update of credit_cost_per_call from catalogue list dropdown."""
+    db = get_db()
+    row = _get_catalogue_row(db, slug)
+    if row is None:
+        row = await _upsert_railway_slug(db, slug)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Not found")
+    db.table("mcp_catalogue").update({
+        "credit_cost_per_call": max(0.0, float(credit_cost_per_call)),
+    }).eq("slug", slug).execute()
+    return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+@router.get("/credits", response_class=HTMLResponse)
+async def credits_manager(request: Request, _: str = Depends(_require_admin), saved: bool = False):
+    """Bulk credit cost management page — all MCPs editable in one screen."""
+    db = get_db()
+    rows = (
+        db.table("mcp_catalogue")
+        .select("slug,name,category,tier,is_published,credit_cost_per_call")
+        .order("name")
+        .execute()
+    ).data or []
+    for r in rows:
+        r["credit_cost_per_call"] = float(r.get("credit_cost_per_call") or 0)
+    return templates.TemplateResponse(
+        request=request, name="admin_credits.html",
+        context={"entries": rows, "tiers": CREDIT_TIERS, "saved": saved},
+    )
+
+
+@router.post("/credits", response_class=HTMLResponse)
+async def credits_manager_save(request: Request, _: str = Depends(_require_admin)):
+    """Bulk save credit costs. Form field name: cost_<slug>."""
+    form = await request.form()
+    db = get_db()
+    updated = 0
+    for key, val in form.items():
+        if not key.startswith("cost_"):
+            continue
+        slug = key[5:]
+        try:
+            cost = max(0.0, float(val))
+        except (TypeError, ValueError):
+            continue
+        db.table("mcp_catalogue").update({
+            "credit_cost_per_call": cost,
+        }).eq("slug", slug).execute()
+        updated += 1
+    return RedirectResponse(url="/admin/credits?saved=true", status_code=303)
 
 
 _BULK_ACTIONS = {
