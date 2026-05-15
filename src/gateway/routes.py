@@ -445,12 +445,18 @@ _MUTATION_SCHEMA = {
 }
 
 
-def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) -> Server:
+def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], token: str = "") -> Server:
     mcp_by_slug = {m["slug"]: m for m in enabled_mcps}
     # Promoted UI tools: promoted_name -> {slug, upstream_name, descriptor}
     _ui_tools: dict[str, dict] = {}
     # Resource origins: uri -> slug (populated lazily by list_resources_handler)
     _resource_origin: dict[str, str] = {}
+
+    def _user_extra_headers(mcp: dict) -> dict[str, str]:
+        headers = _extra_headers_for(mcp, user_id)
+        if token:
+            headers["X-User-Token"] = token
+        return headers
 
     server = Server(
         "DS-MOZ Connect Gateway",
@@ -744,7 +750,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
             mcp.get("upstream_api_key", ""),
             user_id=user_id,
             client_id=client_id,
-            extra_headers=_extra_headers_for(mcp, user_id),
+            extra_headers=_user_extra_headers(mcp),
         )
         _tool_cache.set(cache_key, tools)
         return tools
@@ -788,7 +794,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         api_key=mcp.get("upstream_api_key", ""),
                         user_id=user_id,
                         client_id=client_id,
-                        extra_headers=_extra_headers_for(mcp, user_id),
+                        extra_headers=_user_extra_headers(mcp),
                     )
                 except RuntimeError as exc:
                     print(f"GATEWAY: upstream auth/config error {slug}/{upstream_name}: {exc}", file=sys.stderr)
@@ -986,7 +992,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                         mcp.get("upstream_api_key", ""),
                         user_id=user_id,
                         client_id=client_id,
-                        extra_headers=_extra_headers_for(mcp, user_id),
+                        extra_headers=_user_extra_headers(mcp),
                     )
                 except RuntimeError as exc:
                     print(f"GATEWAY: upstream auth/config error {slug}/{tool_name}: {exc}", file=sys.stderr)
@@ -1066,7 +1072,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
                     api_key=mcp.get("upstream_api_key", ""),
                     user_id=user_id,
                     client_id=client_id,
-                    extra_headers=_extra_headers_for(mcp, user_id),
+                    extra_headers=_user_extra_headers(mcp),
                 )
             except Exception as exc:
                 print(f"GATEWAY: list_resources failed for {slug}: {exc}", file=sys.stderr)
@@ -1110,7 +1116,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict]) ->
             api_key=mcp.get("upstream_api_key", ""),
             user_id=user_id,
             client_id=client_id,
-            extra_headers=_extra_headers_for(mcp, user_id),
+            extra_headers=_user_extra_headers(mcp),
         )
         out: list[ReadResourceContents] = []
         for c in raw.get("contents") or []:
@@ -1274,7 +1280,7 @@ async def _gateway_asgi(scope, receive, send):
         )
         await error(scope, receive, send)
         return
-    mcp_server = _build_mcp_server(token_user_id, client_id, enabled_mcps)
+    mcp_server = _build_mcp_server(token_user_id, client_id, enabled_mcps, token=token or "")
     transport = StreamableHTTPServerTransport(mcp_session_id=None)
 
     response_started = False
