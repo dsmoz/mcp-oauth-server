@@ -1195,12 +1195,12 @@ async def delete_catalogue(request: Request, slug: str, _: str = Depends(_requir
 # ── Credit cost management ──────────────────────────────────────────────────
 
 CREDIT_TIERS = [
-    {"value": 0,  "label": "Free",         "desc": "0 credits — no cost"},
-    {"value": 1,  "label": "Light",        "desc": "1 credit"},
-    {"value": 2,  "label": "Standard",     "desc": "2 credits"},
-    {"value": 3,  "label": "Premium",      "desc": "3 credits"},
-    {"value": 5,  "label": "Heavy",        "desc": "5 credits"},
-    {"value": 10, "label": "Super-heavy",  "desc": "10 credits"},
+    {"value": 0,  "label": "Free",         "desc": "0 credits — no cost", "icon": "gift"},
+    {"value": 1,  "label": "Light",        "desc": "1 credit",            "icon": "feather"},
+    {"value": 2,  "label": "Standard",     "desc": "2 credits",           "icon": "tag"},
+    {"value": 3,  "label": "Premium",      "desc": "3 credits",           "icon": "star"},
+    {"value": 5,  "label": "Heavy",        "desc": "5 credits",           "icon": "flame"},
+    {"value": 10, "label": "Super-heavy",  "desc": "10 credits",          "icon": "zap"},
 ]
 
 

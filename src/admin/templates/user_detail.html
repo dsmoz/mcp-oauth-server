@@ -112,9 +112,9 @@
         style="display:flex;gap:0.75rem;align-items:flex-end;">
     <div class="form-group" style="margin:0">
       <label for="tier">Tier</label>
-      <select name="tier" id="tier" style="padding:0.6rem 0.875rem;background:var(--elevated);border:1px solid var(--border);border-radius:6px;color:var(--text-h);font-size:0.875rem;font-family:inherit;outline:none">
-        <option value="standard" {% if user.tier != 'super' %}selected{% endif %}>Standard</option>
-        <option value="super" {% if user.tier == 'super' %}selected{% endif %}>Super</option>
+      <select name="tier" id="tier" class="ds-select" style="width:220px">
+        <option value="standard" data-icon="shield" {% if user.tier != 'super' %}selected{% endif %}>Standard</option>
+        <option value="super"    data-icon="crown"  {% if user.tier == 'super' %}selected{% endif %}>Super</option>
       </select>
     </div>
     <button type="submit" class="btn btn-primary">

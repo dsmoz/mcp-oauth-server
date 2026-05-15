@@ -74,16 +74,16 @@
       <td>
         <form method="post" action="/admin/catalogue/{{ e.slug }}/credits" style="display:inline">
           {% set cc = (e.credit_cost_per_call or 0) | float %}
-          <select name="credit_cost_per_call" class="form-input" style="width:130px;font-size:0.78rem;padding:0.25rem 0.4rem"
+          <select name="credit_cost_per_call" class="ds-select ds-select-compact" style="width:160px"
                   onchange="this.form.submit()">
-            <option value="0"  {% if cc == 0  %}selected{% endif %}>0 — Free</option>
-            <option value="1"  {% if cc == 1  %}selected{% endif %}>1 — Light</option>
-            <option value="2"  {% if cc == 2  %}selected{% endif %}>2 — Standard</option>
-            <option value="3"  {% if cc == 3  %}selected{% endif %}>3 — Premium</option>
-            <option value="5"  {% if cc == 5  %}selected{% endif %}>5 — Heavy</option>
-            <option value="10" {% if cc == 10 %}selected{% endif %}>10 — Super-heavy</option>
+            <option value="0"  data-icon="gift"    {% if cc == 0  %}selected{% endif %}>0 — Free</option>
+            <option value="1"  data-icon="feather" {% if cc == 1  %}selected{% endif %}>1 — Light</option>
+            <option value="2"  data-icon="tag"     {% if cc == 2  %}selected{% endif %}>2 — Standard</option>
+            <option value="3"  data-icon="star"    {% if cc == 3  %}selected{% endif %}>3 — Premium</option>
+            <option value="5"  data-icon="flame"   {% if cc == 5  %}selected{% endif %}>5 — Heavy</option>
+            <option value="10" data-icon="zap"     {% if cc == 10 %}selected{% endif %}>10 — Super-heavy</option>
             {% if cc not in [0,1,2,3,5,10] %}
-            <option value="{{ cc }}" selected>{{ cc }} — Custom</option>
+            <option value="{{ cc }}" data-icon="dot" selected>{{ cc }} — Custom</option>
             {% endif %}
           </select>
         </form>

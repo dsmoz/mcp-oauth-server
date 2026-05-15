@@ -61,9 +61,9 @@
       </label>
 
       {% if s.value_type == 'select' and s.options %}
-        <select name="{{ s.key }}" style="width:100%;padding:0.6rem 0.875rem;background:var(--elevated);border:1px solid var(--border);border-radius:6px;color:var(--text-h);font-size:0.875rem;font-family:inherit">
+        <select name="{{ s.key }}" class="ds-select" style="width:100%">
           {% for opt in s.options %}
-          <option value="{{ opt.value }}" {% if s.value == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+          <option value="{{ opt.value }}" data-icon="list" {% if s.value == opt.value %}selected{% endif %}>{{ opt.label }}</option>
           {% endfor %}
         </select>
 
@@ -94,9 +94,9 @@
                style="max-width:200px">
 
       {% elif s.value_type == 'bool' %}
-        <select name="{{ s.key }}" style="width:auto;padding:0.6rem 0.875rem;background:var(--elevated);border:1px solid var(--border);border-radius:6px;color:var(--text-h);font-size:0.875rem;font-family:inherit;max-width:200px">
-          <option value="true" {% if s.value == 'true' %}selected{% endif %}>Enabled</option>
-          <option value="false" {% if s.value != 'true' %}selected{% endif %}>Disabled</option>
+        <select name="{{ s.key }}" class="ds-select" style="width:180px">
+          <option value="true"  data-icon="check"  {% if s.value == 'true' %}selected{% endif %}>Enabled</option>
+          <option value="false" data-icon="dot"    {% if s.value != 'true' %}selected{% endif %}>Disabled</option>
         </select>
 
       {% else %}
