@@ -1231,7 +1231,7 @@ async def create_user_admin(
     request: Request,
     email: str = Form(...),
     display_name: str = Form(""),
-    initial_credits: float = Form(0.0),
+    initial_credits: float = Form(5.0),
     _: str = Depends(_require_admin),
 ):
     from src.users import SupabaseUserProvider

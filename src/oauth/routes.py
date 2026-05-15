@@ -481,7 +481,7 @@ async def register_submit(
         user = users.create_user(
             email=contact_email,
             display_name=contact_name,
-            credit_balance=0.0,
+            credit_balance=5.0,
             allowed_mcp_resources=allowed_mcps,
             is_active=False,
         )
