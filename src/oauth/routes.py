@@ -145,10 +145,10 @@ async def authorize(
 @router.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
     """Receive Telegram webhook updates."""
-    settings = get_settings()
-    if settings.TELEGRAM_WEBHOOK_SECRET:
+    expected_secret = tg._webhook_secret()
+    if expected_secret:
         incoming = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-        if incoming != settings.TELEGRAM_WEBHOOK_SECRET:
+        if incoming != expected_secret:
             return JSONResponse({"ok": False}, status_code=403)
 
     body = await request.json()
