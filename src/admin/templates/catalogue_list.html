@@ -92,6 +92,14 @@
             {% if e.is_published %}Unpublish{% else %}Publish{% endif %}
           </button>
         </form>
+        <form method="post" action="/admin/catalogue/{{ e.slug }}/highlight" style="display:inline">
+          <button type="submit" class="btn btn-secondary"
+                  title="{% if e.is_featured %}Remove from landing-page carousel{% else %}Show on landing-page carousel{% endif %}"
+                  {% if e.is_featured %}style="color:var(--accent-vivid);border-color:var(--accent-vivid)"{% endif %}>
+            <i class="ph-{% if e.is_featured %}fill{% else %}light{% endif %} ph-star"></i>
+            {% if e.is_featured %}Featured{% else %}Highlight{% endif %}
+          </button>
+        </form>
         <form method="post" action="/admin/catalogue/{{ e.slug }}/refresh-description" style="display:inline">
           <button type="submit" class="btn btn-secondary" title="Regenerate agent description from tool list">
             <i class="ph-light ph-arrows-clockwise"></i>

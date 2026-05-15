@@ -913,6 +913,8 @@ async def create_catalogue(
     tier: str = Form("standard"),
     upstream_url: str = Form(...),
     upstream_api_key: str = Form(""),
+    icon: str = Form(""),
+    is_featured: str = Form("off"),
     _: str = Depends(_require_admin),
 ):
     db = get_db()
@@ -927,6 +929,8 @@ async def create_catalogue(
         "description_agent": description_agent or description,
         "category": category, "tier": tier_value, "upstream_url": upstream_url,
         "upstream_api_key": upstream_api_key, "is_published": False,
+        "icon": icon.strip() or None,
+        "is_featured": is_featured == "on",
     }).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
@@ -956,6 +960,8 @@ async def save_catalogue(
     upstream_api_key: str = Form(""),
     config_schema: str = Form(""),
     credit_cost_per_call: float = Form(0.0),
+    icon: str = Form(""),
+    is_featured: str = Form("off"),
     _: str = Depends(_require_admin),
 ):
     import json as _json
@@ -969,6 +975,8 @@ async def save_catalogue(
         "tier": tier if tier in ("standard", "super") else "standard",
         "upstream_url": upstream_url,
         "credit_cost_per_call": max(0.0, credit_cost_per_call),
+        "icon": icon.strip() or None,
+        "is_featured": is_featured == "on",
     }
     if upstream_api_key:
         update["upstream_api_key"] = upstream_api_key
@@ -1040,6 +1048,19 @@ async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_
                 update["tool_count"] = tool_count
         db.table("mcp_catalogue").update(update).eq("slug", slug).execute()
 
+    return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+@router.post("/catalogue/{slug}/highlight", response_class=HTMLResponse)
+async def toggle_highlight(slug: str, _: str = Depends(_require_admin)):
+    """Toggle is_featured flag — controls visibility on landing-page carousel."""
+    db = get_db()
+    entry = _get_catalogue_row(db, slug)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    db.table("mcp_catalogue").update({
+        "is_featured": not bool(entry.get("is_featured")),
+    }).eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
 
