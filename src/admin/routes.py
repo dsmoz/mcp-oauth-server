@@ -1626,14 +1626,22 @@ async def approve_topup(request_id: str, _: str = Depends(_require_admin)):
         raise HTTPException(status_code=404, detail="User not found")
     new_balance = float(user.credit_balance or 0) + amount
     db.table("users").update({"credit_balance": new_balance}).eq("id", user_id).execute()
-    db.table("credit_topup_requests").update({"status": "approved"}).eq("id", request_id).execute()
+    db.table("credit_topup_requests").update({
+        "status": "approved",
+        "reviewed_at": datetime.datetime.utcnow().isoformat(),
+        "reviewed_by": "admin-web",
+    }).eq("id", request_id).execute()
     return RedirectResponse(url="/admin/topup-requests", status_code=303)
 
 
 @router.post("/topup-requests/{request_id}/reject", response_class=HTMLResponse)
 async def reject_topup(request_id: str, _: str = Depends(_require_admin)):
     db = get_db()
-    db.table("credit_topup_requests").update({"status": "rejected"}).eq("id", request_id).execute()
+    db.table("credit_topup_requests").update({
+        "status": "rejected",
+        "reviewed_at": datetime.datetime.utcnow().isoformat(),
+        "reviewed_by": "admin-web",
+    }).eq("id", request_id).execute()
     return RedirectResponse(url="/admin/topup-requests", status_code=303)
 
 

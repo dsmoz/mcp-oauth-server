@@ -144,13 +144,95 @@ async def authorize(
 
 @router.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
-    """Receive Telegram webhook updates (registration notifications only)."""
+    """Receive Telegram webhook updates."""
     settings = get_settings()
     if settings.TELEGRAM_WEBHOOK_SECRET:
         incoming = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
         if incoming != settings.TELEGRAM_WEBHOOK_SECRET:
             return JSONResponse({"ok": False}, status_code=403)
+
+    body = await request.json()
+    cq = body.get("callback_query")
+    if cq:
+        await _handle_topup_callback(cq)
     return JSONResponse({"ok": True})
+
+
+async def _handle_topup_callback(cq: dict) -> None:
+    data = cq.get("data", "")
+    cq_id = cq["id"]
+    chat_id = cq["message"]["chat"]["id"]
+    message_id = cq["message"]["message_id"]
+
+    if data.startswith("topup_approve:"):
+        request_id = data.split(":", 1)[1]
+        result = _do_approve_topup(request_id)
+        if result == "approved":
+            await tg.answer_callback_query(cq_id, "✅ Approved — credits added")
+            await tg.edit_topup_message(chat_id, message_id, "✅ *Approved* — credits added.")
+        elif result == "already_done":
+            await tg.answer_callback_query(cq_id, "Already processed")
+        else:
+            await tg.answer_callback_query(cq_id, "❌ Error — check admin panel")
+
+    elif data.startswith("topup_reject:"):
+        request_id = data.split(":", 1)[1]
+        result = _do_reject_topup(request_id)
+        if result == "rejected":
+            await tg.answer_callback_query(cq_id, "❌ Rejected")
+            await tg.edit_topup_message(chat_id, message_id, "❌ *Rejected*.")
+        elif result == "already_done":
+            await tg.answer_callback_query(cq_id, "Already processed")
+        else:
+            await tg.answer_callback_query(cq_id, "Error")
+
+
+def _do_approve_topup(request_id: str) -> str:
+    """Add credits and mark approved. Returns 'approved', 'already_done', or 'error'."""
+    import datetime
+    try:
+        db = get_db()
+        row_res = db.table("credit_topup_requests").select("*").eq("id", request_id).limit(1).execute()
+        if not row_res.data:
+            return "error"
+        row = row_res.data[0]
+        if row["status"] != "pending":
+            return "already_done"
+        user_id = row["user_id"]
+        amount = float(row["amount"])
+        user_res = db.table("users").select("credit_balance").eq("id", user_id).limit(1).execute()
+        if not user_res.data:
+            return "error"
+        current = float(user_res.data[0].get("credit_balance") or 0)
+        db.table("users").update({"credit_balance": current + amount}).eq("id", user_id).execute()
+        db.table("credit_topup_requests").update({
+            "status": "approved",
+            "reviewed_at": datetime.datetime.utcnow().isoformat(),
+            "reviewed_by": "telegram",
+        }).eq("id", request_id).execute()
+        return "approved"
+    except Exception:
+        return "error"
+
+
+def _do_reject_topup(request_id: str) -> str:
+    """Mark rejected. Returns 'rejected', 'already_done', or 'error'."""
+    import datetime
+    try:
+        db = get_db()
+        row_res = db.table("credit_topup_requests").select("status").eq("id", request_id).limit(1).execute()
+        if not row_res.data:
+            return "error"
+        if row_res.data[0]["status"] != "pending":
+            return "already_done"
+        db.table("credit_topup_requests").update({
+            "status": "rejected",
+            "reviewed_at": datetime.datetime.utcnow().isoformat(),
+            "reviewed_by": "telegram",
+        }).eq("id", request_id).execute()
+        return "rejected"
+    except Exception:
+        return "error"
 
 
 # ── Token ─────────────────────────────────────────────────────────────────────
