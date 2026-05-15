@@ -43,6 +43,7 @@
       <th>Domain</th>
       <th>Tier</th>
       <th>Credits</th>
+      <th>Tools</th>
       <th>Status</th>
       <th>Actions</th>
     </tr>
@@ -87,6 +88,9 @@
           </select>
         </form>
       </td>
+      <td style="text-align:center;font-size:0.85rem;color:var(--text-muted)">
+        {{ e.tool_count or 0 }}
+      </td>
       <td>
         {% if e.is_published %}
           <span class="badge badge-active">Published</span>
@@ -121,6 +125,11 @@
         <form method="post" action="/admin/catalogue/{{ e.slug }}/refresh-description" style="display:inline">
           <button type="submit" class="btn btn-secondary" title="Regenerate agent description from tool list">
             <i class="ph-light ph-arrows-clockwise"></i>
+          </button>
+        </form>
+        <form method="post" action="/admin/catalogue/{{ e.slug }}/sync-tools" style="display:inline">
+          <button type="submit" class="btn btn-secondary" title="Sync tool list from upstream into search index">
+            <i class="ph-light ph-plug"></i> Sync
           </button>
         </form>
         {% if not e.from_railway %}

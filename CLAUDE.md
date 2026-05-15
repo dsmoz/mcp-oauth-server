@@ -15,6 +15,7 @@ Any new MCP added to the catalogue MUST follow this guide before deployment.
 - [`docs/per-user-oauth-billing.md`](docs/per-user-oauth-billing.md) — billing integration
 - [`docs/per-user-mcp-credentials.md`](docs/per-user-mcp-credentials.md) — credential storage / config schema
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — product roadmap
+- [`docs/sop-mcp-catalogue-descriptions.md`](docs/sop-mcp-catalogue-descriptions.md) — SOP for writing human-readable catalogue descriptions
 
 ## Key paths
 

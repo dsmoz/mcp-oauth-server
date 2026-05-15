@@ -789,6 +789,34 @@ def _get_catalogue_row(db, slug: str) -> dict | None:
     return result.data[0] if result.data else None
 
 
+async def _sync_tools_for_slug(slug: str, upstream_url: str, api_key: str) -> int:
+    """Fetch tool list from upstream and upsert into mcp_tools. Returns tool count (0 on failure)."""
+    try:
+        from src.gateway.upstream import fetch_tool_list
+        tools = await fetch_tool_list(upstream_url, api_key)
+        if not tools:
+            return 0
+        db = get_db()
+        rows = [
+            {
+                "mcp_slug": slug,
+                "tool_name": t["name"],
+                "description": t.get("description"),
+                "input_schema": t.get("inputSchema"),
+            }
+            for t in tools
+        ]
+        db.table("mcp_tools").upsert(rows, on_conflict="mcp_slug,tool_name").execute()
+        # Delete stale tools no longer exposed by the upstream
+        current_names = [t["name"] for t in tools]
+        db.table("mcp_tools").delete().eq("mcp_slug", slug).not_.in_("tool_name", current_names).execute()
+        return len(tools)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("_sync_tools_for_slug failed for %s: %s", slug, exc)
+        return 0
+
+
 @router.get("/catalogue", response_class=HTMLResponse)
 async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
     db = get_db()
@@ -840,6 +868,7 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
             }).execute()
             if inserted.data:
                 db_rows[slug] = inserted.data[0]
+            await _sync_tools_for_slug(slug, upstream_url, "")
         except Exception as exc:
             import logging
             logging.getLogger(__name__).warning("auto-publish failed for %s: %s", slug, exc)
@@ -870,6 +899,7 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
             "is_featured": bool(db_row.get("is_featured")) if db_row else False,
             "icon": (db_row.get("icon") if db_row else None),
             "credit_cost_per_call": (db_row.get("credit_cost_per_call") if db_row else 0) or 0,
+            "tool_count": (db_row.get("tool_count") if db_row else 0) or 0,
             "tier": (db_row.get("tier") if db_row else None) or "standard",
             "from_railway": True,
             "railway_id": svc["id"],
@@ -1035,6 +1065,7 @@ async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_
                 "upstream_api_key": "",
                 "is_published": True,
             }).execute()
+            await _sync_tools_for_slug(slug, upstream_url, "")
         else:
             raise HTTPException(status_code=404, detail="Not found")
     else:
@@ -1050,6 +1081,8 @@ async def toggle_publish(request: Request, slug: str, _: str = Depends(_require_
             if tool_count is not None:
                 update["tool_count"] = tool_count
         db.table("mcp_catalogue").update(update).eq("slug", slug).execute()
+        if new_published:
+            await _sync_tools_for_slug(slug, entry["upstream_url"], entry.get("upstream_api_key", ""))
 
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
@@ -1100,6 +1133,20 @@ async def refresh_description(request: Request, slug: str, _: str = Depends(_req
         update["tool_count"] = tool_count
     if update:
         db.table("mcp_catalogue").update(update).eq("slug", slug).execute()
+    await _sync_tools_for_slug(slug, entry["upstream_url"], entry.get("upstream_api_key", ""))
+    return RedirectResponse(url="/admin/catalogue", status_code=303)
+
+
+@router.post("/catalogue/{slug}/sync-tools", response_class=HTMLResponse)
+async def sync_tools(request: Request, slug: str, _: str = Depends(_require_admin)):
+    """Sync tool list from upstream into mcp_tools table and update tool_count."""
+    db = get_db()
+    entry = _get_catalogue_row(db, slug)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    count = await _sync_tools_for_slug(slug, entry["upstream_url"], entry.get("upstream_api_key", ""))
+    if count:
+        db.table("mcp_catalogue").update({"tool_count": count}).eq("slug", slug).execute()
     return RedirectResponse(url="/admin/catalogue", status_code=303)
 
 

@@ -109,6 +109,8 @@ _published_mcps_cache: TTLCache[str, list[dict]] = TTLCache(ttl=60, maxsize=4)
 _tool_cache: TTLCache[tuple[str, str], list[dict]] = TTLCache(ttl=300, maxsize=4096)
 # Per-user MCP credential config — short TTL; invalidated on portal save.
 _user_config_cache: TTLCache[tuple[str, str], dict] = TTLCache(ttl=60, maxsize=4096)
+# Tool counts from mcp_tools table — keyed by "super"/"standard"; 5-min TTL.
+_tool_counts_cache: TTLCache[str, dict[str, int]] = TTLCache(ttl=300, maxsize=4)
 
 
 def _invalidate_user_tool_cache(user_id: str) -> None:
@@ -365,6 +367,46 @@ def _get_all_published_mcps(user_tier: str = "standard") -> list[dict]:
     return rows
 
 
+def _get_tool_counts() -> dict[str, int]:
+    """Return {slug: tool_count} for all MCPs that have rows in mcp_tools (5-min TTL)."""
+    cached = _tool_counts_cache.get("counts")
+    if cached is not None:
+        return cached
+    try:
+        rows = get_db().table("mcp_tools").select("mcp_slug").execute().data or []
+        counts: dict[str, int] = {}
+        for r in rows:
+            slug = r["mcp_slug"]
+            counts[slug] = counts.get(slug, 0) + 1
+    except Exception as exc:
+        print(f"WARNING: _get_tool_counts failed: {exc}", file=sys.stderr)
+        counts = {}
+    _tool_counts_cache.set("counts", counts)
+    return counts
+
+
+def _search_mcp_tools_db(query: str) -> list[dict]:
+    """Full-catalogue tool search against mcp_tools table (all published MCPs).
+
+    Returns list of {mcp_slug, tool_name, description, input_schema}.
+    """
+    q = query.lower()
+    try:
+        rows = (
+            get_db().table("mcp_tools")
+            .select("mcp_slug, tool_name, description, input_schema")
+            .execute()
+            .data or []
+        )
+        return [
+            r for r in rows
+            if q in r["tool_name"].lower() or q in (r.get("description") or "").lower()
+        ]
+    except Exception as exc:
+        print(f"WARNING: _search_mcp_tools_db failed: {exc}", file=sys.stderr)
+        return []
+
+
 def _log_tool_call_async(
     user_id: str, client_id: str, mcp_slug: str, tool_name: str,
     credits_used: float = 0.0, duration_ms: int | None = None,
@@ -422,6 +464,7 @@ _MCP_ENTRY_SCHEMA = {
         "description": {"type": "string", "description": "What the MCP does."},
         "category": {"type": "string", "description": "Catalogue category (research, productivity, ...)."},
         "credit_cost_per_call": {"type": "number", "description": "Credits deducted per invoke_mcp_tool call against this MCP."},
+        "tool_count": {"type": "integer", "description": "Number of tools this MCP exposes (0 if not yet synced)."},
     },
 }
 
@@ -572,14 +615,16 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                 name="search_tools",
                 description=(
                     "Keyword search across tool names and descriptions of every "
-                    "*enabled* MCP in the toolbox.\n\n"
+                    "published MCP in the catalogue.\n\n"
                     "When to use: you want to find a capability but don't know "
                     "which MCP provides it. Cheaper than enumerating each MCP "
-                    "with `list_mcp_tools`. Failed upstream discoveries are "
-                    "silently skipped.\n\n"
+                    "with `list_mcp_tools`. Enabled MCPs are searched live "
+                    "(upstream); unenabled published MCPs are searched from the "
+                    "indexed tool registry. Each result carries an `enabled` flag "
+                    "so you can call `add_mcp` if needed.\n\n"
                     "Returns: JSON array of {mcp, mcp_name, tool, description, "
-                    "inputSchema}. Empty array means no matches — try broader "
-                    "keywords or `browse_mcps` to enable more MCPs.\n\n"
+                    "inputSchema, enabled}. Empty array means no matches — try "
+                    "broader keywords.\n\n"
                     "Credit cost: free."
                 ),
                 inputSchema={
@@ -606,6 +651,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                                     "tool": {"type": "string"},
                                     "description": {"type": "string"},
                                     "inputSchema": {"type": "object"},
+                                    "enabled": {"type": "boolean"},
                                 },
                             },
                         },
@@ -865,6 +911,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
         structured: dict = {}
 
         if name == "list_mcps":
+            tool_counts = _get_tool_counts()
             structured = {"items": [
                 {
                     "slug": m["slug"],
@@ -872,6 +919,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                     "description": m.get("description_agent") or m.get("description", ""),
                     "category": m["category"],
                     "credit_cost_per_call": float(m.get("credit_cost_per_call") or 0),
+                    "tool_count": tool_counts.get(m["slug"], 0),
                 }
                 for m in enabled_mcps
             ]}
@@ -879,6 +927,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
         elif name == "browse_mcps":
             all_mcps = _get_all_published_mcps(_get_user_tier(user_id))
             enabled_slugs = set(mcp_by_slug.keys())
+            tool_counts = _get_tool_counts()
             structured = {"items": [
                 {
                     "slug": m["slug"],
@@ -887,6 +936,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                     "category": m["category"],
                     "credit_cost_per_call": float(m.get("credit_cost_per_call") or 0),
                     "enabled": m["slug"] in enabled_slugs,
+                    "tool_count": tool_counts.get(m["slug"], 0),
                 }
                 for m in all_mcps
             ]}
@@ -920,12 +970,13 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
 
         elif name == "search_tools":
             q = (arguments.get("query") or "").lower()
-            # Fan out discovery in parallel; one upstream failing must not block the rest.
+            # Live search across enabled MCPs (upstream discovery, parallel).
             tool_lists = await asyncio.gather(
                 *[_get_tools(mcp["slug"]) for mcp in enabled_mcps],
                 return_exceptions=True,
             )
             results = []
+            seen: set[tuple[str, str]] = set()
             for mcp, tools in zip(enabled_mcps, tool_lists):
                 if isinstance(tools, BaseException):
                     print(
@@ -935,13 +986,35 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                     continue
                 for t in tools:
                     if q in t["name"].lower() or q in t.get("description", "").lower():
+                        key = (mcp["slug"], t["name"])
+                        seen.add(key)
                         results.append({
                             "mcp": mcp["slug"],
                             "mcp_name": mcp["name"],
                             "tool": t["name"],
                             "description": t.get("description", ""),
                             "inputSchema": t.get("inputSchema", {}),
+                            "enabled": True,
                         })
+            # Supplement with DB-indexed tools from unenabled published MCPs.
+            all_published = {m["slug"]: m for m in _get_all_published_mcps(_get_user_tier(user_id))}
+            db_matches = await asyncio.to_thread(_search_mcp_tools_db, q)
+            for row in db_matches:
+                slug = row["mcp_slug"]
+                tool_name = row["tool_name"]
+                if (slug, tool_name) in seen:
+                    continue
+                mcp_meta = all_published.get(slug)
+                if not mcp_meta:
+                    continue
+                results.append({
+                    "mcp": slug,
+                    "mcp_name": mcp_meta["name"],
+                    "tool": tool_name,
+                    "description": row.get("description") or "",
+                    "inputSchema": row.get("input_schema") or {},
+                    "enabled": slug in mcp_by_slug,
+                })
             structured = {"items": results}
 
         elif name == "list_mcp_tools":
