@@ -867,6 +867,8 @@ async def list_catalogue(request: Request, _: str = Depends(_require_admin)):
             "upstream_url": svc["upstream_url"] or (db_row["upstream_url"] if db_row else ""),
             "upstream_api_key": db_row["upstream_api_key"] if db_row else "",
             "is_published": db_row["is_published"] if db_row else False,
+            "is_featured": bool(db_row.get("is_featured")) if db_row else False,
+            "icon": (db_row.get("icon") if db_row else None),
             "tier": (db_row.get("tier") if db_row else None) or "standard",
             "from_railway": True,
             "railway_id": svc["id"],
