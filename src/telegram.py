@@ -157,7 +157,7 @@ async def register_webhook(webhook_url: str) -> None:
     """Register the webhook URL with Telegram on startup."""
     if not _bot_token():
         return
-    payload: dict = {"url": webhook_url}
+    payload: dict = {"url": webhook_url, "allowed_updates": ["message", "callback_query"]}
     secret = _webhook_secret()
     if secret:
         payload["secret_token"] = secret
