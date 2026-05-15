@@ -27,7 +27,7 @@ from slowapi.errors import RateLimitExceeded
 from src.limiter import limiter
 from src.oauth.routes import router as oauth_router
 from src.admin.routes import router as admin_router
-from src.portal.routes import router as portal_router
+from src.portal.routes import router as portal_router, landing_router
 from src.gateway.routes import GatewayASGI
 from src.gateway.rest_proxy import router as rest_proxy_router
 from src.config import get_settings
@@ -89,6 +89,7 @@ async def startup_checks():
     else:
         print("INFO: Telegram not configured — consent will use password form fallback.", file=sys.stderr)
 
+app.include_router(landing_router)
 app.include_router(oauth_router)
 app.include_router(admin_router)
 app.include_router(portal_router)
@@ -98,11 +99,6 @@ app.include_router(rest_proxy_router)
 _portal_static = Path(__file__).parent / "src" / "portal" / "static"
 app.mount("/portal/static", StaticFiles(directory=str(_portal_static)), name="portal-static")
 
-
-@app.get("/")
-async def root():
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/portal", status_code=302)
 
 
 @app.get("/health")

@@ -1612,3 +1612,155 @@ async def reject_topup(request_id: str, _: str = Depends(_require_admin)):
     db = get_db()
     db.table("credit_topup_requests").update({"status": "rejected"}).eq("id", request_id).execute()
     return RedirectResponse(url="/admin/topup-requests", status_code=303)
+
+
+# ── Landing testimonials ───────────────────────────────────────────────────────
+
+@router.get("/testimonials", response_class=HTMLResponse)
+async def list_testimonials(request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
+    rows = db.table("landing_testimonials").select("*").order("sort_order").execute().data or []
+    return templates.TemplateResponse(request=request, name="admin_testimonials.html", context={"testimonials": rows})
+
+
+@router.get("/testimonials/new", response_class=HTMLResponse)
+async def new_testimonial_form(request: Request, _: str = Depends(_require_admin)):
+    return templates.TemplateResponse(request=request, name="admin_testimonial_form.html", context={"item": None})
+
+
+@router.post("/testimonials/new", response_class=HTMLResponse)
+async def create_testimonial(
+    request: Request,
+    _: str = Depends(_require_admin),
+    quote: str = Form(...),
+    author_name: str = Form(...),
+    author_role: str = Form(""),
+    author_org: str = Form(""),
+    author_initials: str = Form(""),
+    sort_order: int = Form(0),
+    is_active: str = Form("off"),
+):
+    db = get_db()
+    db.table("landing_testimonials").insert({
+        "quote": quote.strip(),
+        "author_name": author_name.strip(),
+        "author_role": author_role.strip() or None,
+        "author_org": author_org.strip() or None,
+        "author_initials": author_initials.strip() or None,
+        "sort_order": sort_order,
+        "is_active": is_active == "on",
+    }).execute()
+    return RedirectResponse(url="/admin/testimonials", status_code=303)
+
+
+@router.get("/testimonials/{item_id}/edit", response_class=HTMLResponse)
+async def edit_testimonial_form(item_id: str, request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
+    result = db.table("landing_testimonials").select("*").eq("id", item_id).limit(1).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    return templates.TemplateResponse(request=request, name="admin_testimonial_form.html", context={"item": result.data[0]})
+
+
+@router.post("/testimonials/{item_id}/edit", response_class=HTMLResponse)
+async def update_testimonial(
+    item_id: str,
+    _: str = Depends(_require_admin),
+    quote: str = Form(...),
+    author_name: str = Form(...),
+    author_role: str = Form(""),
+    author_org: str = Form(""),
+    author_initials: str = Form(""),
+    sort_order: int = Form(0),
+    is_active: str = Form("off"),
+):
+    db = get_db()
+    db.table("landing_testimonials").update({
+        "quote": quote.strip(),
+        "author_name": author_name.strip(),
+        "author_role": author_role.strip() or None,
+        "author_org": author_org.strip() or None,
+        "author_initials": author_initials.strip() or None,
+        "sort_order": sort_order,
+        "is_active": is_active == "on",
+    }).eq("id", item_id).execute()
+    return RedirectResponse(url="/admin/testimonials", status_code=303)
+
+
+@router.post("/testimonials/{item_id}/delete")
+async def delete_testimonial(item_id: str, _: str = Depends(_require_admin)):
+    db = get_db()
+    db.table("landing_testimonials").delete().eq("id", item_id).execute()
+    return RedirectResponse(url="/admin/testimonials", status_code=303)
+
+
+# ── Landing partners ──────────────────────────────────────────────────────────
+
+@router.get("/partners", response_class=HTMLResponse)
+async def list_partners(request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
+    rows = db.table("landing_partners").select("*").order("sort_order").execute().data or []
+    return templates.TemplateResponse(request=request, name="admin_partners.html", context={"partners": rows})
+
+
+@router.get("/partners/new", response_class=HTMLResponse)
+async def new_partner_form(request: Request, _: str = Depends(_require_admin)):
+    return templates.TemplateResponse(request=request, name="admin_partner_form.html", context={"item": None})
+
+
+@router.post("/partners/new", response_class=HTMLResponse)
+async def create_partner(
+    request: Request,
+    _: str = Depends(_require_admin),
+    name: str = Form(...),
+    logo_url: str = Form(""),
+    website_url: str = Form(""),
+    sort_order: int = Form(0),
+    is_active: str = Form("off"),
+):
+    db = get_db()
+    db.table("landing_partners").insert({
+        "name": name.strip(),
+        "logo_url": logo_url.strip() or None,
+        "website_url": website_url.strip() or None,
+        "sort_order": sort_order,
+        "is_active": is_active == "on",
+    }).execute()
+    return RedirectResponse(url="/admin/partners", status_code=303)
+
+
+@router.get("/partners/{item_id}/edit", response_class=HTMLResponse)
+async def edit_partner_form(item_id: str, request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
+    result = db.table("landing_partners").select("*").eq("id", item_id).limit(1).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Partner not found")
+    return templates.TemplateResponse(request=request, name="admin_partner_form.html", context={"item": result.data[0]})
+
+
+@router.post("/partners/{item_id}/edit", response_class=HTMLResponse)
+async def update_partner(
+    item_id: str,
+    _: str = Depends(_require_admin),
+    name: str = Form(...),
+    logo_url: str = Form(""),
+    website_url: str = Form(""),
+    sort_order: int = Form(0),
+    is_active: str = Form("off"),
+):
+    db = get_db()
+    db.table("landing_partners").update({
+        "name": name.strip(),
+        "logo_url": logo_url.strip() or None,
+        "website_url": website_url.strip() or None,
+        "sort_order": sort_order,
+        "is_active": is_active == "on",
+    }).eq("id", item_id).execute()
+    return RedirectResponse(url="/admin/partners", status_code=303)
+
+
+@router.post("/partners/{item_id}/delete")
+async def delete_partner(item_id: str, _: str = Depends(_require_admin)):
+    db = get_db()
+    db.table("landing_partners").delete().eq("id", item_id).execute()
+    return RedirectResponse(url="/admin/partners", status_code=303)

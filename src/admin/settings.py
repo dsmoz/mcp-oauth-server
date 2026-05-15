@@ -64,4 +64,5 @@ CATEGORY_META = {
     "notifications": {"label": "Notifications", "icon": "ph-bell", "order": 3},
     "telegram": {"label": "Telegram Bot", "icon": "ph-telegram-logo", "order": 4},
     "search": {"label": "Search & Indexing", "icon": "ph-magnifying-glass", "order": 5},
+    "branding": {"label": "Branding", "icon": "ph-palette", "order": 6},
 }

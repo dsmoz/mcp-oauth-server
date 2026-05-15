@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Testimonials — DS-MOZ Connect{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Landing Testimonials</h1>
+  <a href="/admin/testimonials/new" class="btn btn-primary">
+    <i class="ph-light ph-plus"></i> Add Testimonial
+  </a>
+</div>
+
+{% if testimonials %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Order</th>
+        <th>Author</th>
+        <th>Quote</th>
+        <th>Active</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in testimonials %}
+      <tr>
+        <td style="color:var(--text-muted);font-size:0.85rem">{{ t.sort_order }}</td>
+        <td>
+          <div style="font-weight:600;font-size:0.9rem">{{ t.author_name }}</div>
+          <div style="font-size:0.8rem;color:var(--text-muted)">
+            {% if t.author_role %}{{ t.author_role }}{% endif %}
+            {% if t.author_org %} · {{ t.author_org }}{% endif %}
+          </div>
+        </td>
+        <td style="font-size:0.85rem;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)">"{{ t.quote[:100] }}{% if t.quote|length > 100 %}…{% endif %}"</td>
+        <td>
+          {% if t.is_active %}
+          <span class="badge badge-success">active</span>
+          {% else %}
+          <span class="badge badge-secondary">inactive</span>
+          {% endif %}
+        </td>
+        <td style="white-space:nowrap">
+          <a href="/admin/testimonials/{{ t.id }}/edit" class="btn btn-secondary btn-sm">Edit</a>
+          <form method="post" action="/admin/testimonials/{{ t.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this testimonial?')">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:2.5rem;color:var(--text-muted)">
+  No testimonials yet. <a href="/admin/testimonials/new">Add the first one.</a>
+</div>
+{% endif %}
+{% endblock %}

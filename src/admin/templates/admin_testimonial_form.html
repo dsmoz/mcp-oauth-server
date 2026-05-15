@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{% if item %}Edit{% else %}New{% endif %} Testimonial — DS-MOZ Connect{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>{% if item %}Edit Testimonial{% else %}New Testimonial{% endif %}</h1>
+  <a href="/admin/testimonials" class="btn btn-secondary">← Back</a>
+</div>
+
+<div class="card" style="max-width:640px">
+  <form method="post" action="/admin/testimonials/{% if item %}{{ item.id }}/edit{% else %}new{% endif %}">
+    <div class="form-group">
+      <label class="form-label" for="quote">Quote <span style="color:var(--danger)">*</span></label>
+      <textarea id="quote" name="quote" class="form-control" rows="4" required>{{ item.quote if item else '' }}</textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="author_name">Author Name <span style="color:var(--danger)">*</span></label>
+      <input type="text" id="author_name" name="author_name" class="form-control" required value="{{ item.author_name if item else '' }}">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="form-group">
+        <label class="form-label" for="author_role">Role</label>
+        <input type="text" id="author_role" name="author_role" class="form-control" value="{{ item.author_role or '' if item else '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="author_org">Organisation</label>
+        <input type="text" id="author_org" name="author_org" class="form-control" value="{{ item.author_org or '' if item else '' }}">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="form-group">
+        <label class="form-label" for="author_initials">Initials (avatar fallback)</label>
+        <input type="text" id="author_initials" name="author_initials" class="form-control" maxlength="3" value="{{ item.author_initials or '' if item else '' }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="sort_order">Sort Order</label>
+        <input type="number" id="sort_order" name="sort_order" class="form-control" value="{{ item.sort_order if item else 0 }}">
+      </div>
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:0.5rem">
+      <input type="checkbox" id="is_active" name="is_active" value="on" {% if not item or item.is_active %}checked{% endif %}>
+      <label for="is_active" style="margin:0;font-weight:500">Active (show on landing page)</label>
+    </div>
+    <div style="display:flex;gap:0.75rem;margin-top:1.5rem">
+      <button type="submit" class="btn btn-primary">{% if item %}Save Changes{% else %}Create{% endif %}</button>
+      <a href="/admin/testimonials" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
