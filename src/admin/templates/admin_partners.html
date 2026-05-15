@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Partners — DS-MOZ Connect{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Landing Partners</h1>
+  <a href="/admin/partners/new" class="btn btn-primary">
+    <i class="ph-light ph-plus"></i> Add Partner
+  </a>
+</div>
+
+{% if partners %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Order</th>
+        <th>Name</th>
+        <th>Logo URL</th>
+        <th>Website</th>
+        <th>Active</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in partners %}
+      <tr>
+        <td style="color:var(--text-muted);font-size:0.85rem">{{ p.sort_order }}</td>
+        <td style="font-weight:600;font-size:0.9rem">{{ p.name }}</td>
+        <td style="font-size:0.8rem;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          {% if p.logo_url %}<a href="{{ p.logo_url }}" target="_blank" rel="noopener">{{ p.logo_url[:40] }}…</a>{% else %}—{% endif %}
+        </td>
+        <td style="font-size:0.85rem">
+          {% if p.website_url %}<a href="{{ p.website_url }}" target="_blank" rel="noopener">{{ p.website_url[:30] }}…</a>{% else %}—{% endif %}
+        </td>
+        <td>
+          {% if p.is_active %}
+          <span class="badge badge-success">active</span>
+          {% else %}
+          <span class="badge badge-secondary">inactive</span>
+          {% endif %}
+        </td>
+        <td style="white-space:nowrap">
+          <a href="/admin/partners/{{ p.id }}/edit" class="btn btn-secondary btn-sm">Edit</a>
+          <form method="post" action="/admin/partners/{{ p.id }}/delete" style="display:inline" onsubmit="return confirm('Delete {{ p.name }}?')">
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:2.5rem;color:var(--text-muted)">
+  No partners yet. <a href="/admin/partners/new">Add the first one.</a>
+</div>
+{% endif %}
+{% endblock %}

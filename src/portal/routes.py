@@ -1291,3 +1291,40 @@ async def portal_settings_password(
         return _settings_ctx(request, user, error="New password must differ from current.")
     users.set_password(user_id, new_password)
     return _settings_ctx(request, user, success="Password changed.")
+
+
+# ── Public landing page (root /) ──────────────────────────────────────────────
+
+landing_router = APIRouter()
+
+
+@landing_router.get("/", response_class=HTMLResponse)
+async def public_landing(request: Request):
+    """Landing page. Shown to every visitor — authenticated or not."""
+    is_authenticated = bool(_verify_session(request.cookies.get(_COOKIE_NAME) or ""))
+
+    from src.portal.landing import (
+        get_featured_servers,
+        get_landing_stats,
+        get_partners,
+        get_testimonials,
+    )
+    from src.admin.settings import get_setting
+
+    featured_servers = get_featured_servers()
+    testimonials = get_testimonials()
+    partners = get_partners()
+    stats = get_landing_stats()
+    hero_image_url = get_setting("landing_hero_image_url") or None
+
+    return templates.TemplateResponse(
+        request=request, name="portal_landing.html", context={
+            "featured_servers": featured_servers,
+            "testimonials": testimonials,
+            "partners": partners,
+            "server_count": stats["server_count"],
+            "tool_count": stats["tool_count"],
+            "hero_image_url": hero_image_url,
+            "is_authenticated": is_authenticated,
+        },
+    )

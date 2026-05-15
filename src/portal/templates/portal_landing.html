@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DS-MOZ Connect — One gateway for all your AI tools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { font-family: 'Inter', sans-serif; background: #fff; color: #072B31; }
+
+:root {
+  --deep:   #072B31;
+  --teal:   #115E67;
+  --orange: #FF5E00;
+  --beige:  #FAF6F4;
+  --line:   rgba(7,43,49,0.12);
+  --fg2:    #4A6469;
+  --fg3:    #6B7E81;
+  --r: 4px;
+}
+
+.display { font-family: 'Raleway', sans-serif; font-weight: 800; }
+.eyebrow {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--orange);
+}
+.eyebrow.onDeep { color: rgba(255,94,0,0.85); }
+
+.inner { max-width: 1160px; margin: 0 auto; padding: 0 48px; }
+
+/* NAV */
+nav {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+  padding: 24px 48px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-logo {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+}
+.nav-logo span { color: var(--orange); }
+.btn-nav {
+  padding: 9px 20px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: var(--r);
+  color: #fff;
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.btn-nav:hover { background: rgba(255,255,255,0.20); }
+
+/* HERO */
+.hero {
+  position: relative;
+  min-height: 580px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  background: var(--deep);
+}
+.hero-bg {
+  position: absolute; inset: 0; z-index: 0;
+}
+.hero-content {
+  position: relative; z-index: 1;
+  max-width: 1160px; margin: 0 auto;
+  padding: 140px 48px 96px;
+  display: grid; grid-template-columns: 1.3fr 1fr; gap: 64px; align-items: center;
+}
+.hero h1 {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 800;
+  font-size: clamp(38px, 5vw, 60px);
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  color: #fff;
+  margin: 18px 0 20px;
+  max-width: 580px;
+}
+.hero-sub {
+  font-size: 18px;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.72);
+  max-width: 480px;
+  margin-bottom: 36px;
+}
+.hero-ctas { display: flex; gap: 12px; align-items: center; }
+.btn-primary {
+  padding: 12px 24px;
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  border-radius: var(--r);
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: opacity 0.15s;
+}
+.btn-primary:hover { opacity: 0.88; }
+.btn-ghost {
+  padding: 11px 22px;
+  background: transparent;
+  color: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.30);
+  border-radius: var(--r);
+  font-family: 'Raleway', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-ghost:hover { border-color: rgba(255,255,255,0.55); color: #fff; }
+
+.hero-stat-card {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 6px;
+  padding: 28px;
+  backdrop-filter: blur(8px);
+}
+.hero-stat-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;
+}
+.hero-stat { text-align: center; }
+.hero-stat-num {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 800;
+  font-size: 34px;
+  color: #fff;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.hero-stat-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.50);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 5px;
+}
+.hero-divider { height: 1px; background: rgba(255,255,255,0.10); margin: 20px 0; }
+.hero-tagline {
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* SERVERS */
+.servers-section {
+  padding: 88px 0;
+  background: var(--beige);
+  border-bottom: 1px solid var(--line);
+}
+.section-header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  margin-bottom: 36px;
+}
+.section-header h2 {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 800;
+  font-size: 30px;
+  color: var(--deep);
+  letter-spacing: -0.015em;
+  margin-top: 12px;
+  line-height: 1.2;
+}
+.see-catalogue-link {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--teal);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 24px;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+
+.carousel-wrapper { position: relative; }
+.carousel-track {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.server-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 24px;
+  display: flex; flex-direction: column;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.server-card:hover {
+  box-shadow: 0 4px 20px rgba(7,43,49,0.08);
+  border-color: rgba(7,43,49,0.20);
+}
+.server-card-head {
+  display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px;
+}
+.server-icon {
+  width: 40px; height: 40px;
+  border-radius: 6px;
+  background: rgba(17,94,103,0.10);
+  color: var(--teal);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.server-icon svg, .server-icon i { width: 20px; height: 20px; }
+.tool-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  background: rgba(17,94,103,0.08);
+  color: var(--teal);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.cat-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  background: rgba(17,94,103,0.08);
+  color: var(--teal);
+  width: fit-content;
+  text-transform: capitalize;
+}
+.server-name {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--deep);
+  letter-spacing: -0.01em;
+  margin-bottom: 8px;
+}
+.server-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fg2);
+  flex: 1;
+  margin-bottom: 20px;
+}
+.server-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.cost-chip {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg3);
+  letter-spacing: 0.02em;
+}
+.btn-add {
+  padding: 7px 14px;
+  background: var(--deep);
+  color: #fff;
+  border: none;
+  border-radius: var(--r);
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 5px;
+  transition: opacity 0.15s;
+}
+.btn-add:hover { opacity: 0.85; }
+
+.carousel-dots {
+  display: flex; justify-content: center; gap: 7px; margin-top: 28px;
+}
+.dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(7,43,49,0.18);
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+  border: none;
+}
+.dot.active {
+  background: var(--orange);
+  transform: scale(1.25);
+}
+
+/* TESTIMONIALS */
+.testimonials-section {
+  padding: 88px 0;
+  background: var(--deep);
+}
+.test-inner {
+  max-width: 880px; margin: 0 auto; padding: 0 48px;
+}
+.test-slide { display: none; }
+.test-slide.active { display: block; }
+.test-quote {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1.45;
+  color: #fff;
+  letter-spacing: -0.01em;
+  margin: 20px 0 30px;
+  max-width: 760px;
+}
+.test-author {
+  display: flex; align-items: center; gap: 14px;
+}
+.test-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: rgba(255,94,0,0.90);
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+}
+.test-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.test-name {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+}
+.test-role { font-size: 12px; color: rgba(255,255,255,0.45); margin-top: 2px; }
+.test-nav {
+  display: flex; align-items: center; gap: 10px; margin-top: 36px;
+}
+.test-nav-btn {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: transparent;
+  color: rgba(255,255,255,0.55);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.test-nav-btn:hover { border-color: rgba(255,255,255,0.45); color: #fff; }
+.test-dots { display: flex; gap: 6px; margin-left: 6px; }
+.test-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s;
+}
+.test-dot.active { background: rgba(255,255,255,0.75); }
+
+/* PARTNERS */
+.partners-section {
+  padding: 60px 0;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+.partners-label {
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--fg3);
+  margin-bottom: 28px;
+  font-weight: 600;
+}
+.partners-logos {
+  display: flex; align-items: center; gap: 40px; flex-wrap: wrap;
+}
+.partner-logo-img {
+  height: 32px;
+  object-fit: contain;
+  filter: grayscale(1) opacity(0.55);
+  transition: filter 0.15s;
+}
+.partner-logo-img:hover { filter: grayscale(0) opacity(1); }
+.partner-pill {
+  height: 28px;
+  background: rgba(7,43,49,0.08);
+  border-radius: 2px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 16px;
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: rgba(7,43,49,0.40);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+/* FOOTER */
+footer {
+  padding: 32px 48px;
+  background: var(--beige);
+  border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.footer-brand {
+  font-family: 'Raleway', sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg3);
+}
+.footer-links { display: flex; gap: 24px; }
+.footer-links a {
+  font-size: 12px;
+  color: var(--fg3);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+.footer-links a:hover { color: var(--deep); }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .hero-content { grid-template-columns: 1fr; padding: 120px 24px 64px; }
+  .hero-stat-card { display: none; }
+  .carousel-track { grid-template-columns: 1fr 1fr; }
+  .inner { padding: 0 24px; }
+  nav { padding: 20px 24px; }
+  .test-inner { padding: 0 24px; }
+}
+@media (max-width: 600px) {
+  .carousel-track { grid-template-columns: 1fr; }
+  footer { flex-direction: column; gap: 12px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">DS&#8209;MOZ <span>Connect</span></div>
+  {% if is_authenticated %}
+  <a href="/portal/mcps" class="btn-nav">My toolbox →</a>
+  {% else %}
+  <a href="/portal/login" class="btn-nav">Sign in →</a>
+  {% endif %}
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg">
+    {% if hero_image_url %}
+    <div style="
+      position:absolute;inset:0;
+      background-image: url('{{ hero_image_url }}');
+      background-size: cover;
+      background-position: center;
+    "></div>
+    <div style="position:absolute;inset:0;background:rgba(7,43,49,0.72);"></div>
+    {% else %}
+    <div style="
+      position:absolute;inset:0;
+      background: linear-gradient(135deg, #0d3d46 0%, #3a1c0d 60%, #6b2a00 100%);
+    "></div>
+    <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(7,43,49,0.70) 0%,rgba(7,43,49,0.40) 100%);"></div>
+    {% endif %}
+  </div>
+  <div class="hero-content">
+    <div>
+      <div class="eyebrow onDeep">DS-MOZ Connect</div>
+      <h1 class="display">One gateway for all your AI tools.</h1>
+      <p class="hero-sub">Connect Claude, ChatGPT, Cursor and more to your full DS-MOZ toolset in minutes — research, writing, data, and comms in one place.</p>
+      <div class="hero-ctas">
+        {% if is_authenticated %}
+        <a href="/portal/mcps" class="btn-primary">
+          Open my toolbox
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </a>
+        <a href="/portal/catalog" class="btn-ghost">See catalogue</a>
+        {% else %}
+        <a href="/portal/login" class="btn-primary">
+          Get started
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </a>
+        <a href="#catalogue" class="btn-ghost">See catalogue</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="hero-stat-card">
+      <div class="hero-stat-row">
+        <div class="hero-stat">
+          <div class="hero-stat-num">{{ server_count }}</div>
+          <div class="hero-stat-label">MCP Servers</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-num">{{ tool_count }}+</div>
+          <div class="hero-stat-label">AI Tools</div>
+        </div>
+      </div>
+      <div class="hero-divider"></div>
+      <div class="hero-tagline">Works with Claude · Cursor · Windsurf · ChatGPT</div>
+    </div>
+  </div>
+</section>
+
+<!-- SERVERS -->
+{% if featured_servers %}
+<section class="servers-section" id="catalogue">
+  <div class="inner">
+    <div class="section-header">
+      <div>
+        <div class="eyebrow">Available tools</div>
+        <h2 class="display">Built for the work you do.</h2>
+      </div>
+      <a href="{% if is_authenticated %}/portal/catalog{% else %}/portal/login?next=/portal/catalog{% endif %}" class="see-catalogue-link">
+        See full catalogue
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+    </div>
+
+    <div class="carousel-wrapper">
+      <div class="carousel-track" id="carouselTrack">
+        {% for mcp in featured_servers %}
+        <div class="server-card" data-page="{{ loop.index0 // 3 }}">
+          <div class="server-card-head">
+            <div class="server-icon">
+              {% if mcp.icon %}
+              <i data-lucide="{{ mcp.icon }}"></i>
+              {% else %}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              {% endif %}
+            </div>
+            {% if mcp.tool_count %}
+            <span class="tool-chip">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              {{ mcp.tool_count }} tools
+            </span>
+            {% endif %}
+          </div>
+          {% if mcp.category %}
+          <div class="cat-pill">{{ mcp.category }}</div>
+          {% endif %}
+          <div class="server-name">{{ mcp.name }}</div>
+          <p class="server-desc">{{ mcp.description or '' }}</p>
+          <div class="server-footer">
+            <span class="cost-chip">
+              {% if mcp.credit_cost_per_call %}{{ mcp.credit_cost_per_call }} cr / call{% else %}Free{% endif %}
+            </span>
+            <a href="{% if is_authenticated %}/portal/catalog{% else %}/portal/login?next=/portal/catalog{% endif %}" class="btn-add">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              See catalogue
+            </a>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% set page_count = ((featured_servers | length) + 2) // 3 %}
+    {% if page_count > 1 %}
+    <div class="carousel-dots" id="carouselDots">
+      {% for i in range(page_count) %}
+      <button class="dot{% if loop.first %} active{% endif %}" data-page="{{ loop.index0 }}"></button>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+<!-- TESTIMONIALS -->
+{% if testimonials %}
+<section class="testimonials-section">
+  <div class="test-inner">
+    <div class="eyebrow onDeep">Testemunhos</div>
+    {% for t in testimonials %}
+    <div class="test-slide{% if loop.first %} active{% endif %}" id="testSlide{{ loop.index0 }}">
+      <p class="test-quote">"{{ t.quote }}"</p>
+      <div class="test-author">
+        <div class="test-avatar">
+          {% if t.author_initials %}{{ t.author_initials }}{% else %}?{% endif %}
+        </div>
+        <div>
+          <div class="test-name">{{ t.author_name }}</div>
+          <div class="test-role">
+            {% if t.author_role %}{{ t.author_role }}{% endif %}
+            {% if t.author_role and t.author_org %} · {% endif %}
+            {% if t.author_org %}{{ t.author_org }}{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    {% if testimonials | length > 1 %}
+    <div class="test-nav">
+      <button class="test-nav-btn" id="testPrev" aria-label="Previous">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button class="test-nav-btn" id="testNext" aria-label="Next">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <div class="test-dots" id="testDots">
+        {% for t in testimonials %}
+        <button class="test-dot{% if loop.first %} active{% endif %}" data-index="{{ loop.index0 }}"></button>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
+<!-- PARTNERS -->
+{% if partners %}
+<section class="partners-section">
+  <div class="inner">
+    <div class="partners-label">Trusted by organisations in Mozambique &amp; Angola</div>
+    <div class="partners-logos">
+      {% for p in partners %}
+      {% if p.website_url %}
+      <a href="{{ p.website_url }}" target="_blank" rel="noopener" style="text-decoration:none;">
+      {% endif %}
+        {% if p.logo_url %}
+        <img src="{{ p.logo_url }}" alt="{{ p.name }}" class="partner-logo-img">
+        {% else %}
+        <div class="partner-pill">{{ p.name }}</div>
+        {% endif %}
+      {% if p.website_url %}
+      </a>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<footer>
+  <div class="footer-brand">DS&#8209;MOZ Connect &middot; Maputo</div>
+  <div class="footer-links">
+    {% if is_authenticated %}
+    <a href="/portal/mcps">My toolbox</a>
+    <a href="/portal/catalog">Catalogue</a>
+    <a href="/portal/logout">Sign out</a>
+    {% else %}
+    <a href="/portal/login">Sign in</a>
+    <a href="/portal/login">Create account</a>
+    {% endif %}
+    <a href="mailto:connect@dsmozconsultancy.com">Contact</a>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script>
+if (window.lucide) lucide.createIcons();
+
+// Carousel
+(function () {
+  const track = document.getElementById('carouselTrack');
+  const dotsEl = document.getElementById('carouselDots');
+  if (!track || !dotsEl) return;
+
+  const cards = Array.from(track.querySelectorAll('.server-card'));
+  const pageSize = 3;
+  const pageCount = Math.ceil(cards.length / pageSize);
+  let current = 0;
+
+  function showPage(n) {
+    current = (n + pageCount) % pageCount;
+    cards.forEach((c, i) => {
+      c.style.display = (Math.floor(i / pageSize) === current) ? '' : 'none';
+    });
+    dotsEl.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i === current);
+    });
+  }
+
+  if (pageCount > 1) {
+    showPage(0);
+    dotsEl.querySelectorAll('.dot').forEach(d => {
+      d.addEventListener('click', () => showPage(parseInt(d.dataset.page)));
+    });
+  }
+})();
+
+// Testimonials
+(function () {
+  const slides = Array.from(document.querySelectorAll('.test-slide'));
+  if (slides.length <= 1) return;
+  const dots = Array.from(document.querySelectorAll('.test-dot'));
+  const prev = document.getElementById('testPrev');
+  const next = document.getElementById('testNext');
+  let idx = 0;
+
+  function show(n) {
+    idx = (n + slides.length) % slides.length;
+    slides.forEach((s, i) => s.classList.toggle('active', i === idx));
+    dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+  }
+
+  prev && prev.addEventListener('click', () => show(idx - 1));
+  next && next.addEventListener('click', () => show(idx + 1));
+  dots.forEach(d => d.addEventListener('click', () => show(parseInt(d.dataset.index))));
+})();
+</script>
+</body>
+</html>
