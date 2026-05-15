@@ -142,50 +142,13 @@ async def authorize(
     return RedirectResponse(url=f"/portal/login?next_session={session_id}", status_code=302)
 
 
-@router.get("/telegram/webhook-diag")
-async def telegram_webhook_diag():
-    """Marker endpoint to confirm latest diagnostic build is live."""
-    sentry_state: dict = {"installed": False, "dsn_set": bool(os.getenv("SENTRY_DSN"))}
-    try:
-        import sentry_sdk
-        hub = sentry_sdk.Hub.current
-        client = hub.client
-        sentry_state["installed"] = client is not None
-        if client is not None:
-            sentry_state["dsn_configured"] = bool(client.dsn)
-            test_event_id = sentry_sdk.capture_message(
-                "diag endpoint test event", level="warning"
-            )
-            sentry_state["test_event_id"] = test_event_id
-    except Exception as exc:
-        sentry_state["error"] = str(exc)
-    return JSONResponse({
-        "build": "diag-v4-2026-05-15",
-        "secret_present": bool(tg._webhook_secret()),
-        "sentry": sentry_state,
-    })
-
-
 @router.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
     """Receive Telegram webhook updates."""
-    import sys
-    client_host = request.client.host if request.client else "?"
-    print(f"[telegram_webhook] hit from {client_host}", file=sys.stderr, flush=True)
-    try:
-        import sentry_sdk
-        sentry_sdk.capture_message(f"telegram_webhook hit from {client_host}", level="warning")
-    except Exception:
-        pass
-
     expected_secret = tg._webhook_secret()
-    incoming = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
     if expected_secret:
+        incoming = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
         if incoming != expected_secret:
-            print(
-                f"[telegram_webhook] 403 secret mismatch — incoming_len={len(incoming)} expected_len={len(expected_secret)}",
-                file=sys.stderr, flush=True,
-            )
             try:
                 import sentry_sdk
                 sentry_sdk.capture_message(
@@ -195,35 +158,21 @@ async def telegram_webhook(request: Request):
             except Exception:
                 pass
             return JSONResponse({"ok": False, "reason": "secret mismatch"}, status_code=403)
-    else:
-        print("[telegram_webhook] WARNING: no expected_secret configured", file=sys.stderr, flush=True)
 
     try:
         body = await request.json()
     except Exception as exc:
-        print(f"[telegram_webhook] body parse failed: {exc}", file=sys.stderr, flush=True)
         try:
             import sentry_sdk; sentry_sdk.capture_exception(exc)
         except Exception:
             pass
         return JSONResponse({"ok": False, "reason": "bad json"}, status_code=400)
 
-    print(f"[telegram_webhook] body keys: {list(body.keys())}", file=sys.stderr, flush=True)
-    try:
-        import sentry_sdk
-        sentry_sdk.capture_message(
-            f"telegram_webhook body keys={list(body.keys())} cq_data={body.get('callback_query', {}).get('data')!r}",
-            level="warning",
-        )
-    except Exception:
-        pass
-
     cq = body.get("callback_query")
     if cq:
         try:
             await _handle_topup_callback(cq)
         except Exception as exc:
-            print(f"[telegram_webhook] callback handler raised: {exc}", file=sys.stderr, flush=True)
             try:
                 import sentry_sdk; sentry_sdk.capture_exception(exc)
             except Exception:
@@ -232,17 +181,14 @@ async def telegram_webhook(request: Request):
 
 
 async def _handle_topup_callback(cq: dict) -> None:
-    import sys
     data = cq.get("data", "")
     cq_id = cq["id"]
     chat_id = cq["message"]["chat"]["id"]
     message_id = cq["message"]["message_id"]
-    print(f"[telegram_callback] data={data!r} chat_id={chat_id}", file=sys.stderr, flush=True)
 
     if data.startswith("topup_approve:"):
         request_id = data.split(":", 1)[1]
         result = _do_approve_topup(request_id)
-        print(f"[telegram_callback] approve {request_id} -> {result}", file=sys.stderr, flush=True)
         if result == "approved":
             await tg.answer_callback_query(cq_id, "✅ Approved — credits added")
             await tg.edit_topup_message(chat_id, message_id, "✅ *Approved* — credits added.")
@@ -254,7 +200,6 @@ async def _handle_topup_callback(cq: dict) -> None:
     elif data.startswith("topup_reject:"):
         request_id = data.split(":", 1)[1]
         result = _do_reject_topup(request_id)
-        print(f"[telegram_callback] reject {request_id} -> {result}", file=sys.stderr, flush=True)
         if result == "rejected":
             await tg.answer_callback_query(cq_id, "❌ Rejected")
             await tg.edit_topup_message(chat_id, message_id, "❌ *Rejected*.")
@@ -262,8 +207,6 @@ async def _handle_topup_callback(cq: dict) -> None:
             await tg.answer_callback_query(cq_id, "Already processed")
         else:
             await tg.answer_callback_query(cq_id, "Error")
-    else:
-        print(f"[telegram_callback] unknown data prefix: {data!r}", file=sys.stderr, flush=True)
 
 
 def _do_approve_topup(request_id: str) -> str:
@@ -291,9 +234,6 @@ def _do_approve_topup(request_id: str) -> str:
         }).eq("id", request_id).execute()
         return "approved"
     except Exception as exc:
-        import sys, traceback
-        print(f"ERROR: topup approve failed for {request_id}: {exc}", file=sys.stderr, flush=True)
-        traceback.print_exc(file=sys.stderr)
         try:
             import sentry_sdk; sentry_sdk.capture_exception(exc)
         except Exception:
@@ -318,9 +258,6 @@ def _do_reject_topup(request_id: str) -> str:
         }).eq("id", request_id).execute()
         return "rejected"
     except Exception as exc:
-        import sys, traceback
-        print(f"ERROR: topup reject failed for {request_id}: {exc}", file=sys.stderr, flush=True)
-        traceback.print_exc(file=sys.stderr)
         try:
             import sentry_sdk; sentry_sdk.capture_exception(exc)
         except Exception:
