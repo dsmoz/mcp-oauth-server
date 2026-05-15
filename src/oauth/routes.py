@@ -211,7 +211,9 @@ def _do_approve_topup(request_id: str) -> str:
             "reviewed_by": "telegram",
         }).eq("id", request_id).execute()
         return "approved"
-    except Exception:
+    except Exception as exc:
+        import sys
+        print(f"ERROR: topup approve failed for {request_id}: {exc}", file=sys.stderr)
         return "error"
 
 
@@ -231,7 +233,9 @@ def _do_reject_topup(request_id: str) -> str:
             "reviewed_by": "telegram",
         }).eq("id", request_id).execute()
         return "rejected"
-    except Exception:
+    except Exception as exc:
+        import sys
+        print(f"ERROR: topup reject failed for {request_id}: {exc}", file=sys.stderr)
         return "error"
 
 
