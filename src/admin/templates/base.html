@@ -481,6 +481,17 @@
           <i class="ph-light ph-credit-card"></i>
           <span class="nav-label">Top-ups</span>
         </a>
+        <div class="sidebar-section-label" style="margin-top: 0.5rem;">Landing Page</div>
+        <a href="/admin/testimonials" class="nav-item {% if '/admin/testimonials' in request.url.path %}active{% endif %}"
+           title="Testimonials">
+          <i class="ph-light ph-chat-circle-text"></i>
+          <span class="nav-label">Testimonials</span>
+        </a>
+        <a href="/admin/partners" class="nav-item {% if '/admin/partners' in request.url.path %}active{% endif %}"
+           title="Partners">
+          <i class="ph-light ph-handshake"></i>
+          <span class="nav-label">Partners</span>
+        </a>
         <div class="sidebar-section-label" style="margin-top: 0.5rem;">System</div>
         <a href="/admin/settings" class="nav-item {% if '/admin/settings' in request.url.path %}active{% endif %}"
            title="Settings">
