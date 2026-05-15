@@ -721,7 +721,7 @@ async def _auto_describe_mcp(upstream_url: str, api_key: str, name: str) -> tupl
     """
     try:
         from src.gateway.upstream import fetch_tool_list
-        tools = await fetch_tool_list(upstream_url, api_key)
+        tools = await fetch_tool_list(upstream_url, api_key, user_id="admin")
         if not tools:
             return None, None
         tool_count = len(tools)
@@ -793,7 +793,7 @@ async def _sync_tools_for_slug(slug: str, upstream_url: str, api_key: str) -> in
     """Fetch tool list from upstream and upsert into mcp_tools. Returns tool count (0 on failure)."""
     try:
         from src.gateway.upstream import fetch_tool_list
-        tools = await fetch_tool_list(upstream_url, api_key)
+        tools = await fetch_tool_list(upstream_url, api_key, user_id="admin")
         if not tools:
             return 0
         db = get_db()
@@ -974,9 +974,10 @@ async def edit_catalogue_form(request: Request, slug: str, _: str = Depends(_req
     entry = _get_catalogue_row(db, slug)
     if entry is None:
         raise HTTPException(status_code=404, detail="Not found")
+    tools_res = db.table("mcp_tools").select("tool_name,description").eq("mcp_slug", slug).order("tool_name").execute()
     return templates.TemplateResponse(
         request=request, name="catalogue_form.html",
-        context={"entry": entry, "error": None, "categories": _list_categories(db)},
+        context={"entry": entry, "error": None, "categories": _list_categories(db), "tools": tools_res.data or []},
     )
 
 

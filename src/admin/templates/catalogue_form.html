@@ -133,6 +133,45 @@
     </button>
   </form>
 </div>
+
+{% if entry %}
+<div class="card" style="margin-top:1.25rem">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+    <h2 style="margin:0;display:flex;align-items:center;gap:0.5rem">
+      <i class="ph-light ph-wrench" style="color:var(--accent-vivid)"></i>
+      Tools
+      {% if tools %}
+      <span style="font-size:0.75rem;font-weight:600;background:var(--elevated);color:var(--text-muted);padding:0.15em 0.5em;border-radius:9999px;margin-left:0.25rem">{{ tools|length }}</span>
+      {% endif %}
+    </h2>
+    <form method="post" action="/admin/catalogue/{{ entry.slug }}/sync-tools" style="margin:0">
+      <button type="submit" class="btn btn-secondary" style="font-size:0.8rem">
+        <i class="ph-light ph-arrows-clockwise"></i> Sync from upstream
+      </button>
+    </form>
+  </div>
+  {% if tools %}
+  <table style="font-size:0.8125rem">
+    <thead>
+      <tr>
+        <th style="width:220px">Tool name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tools %}
+      <tr>
+        <td style="font-family:monospace;color:var(--text-h)">{{ t.tool_name }}</td>
+        <td style="color:var(--text-muted)">{{ t.description or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="font-size:0.875rem;color:var(--text-muted)">No tools indexed yet. Click <strong>Sync from upstream</strong> to fetch the tool list.</p>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 <script>
