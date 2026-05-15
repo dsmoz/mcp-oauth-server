@@ -25,6 +25,20 @@
     {{ cat_meta.label }}
   </h2>
 
+  {% if cat_key == 'telegram' %}
+  <div style="background:var(--elevated);border:1px solid var(--border);border-radius:6px;padding:1rem;margin-bottom:1.25rem;font-size:0.875rem;line-height:1.55">
+    <p style="margin:0 0 0.5rem 0;font-weight:600;color:var(--text-h)"><i class="ph-light ph-info"></i> Setup instructions</p>
+    <ol style="margin:0 0 0.5rem 1.25rem;padding:0;color:var(--text)">
+      <li>Open Telegram, message <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent-vivid)">@BotFather</a> and send <code>/newbot</code>. Choose a name and username, then copy the <strong>HTTP API token</strong> into <em>Bot Token</em> below.</li>
+      <li>Message <a href="https://t.me/userinfobot" target="_blank" style="color:var(--accent-vivid)">@userinfobot</a> to get your numeric chat ID. Paste it into <em>Owner Chat ID</em> — that is where top-up requests, registrations and dynamic-client notices are delivered.</li>
+      <li>Generate a random <em>Webhook Secret</em> (any 32+ char string). Telegram echoes it in the <code>x-telegram-bot-api-secret-token</code> header so the server can verify incoming updates.</li>
+      <li>Send <code>/start</code> to your bot once so it can DM you.</li>
+      <li>Save settings, then redeploy or restart the server — webhook is registered on startup against <code>OAUTH_ISSUER_URL/telegram/webhook</code>.</li>
+    </ol>
+    <p style="margin:0;color:var(--text-muted);font-size:0.8rem">Leaving Bot Token blank disables all Telegram notifications silently.</p>
+  </div>
+  {% endif %}
+
   <form method="post" action="/admin/settings">
     <input type="hidden" name="category" value="{{ cat_key }}">
 

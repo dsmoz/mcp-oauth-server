@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Credit Top-up Requests — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Credit Top-up Requests</h1>
+</div>
+
+{% if requests %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>User</th>
+        <th>Amount</th>
+        <th>Note</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in requests %}
+      <tr>
+        <td style="white-space:nowrap;font-size:0.8rem;color:var(--text-muted)">{{ r.created_at[:16] if r.created_at else '—' }}</td>
+        <td style="font-size:0.85rem"><code>{{ r.user_id[:8] }}…</code></td>
+        <td style="font-weight:600">{{ r.amount | int }}</td>
+        <td style="font-size:0.85rem;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.note or '—' }}</td>
+        <td>
+          {% if r.status == 'pending' %}
+          <span class="badge badge-warning">pending</span>
+          {% elif r.status == 'approved' %}
+          <span class="badge badge-success">approved</span>
+          {% else %}
+          <span class="badge badge-danger">rejected</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.status == 'pending' %}
+          <form method="post" action="/admin/topup-requests/{{ r.id }}/approve" style="display:inline">
+            <button type="submit" class="btn btn-primary btn-sm"
+                    onclick="return confirm('Add {{ r.amount | int }} credits to this user?')">
+              <i class="ph-light ph-check"></i> Approve
+            </button>
+          </form>
+          <form method="post" action="/admin/topup-requests/{{ r.id }}/reject" style="display:inline;margin-left:4px">
+            <button type="submit" class="btn btn-secondary btn-sm">
+              <i class="ph-light ph-x"></i> Reject
+            </button>
+          </form>
+          {% else %}
+          <span style="color:var(--text-muted);font-size:0.8rem">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <p style="color:var(--text-muted);text-align:center;padding:2rem 0">No top-up requests yet.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -62,5 +62,6 @@ CATEGORY_META = {
     "llm": {"label": "LLM & AI Models", "icon": "ph-brain", "order": 1},
     "auth": {"label": "Authentication", "icon": "ph-shield-check", "order": 2},
     "notifications": {"label": "Notifications", "icon": "ph-bell", "order": 3},
-    "search": {"label": "Search & Indexing", "icon": "ph-magnifying-glass", "order": 4},
+    "telegram": {"label": "Telegram Bot", "icon": "ph-telegram-logo", "order": 4},
+    "search": {"label": "Search & Indexing", "icon": "ph-magnifying-glass", "order": 5},
 }

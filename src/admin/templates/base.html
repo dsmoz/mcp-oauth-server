@@ -448,6 +448,11 @@
           <i class="ph-light ph-tag"></i>
           <span class="nav-label">Categories</span>
         </a>
+        <a href="/admin/topup-requests" class="nav-item {% if '/admin/topup-requests' in request.url.path %}active{% endif %}"
+           title="Top-up Requests">
+          <i class="ph-light ph-credit-card"></i>
+          <span class="nav-label">Top-ups</span>
+        </a>
         <div class="sidebar-section-label" style="margin-top: 0.5rem;">System</div>
         <a href="/admin/settings" class="nav-item {% if '/admin/settings' in request.url.path %}active{% endif %}"
            title="Settings">
