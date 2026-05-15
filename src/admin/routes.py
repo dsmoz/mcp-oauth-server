@@ -1492,3 +1492,54 @@ async def save_settings(request: Request, _: str = Depends(_require_admin)):
             if new_value != (s["value"] or ""):
                 set_setting(key, str(new_value))
     return RedirectResponse(url="/admin/settings?saved=true", status_code=303)
+
+
+# ── Credit top-up request queue ───────────────────────────────────────────────
+
+@router.get("/topup-requests", response_class=HTMLResponse)
+async def list_topup_requests(request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
+    rows = (
+        db.table("credit_topup_requests")
+        .select("*")
+        .order("created_at", desc=True)
+        .limit(200)
+        .execute()
+    ).data or []
+    return templates.TemplateResponse(
+        request=request, name="topup_requests.html", context={"requests": rows}
+    )
+
+
+@router.post("/topup-requests/{request_id}/approve", response_class=HTMLResponse)
+async def approve_topup(request_id: str, _: str = Depends(_require_admin)):
+    db = get_db()
+    row_res = (
+        db.table("credit_topup_requests")
+        .select("*")
+        .eq("id", request_id)
+        .limit(1)
+        .execute()
+    )
+    if not row_res.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+    row = row_res.data[0]
+    if row["status"] != "pending":
+        return RedirectResponse(url="/admin/topup-requests", status_code=303)
+    user_id = row["user_id"]
+    amount = float(row["amount"])
+    provider = SupabaseOAuthProvider(db)
+    user = provider.get_user(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    new_balance = float(user.credit_balance or 0) + amount
+    db.table("users").update({"credit_balance": new_balance}).eq("id", user_id).execute()
+    db.table("credit_topup_requests").update({"status": "approved"}).eq("id", request_id).execute()
+    return RedirectResponse(url="/admin/topup-requests", status_code=303)
+
+
+@router.post("/topup-requests/{request_id}/reject", response_class=HTMLResponse)
+async def reject_topup(request_id: str, _: str = Depends(_require_admin)):
+    db = get_db()
+    db.table("credit_topup_requests").update({"status": "rejected"}).eq("id", request_id).execute()
+    return RedirectResponse(url="/admin/topup-requests", status_code=303)

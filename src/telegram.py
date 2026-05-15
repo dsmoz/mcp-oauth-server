@@ -64,6 +64,31 @@ async def send_registration_alert(
         )
 
 
+async def send_topup_request_notice(
+    user_id: str,
+    user_email: str,
+    amount: float,
+    note: str,
+    request_id: str,
+) -> None:
+    settings = get_settings()
+    if not settings.TELEGRAM_BOT_TOKEN or not settings.TELEGRAM_OWNER_CHAT_ID:
+        return
+    text = (
+        f"💳 *Credit Top-up Request*\n\n"
+        f"User: `{user_email}` (`{user_id}`)\n"
+        f"Amount: *{amount:.0f} credits*\n"
+        f"Note: {note or '—'}\n\n"
+        f"Review: /admin/topup-requests/{request_id}"
+    )
+    async with httpx.AsyncClient() as client:
+        await client.post(
+            _url("sendMessage"),
+            json={"chat_id": settings.TELEGRAM_OWNER_CHAT_ID, "text": text, "parse_mode": "Markdown"},
+            timeout=10.0,
+        )
+
+
 async def register_webhook(webhook_url: str) -> None:
     """Register the webhook URL with Telegram on startup."""
     settings = get_settings()

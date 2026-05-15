@@ -29,86 +29,27 @@
 
 <hr class="divider">
 
-<!-- ── Top up ── -->
-<div style="font-family:'Raleway',sans-serif;font-size:18px;font-weight:700;color:var(--fg-1);margin-bottom:14px">Top up</div>
+<!-- ── Top-up request ── -->
+<div style="font-family:'Raleway',sans-serif;font-size:18px;font-weight:700;color:var(--fg-1);margin-bottom:6px">Request Top-up</div>
+<p style="font-size:13px;color:var(--fg-3);margin-bottom:20px">Submit a request and the admin will add credits to your account manually.</p>
 
-<form method="post" action="/portal/credits/buy">
-  <div class="grid-3" style="margin-bottom:24px">
-
-    {% set plans = [
-      ('starter', 'Starter', '$10', '10 credits', '~5 days of use', false),
-      ('pro', 'Pro', '$40', '50 credits', 'most popular', true),
-      ('enterprise', 'Enterprise', '$150', '200 credits', 'best value', false),
-    ] %}
-
-    {% for slug, name, price, qty, note, is_pop in plans %}
-    <label class="plan-wrap" data-plan="{{ slug }}" style="cursor:pointer;display:block">
-      <input type="radio" name="plan" value="{{ slug }}" {% if is_pop %}checked{% endif %} required class="plan-radio" style="display:none">
-      <div class="plan-card{% if is_pop %} plan-card-on{% endif %}">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">
-          <div style="font-family:'Raleway',sans-serif;font-size:14px;font-weight:700;color:var(--fg-1)">{{ name }}</div>
-          <span class="plan-radio-circle{% if is_pop %} on{% endif %}" aria-hidden="true"></span>
-        </div>
-        <div class="stat-num lg" style="margin:6px 0 8px">{{ price }}</div>
-        <div style="font-size:13px;color:var(--fg-2);font-weight:500">{{ qty }}</div>
-        <div style="font-size:12px;color:var(--fg-3);margin-top:4px">{{ note }}</div>
-      </div>
-    </label>
-    {% endfor %}
-
+<form method="post" action="/portal/credits/request" style="max-width:480px">
+  <div class="form-group" style="margin-bottom:16px">
+    <label class="form-label" style="font-size:13px;font-weight:600;color:var(--fg-2);display:block;margin-bottom:6px">Credits requested</label>
+    <input type="number" name="amount" min="10" max="10000" step="10" required
+           class="form-input" style="width:160px"
+           placeholder="e.g. 100">
   </div>
-
-  <div style="display:flex;justify-content:flex-end">
-    <button type="submit" class="btn btn-primary" style="padding:10px 22px;font-size:14px">
-      Proceed to payment
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-    </button>
+  <div class="form-group" style="margin-bottom:20px">
+    <label class="form-label" style="font-size:13px;font-weight:600;color:var(--fg-2);display:block;margin-bottom:6px">Note <span style="font-weight:400;color:var(--fg-3)">(optional)</span></label>
+    <input type="text" name="note" maxlength="500"
+           class="form-input" style="width:100%"
+           placeholder="e.g. Monthly subscription renewal">
   </div>
+  <button type="submit" class="btn btn-primary" style="padding:10px 22px;font-size:14px">
+    Submit Request
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+  </button>
 </form>
 
-<style>
-.plan-card {
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px;
-  background: var(--bg-card);
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-  position: relative;
-}
-.plan-card:hover { border-color: var(--line-2); }
-.plan-card-on {
-  border-color: var(--accent);
-  background: linear-gradient(0deg, var(--accent-soft), var(--accent-soft)), var(--bg-card);
-}
-.plan-radio-circle {
-  width: 16px; height: 16px;
-  border: 1.5px solid var(--line-2);
-  border-radius: 50%;
-  flex-shrink: 0;
-  position: relative;
-  transition: border-color 0.12s;
-  background: transparent;
-}
-.plan-radio-circle.on {
-  border-color: var(--accent);
-  background: var(--accent);
-  box-shadow: inset 0 0 0 3px #fff;
-}
-</style>
-
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-document.querySelectorAll('.plan-wrap').forEach(function(lbl) {
-  lbl.addEventListener('click', function(e) {
-    const radio = lbl.querySelector('.plan-radio');
-    radio.checked = true;
-    document.querySelectorAll('.plan-card').forEach(function(c) { c.classList.remove('plan-card-on'); });
-    document.querySelectorAll('.plan-radio-circle').forEach(function(c) { c.classList.remove('on'); });
-    lbl.querySelector('.plan-card').classList.add('plan-card-on');
-    lbl.querySelector('.plan-radio-circle').classList.add('on');
-  });
-});
-</script>
 {% endblock %}

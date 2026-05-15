@@ -1076,13 +1076,6 @@ async def portal_setup_download(request: Request, user_id: str = Depends(_requir
 
 # ── Credits ───────────────────────────────────────────────────────────────────
 
-_CREDIT_PLANS = {
-    "starter": 10.0,
-    "pro": 50.0,
-    "enterprise": 200.0,
-}
-
-
 @router.get("/credits", response_class=HTMLResponse)
 async def portal_credits_get(
     request: Request,
@@ -1109,22 +1102,35 @@ async def portal_credits_get(
     )
 
 
-@router.post("/credits/buy", response_class=HTMLResponse)
-async def portal_credits_buy(
+@router.post("/credits/request", response_class=HTMLResponse)
+async def portal_credits_request(
     request: Request,
-    plan: str = Form(...),
+    amount: float = Form(...),
+    note: str = Form(""),
     user_id: str = Depends(_require_portal_user),
 ):
-    credits_to_add = _CREDIT_PLANS.get(plan)
-    if not credits_to_add:
-        raise HTTPException(status_code=400, detail="Invalid plan")
-
-    users = _users()
-    users.add_credits(user_id, credits_to_add)
-    user = users.get_user(user_id)
+    if amount <= 0 or amount > 10000:
+        raise HTTPException(status_code=400, detail="Invalid amount")
+    user = _users().get_user(user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-
+        raise HTTPException(status_code=401, detail="Not found")
+    db = get_db()
+    result = db.table("credit_topup_requests").insert({
+        "user_id": user_id,
+        "amount": amount,
+        "note": note.strip()[:500],
+        "status": "pending",
+    }).execute()
+    request_id = result.data[0]["id"] if result.data else "unknown"
+    from src.telegram import send_topup_request_notice
+    import asyncio
+    asyncio.create_task(send_topup_request_notice(
+        user_id=user_id,
+        user_email=user.email,
+        amount=amount,
+        note=note,
+        request_id=request_id,
+    ))
     client_ctx = {
         "client_id": user_id,
         "client_name": user.display_name or user.email,
@@ -1136,6 +1142,6 @@ async def portal_credits_buy(
             "user": user,
             "active_nav": "credits",
             "credit_balance": float(user.credit_balance or 0),
-            "success": f"{credits_to_add:.0f} credits added to your account. New balance: {user.credit_balance:.2f}",
+            "success": f"Top-up request for {amount:.0f} credits submitted. Admin will review shortly.",
         }
     )
