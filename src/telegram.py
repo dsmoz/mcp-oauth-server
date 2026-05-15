@@ -151,10 +151,12 @@ async def send_topup_request_notice(
     )
 
 
-async def register_webhook(webhook_url: str) -> None:
-    """Register the webhook URL with Telegram on startup."""
+async def register_webhook(webhook_url: str) -> dict:
+    """Register the webhook URL with Telegram on startup. Returns Telegram's response."""
     if not _bot_token():
-        return
+        return {"ok": False, "error": "no bot token configured"}
+    if not webhook_url:
+        return {"ok": False, "error": "empty webhook_url"}
     payload: dict = {"url": webhook_url, "allowed_updates": ["message", "callback_query"]}
     secret = _webhook_secret()
     if secret:
@@ -164,7 +166,15 @@ async def register_webhook(webhook_url: str) -> None:
     data = resp.json()
     if not data.get("ok"):
         import sys
-        print(f"WARNING: Telegram webhook registration failed: {data}", file=sys.stderr)
+        print(f"WARNING: Telegram webhook registration failed: {data} (url={webhook_url!r})", file=sys.stderr, flush=True)
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_message(
+                f"register_webhook failed: {data} url={webhook_url!r}", level="error"
+            )
+        except Exception:
+            pass
+    return data
 
 
 async def get_webhook_info() -> dict:
