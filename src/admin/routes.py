@@ -1385,6 +1385,34 @@ async def delete_category(request: Request, name: str, _: str = Depends(_require
     return RedirectResponse(url="/admin/categories", status_code=303)
 
 
+@router.post("/categories/{name}/set-icon", response_class=HTMLResponse)
+async def set_category_icon(
+    request: Request,
+    name: str,
+    icon: str = Form(""),
+    _: str = Depends(_require_admin),
+):
+    db = get_db()
+    db.table("mcp_categories").update({"icon": icon.strip() or None}).eq("name", name).execute()
+    return RedirectResponse(url="/admin/categories", status_code=303)
+
+
+@router.post("/categories/reorder")
+async def reorder_categories(request: Request, _: str = Depends(_require_admin)):
+    """Accept JSON body {"order": ["Name1", "Name2", ...]} and update sort_order."""
+    try:
+        body = await request.json()
+        names: list[str] = body.get("order", [])
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid_json_body")
+    if not names:
+        raise HTTPException(status_code=400, detail="order list empty")
+    db = get_db()
+    for i, name in enumerate(names):
+        db.table("mcp_categories").update({"sort_order": i}).eq("name", name).execute()
+    return JSONResponse({"ok": True})
+
+
 # ── Settings ─────────────────────────────────────────────────────────────────
 
 

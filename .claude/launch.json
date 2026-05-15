@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "dev",
+      "runtimeExecutable": "/Users/danilodasilva/Documents/Programming/mcp-oauth-server/.venv/bin/uvicorn",
+      "runtimeArgs": ["main:app", "--reload", "--port", "8100"],
+      "port": 8100
+    },
+    {
       "name": "mockup",
       "runtimeExecutable": "/usr/bin/python3",
       "runtimeArgs": ["-m", "http.server", "7788"],
