@@ -79,7 +79,7 @@
           {% for mcp in group %}
             {% set is_on = mcp.slug in enabled %}
             {% set has_cfg = mcp.config_schema and mcp.config_schema | length > 0 %}
-            <div class="tool-wrap" data-slug="{{ mcp.slug }}" data-cat="{{ cat }}" data-name="{{ mcp.name | lower }}" data-desc="{{ (mcp.description or '') | lower }}">
+            <div class="tool-wrap" data-slug="{{ mcp.slug }}" data-cat="{{ cat }}" data-name="{{ mcp.name | lower }}" data-desc="{{ (mcp.description or '') | lower }}" data-display-name="{{ mcp.name }}">
               <label class="tool-row{% if is_on %} on{% endif %}">
                 <input type="checkbox" name="mcps" value="{{ mcp.slug }}" {% if is_on %}checked{% endif %} class="mcp-toggle">
                 <div class="tool-text">
@@ -92,7 +92,11 @@
                     </span>
                     {% endif %}
                   </div>
-                  <div class="tool-desc">{{ mcp.description }}</div>
+                  <div class="tool-desc" data-full="{{ mcp.description }}">{{ mcp.description }}</div>
+                  <button type="button" class="read-more-btn" style="display:none"
+                          onclick="event.preventDefault();event.stopPropagation();openDescModal('{{ mcp.slug }}')">
+                    Read more
+                  </button>
                 </div>
                 <div class="tool-control">
                   <span class="on-pill" aria-hidden="true"><span class="chip-dot"></span>on</span>
@@ -162,6 +166,18 @@
 </form>
 
 <div id="cfg-backdrop" class="cfg-backdrop" onclick="closeAllCfg()" aria-hidden="true"></div>
+
+<div id="desc-modal" class="cfg-panel desc-modal" style="display:none" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="cfg-panel-inner">
+    <div class="cfg-head">
+      <div class="cfg-title" id="desc-modal-title"></div>
+      <button type="button" class="cfg-close" aria-label="Close" onclick="event.preventDefault();closeDescModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div id="desc-modal-body" class="desc-modal-body"></div>
+  </div>
+</div>
 
 <style>
 .search-wrap {
@@ -451,6 +467,26 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.read-more-btn {
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--bg-deep-alt);
+  font-size: 11px; font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+}
+.read-more-btn:hover { text-decoration: underline; }
+.view-list .read-more-btn { display: none !important; }
+
+.desc-modal-body {
+  font-size: 13px; line-height: 1.55;
+  color: var(--fg-2);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
 .view-grid .tool-control { width: 100%; justify-content: space-between; }
 
 @media (max-width: 480px) {
@@ -481,8 +517,22 @@
   try { initial = localStorage.getItem(VIEW_KEY) || 'list'; } catch(e) {}
   applyView(initial);
   viewBtns.forEach(function(b) {
-    b.addEventListener('click', function() { applyView(b.dataset.view); });
+    b.addEventListener('click', function() { applyView(b.dataset.view); refreshReadMore(); });
   });
+
+  function refreshReadMore() {
+    const isGrid = form.classList.contains('view-grid');
+    document.querySelectorAll('.tool-wrap').forEach(function(wrap) {
+      const desc = wrap.querySelector('.tool-desc');
+      const btn = wrap.querySelector('.read-more-btn');
+      if (!desc || !btn) return;
+      if (!isGrid) { btn.style.display = 'none'; return; }
+      const truncated = desc.scrollHeight > desc.clientHeight + 1;
+      btn.style.display = truncated ? 'inline-block' : 'none';
+    });
+  }
+  refreshReadMore();
+  window.addEventListener('resize', refreshReadMore);
 
   function recountAll() {
     let total = 0;
@@ -577,8 +627,32 @@ function toggleCfg(slug) {
   }
 }
 
+function openDescModal(slug) {
+  const wrap = document.querySelector('.tool-wrap[data-slug="' + slug + '"]');
+  if (!wrap) return;
+  const name = wrap.dataset.displayName || '';
+  const desc = wrap.querySelector('.tool-desc');
+  const full = desc ? (desc.dataset.full || desc.textContent || '') : '';
+  document.getElementById('desc-modal-title').textContent = name;
+  document.getElementById('desc-modal-body').textContent = full;
+  const m = document.getElementById('desc-modal');
+  m.style.display = 'block';
+  m.setAttribute('aria-hidden', 'false');
+  const bd = document.getElementById('cfg-backdrop');
+  if (bd) { bd.classList.add('open'); bd.setAttribute('aria-hidden', 'false'); bd.onclick = closeDescModal; }
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDescModal() {
+  const m = document.getElementById('desc-modal');
+  if (m) { m.style.display = 'none'; m.setAttribute('aria-hidden', 'true'); }
+  const bd = document.getElementById('cfg-backdrop');
+  if (bd) { bd.classList.remove('open'); bd.setAttribute('aria-hidden', 'true'); bd.onclick = closeAllCfg; }
+  document.body.style.overflow = '';
+}
+
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeAllCfg();
+  if (e.key === 'Escape') { closeAllCfg(); closeDescModal(); }
 });
 
 async function saveCfg(slug) {
