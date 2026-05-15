@@ -33,12 +33,15 @@
       <li>Message <a href="https://t.me/userinfobot" target="_blank" style="color:var(--accent-vivid)">@userinfobot</a> to get your numeric chat ID. Paste it into <em>Owner Chat ID</em> — that is where top-up requests, registrations and dynamic-client notices are delivered.</li>
       <li>Generate a random <em>Webhook Secret</em> (any 32+ char string). Telegram echoes it in the <code>x-telegram-bot-api-secret-token</code> header so the server can verify incoming updates.</li>
       <li>Send <code>/start</code> to your bot once so it can DM you.</li>
-      <li>Save settings, then redeploy or restart the server — webhook is registered on startup against <code>OAUTH_ISSUER_URL/telegram/webhook</code>.</li>
+      <li>Save settings, then click <strong>Re-register Webhook</strong> below — no restart needed.</li>
     </ol>
     <p style="margin:0;color:var(--text-muted);font-size:0.8rem">Leaving Bot Token blank disables all Telegram notifications silently.</p>
-    <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.6rem">
+    <div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
       <button type="button" id="tg-test-btn" onclick="testTelegram()" class="btn btn-secondary" style="padding:0.45rem 0.8rem;font-size:0.85rem">
         <i class="ph-light ph-paper-plane-tilt"></i> Send Test Message
+      </button>
+      <button type="button" id="tg-register-btn" onclick="reregisterWebhook()" class="btn btn-secondary" style="padding:0.45rem 0.8rem;font-size:0.85rem">
+        <i class="ph-light ph-arrows-clockwise"></i> Re-register Webhook
       </button>
       <span id="tg-test-status" style="font-size:0.85rem;color:var(--text-muted)"></span>
     </div>
@@ -138,6 +141,31 @@ async function testTelegram() {
     } else {
       status.textContent = 'Failed: ' + (data.error || 'unknown');
       status.style.color = 'var(--danger-fg, #f87171)';
+    }
+  } catch (e) {
+    status.textContent = 'Request failed: ' + e.message;
+    status.style.color = 'var(--danger-fg, #f87171)';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function reregisterWebhook() {
+  const btn = document.getElementById('tg-register-btn');
+  const status = document.getElementById('tg-test-status');
+  btn.disabled = true;
+  status.textContent = 'Registering…';
+  status.style.color = 'var(--text-muted)';
+  try {
+    const resp = await fetch('/admin/telegram/re-register-webhook', {method: 'POST'});
+    const data = await resp.json();
+    const url = data.webhook_info?.result?.url || '';
+    if (url) {
+      status.textContent = '✓ Webhook registered: ' + url;
+      status.style.color = 'var(--success-fg, #4ade80)';
+    } else {
+      status.textContent = 'Registered but URL empty — check bot token.';
+      status.style.color = 'var(--warn-fg, #facc15)';
     }
   } catch (e) {
     status.textContent = 'Request failed: ' + e.message;
