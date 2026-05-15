@@ -476,6 +476,11 @@
           <i class="ph-light ph-tag"></i>
           <span class="nav-label">Categories</span>
         </a>
+        <a href="/admin/credits" class="nav-item {% if '/admin/credits' in request.url.path %}active{% endif %}"
+           title="Credit Costs">
+          <i class="ph-light ph-coins"></i>
+          <span class="nav-label">Credit Costs</span>
+        </a>
         <a href="/admin/topup-requests" class="nav-item {% if '/admin/topup-requests' in request.url.path %}active{% endif %}"
            title="Top-up Requests">
           <i class="ph-light ph-credit-card"></i>

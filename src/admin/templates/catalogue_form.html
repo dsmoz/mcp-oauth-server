@@ -106,10 +106,19 @@
     </div>
     <div class="form-group">
       <label class="form-label">Credit Cost Per Call</label>
-      <input type="number" step="0.5" min="0" name="credit_cost_per_call"
-             class="form-input" style="width:140px"
-             value="{{ entry.credit_cost_per_call or 0 }}">
-      <div class="form-text">Credits deducted per LLM call inside this upstream MCP (0 = no deduction).</div>
+      {% set current_cost = (entry.credit_cost_per_call if entry and entry.credit_cost_per_call is not none else 0) | float %}
+      <select name="credit_cost_per_call" class="form-input" style="width:240px">
+        <option value="0"  {% if current_cost == 0  %}selected{% endif %}>Free — 0 credits</option>
+        <option value="1"  {% if current_cost == 1  %}selected{% endif %}>Light — 1 credit</option>
+        <option value="2"  {% if current_cost == 2  %}selected{% endif %}>Standard — 2 credits</option>
+        <option value="3"  {% if current_cost == 3  %}selected{% endif %}>Premium — 3 credits</option>
+        <option value="5"  {% if current_cost == 5  %}selected{% endif %}>Heavy — 5 credits</option>
+        <option value="10" {% if current_cost == 10 %}selected{% endif %}>Super-heavy — 10 credits</option>
+        {% if current_cost not in [0,1,2,3,5,10] %}
+        <option value="{{ current_cost }}" selected>Custom — {{ current_cost }} credits</option>
+        {% endif %}
+      </select>
+      <div class="form-text">Credits deducted per LLM call inside this upstream MCP. Use the global <a href="/admin/credits" style="color:var(--accent-vivid)">Credits Manager</a> to update many at once.</div>
     </div>
     <div class="form-group">
       <label class="form-label">Config Schema
