@@ -165,7 +165,7 @@ input:focus {
     <div class="alert-error">{{ error }}</div>
     {% endif %}
 
-    <form method="post" action="/portal/login{% if next_session %}?next_session={{ next_session }}{% endif %}">
+    <form method="post" action="/portal/login{% if next_session %}?next_session={{ next_session }}{% elif next_path %}?next={{ next_path | urlencode }}{% endif %}">
       <div class="form-group">
         <label for="username">Email address</label>
         <input type="email" id="username" name="username" required autocomplete="username" autofocus>

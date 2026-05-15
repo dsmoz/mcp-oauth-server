@@ -87,6 +87,24 @@
       </div>
     </div>
     <div class="form-group">
+      <label class="form-label">Landing-page Icon
+        <small style="color:var(--text-muted)">
+          Lucide icon name (e.g. <code>pen-line</code>, <code>book-open</code>, <code>palette</code>). See
+          <a href="https://lucide.dev/icons/" target="_blank" rel="noopener" style="color:var(--accent-vivid)">lucide.dev/icons</a>.
+          Used on the landing-page carousel when Highlight is on.
+        </small>
+      </label>
+      <input type="text" name="icon" class="form-input" style="width:240px;font-family:monospace"
+             value="{{ entry.icon if entry and entry.icon else '' }}"
+             placeholder="pen-line">
+    </div>
+    <div class="form-group">
+      <label class="form-label" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer">
+        <input type="checkbox" name="is_featured" value="on" {% if entry and entry.is_featured %}checked{% endif %}>
+        <span>Highlight on landing page <small style="color:var(--text-muted);font-weight:normal">— show this MCP in the public landing-page carousel</small></span>
+      </label>
+    </div>
+    <div class="form-group">
       <label class="form-label">Credit Cost Per Call</label>
       <input type="number" step="0.5" min="0" name="credit_cost_per_call"
              class="form-input" style="width:140px"

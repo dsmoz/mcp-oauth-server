@@ -188,11 +188,27 @@ def _complete_oauth_session(next_session: str, user_id: str) -> Optional[Redirec
 
 # ── Login ─────────────────────────────────────────────────────────────────────
 
+def _safe_next(value: Optional[str]) -> Optional[str]:
+    """Only accept relative paths inside the portal — never external URLs."""
+    if not value:
+        return None
+    if value.startswith("/portal/") and "//" not in value[1:]:
+        return value
+    return None
+
+
 @router.get("/login", response_class=HTMLResponse)
 async def portal_login_get(
     request: Request,
     next_session: Optional[str] = Query(None),
+    next: Optional[str] = Query(None),
 ):
+    next_path = _safe_next(next)
+    # If already signed in, send straight to next_path
+    if next_path:
+        token = request.cookies.get(_COOKIE_NAME)
+        if token and _verify_session(token):
+            return RedirectResponse(url=next_path, status_code=302)
     # Auto-complete OAuth if user already has a valid portal session
     if next_session:
         token = request.cookies.get(_COOKIE_NAME)
@@ -205,7 +221,7 @@ async def portal_login_get(
     return templates.TemplateResponse(
         request=request,
         name="portal_login.html",
-        context={"error": None, "next_session": next_session},
+        context={"error": None, "next_session": next_session, "next_path": next_path},
     )
 
 
@@ -215,7 +231,9 @@ async def portal_login_post(
     username: str = Form(...),
     password: str = Form(...),
     next_session: Optional[str] = Query(None),
+    next: Optional[str] = Query(None),
 ):
+    next_path = _safe_next(next)
     email = username.strip().lower()
     users = _users()
     user = users.get_user_by_email(email)
@@ -223,7 +241,7 @@ async def portal_login_post(
     def _login_error(msg: str, status: int = 401):
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
-            context={"error": msg, "next_session": next_session}, status_code=status,
+            context={"error": msg, "next_session": next_session, "next_path": next_path}, status_code=status,
         )
 
     if user is None:
@@ -250,7 +268,7 @@ async def portal_login_post(
         )
         return response
 
-    response = RedirectResponse(url="/portal/", status_code=303)
+    response = RedirectResponse(url=next_path or "/portal/", status_code=303)
     response.set_cookie(
         _COOKIE_NAME, cookie_value,
         httponly=True, samesite="lax", max_age=_SESSION_MAX_AGE, secure=_COOKIE_SECURE,
