@@ -1775,7 +1775,7 @@ async def approve_topup(request_id: str, _: str = Depends(_require_admin)):
         return RedirectResponse(url="/admin/topup-requests", status_code=303)
     user_id = row["user_id"]
     amount = float(row["amount"])
-    provider = SupabaseOAuthProvider(db)
+    provider = SupabaseOAuthProvider()
     user = provider.get_user(user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
