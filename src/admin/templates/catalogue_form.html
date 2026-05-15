@@ -105,6 +105,14 @@
       </label>
     </div>
     <div class="form-group">
+      <label class="form-label">Tool Count Override
+        <small style="color:var(--text-muted)">Auto-set by Sync. Override for code-execution MCPs (e.g. Microsoft 365 exposes 50+ functions via one <code>run</code> tool — enter the actual function count here).</small>
+      </label>
+      <input type="number" name="tool_count" class="form-input" style="width:120px" min="0" step="1"
+             value="{{ entry.tool_count if entry and entry.tool_count is not none else '' }}"
+             placeholder="auto">
+    </div>
+    <div class="form-group">
       <label class="form-label">Credit Cost Per Call</label>
       {% set current_cost = (entry.credit_cost_per_call if entry and entry.credit_cost_per_call is not none else 0) | float %}
       <select name="credit_cost_per_call" class="form-input" style="width:240px">

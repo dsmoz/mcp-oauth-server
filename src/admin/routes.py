@@ -994,6 +994,7 @@ async def save_catalogue(
     upstream_api_key: str = Form(""),
     config_schema: str = Form(""),
     credit_cost_per_call: float = Form(0.0),
+    tool_count: str = Form(""),
     icon: str = Form(""),
     is_featured: str = Form("off"),
     _: str = Depends(_require_admin),
@@ -1012,6 +1013,11 @@ async def save_catalogue(
         "icon": icon.strip() or None,
         "is_featured": is_featured == "on",
     }
+    if tool_count.strip():
+        try:
+            update["tool_count"] = max(0, int(tool_count.strip()))
+        except ValueError:
+            pass
     if upstream_api_key:
         update["upstream_api_key"] = upstream_api_key
     schema_str = config_schema.strip()
