@@ -142,13 +142,11 @@ async def send_topup_request_notice(
     note: str,
     request_id: str,
 ) -> None:
-    base_url = get_settings().OAUTH_ISSUER_URL.rstrip("/")
     await _send_topup_with_buttons(
         f"💳 *Credit Top-up Request*\n\n"
         f"User: `{user_email}` (`{user_id}`)\n"
         f"Amount: *{amount:.0f} credits*\n"
-        f"Note: {note or '—'}\n\n"
-        f"Review: {base_url}/admin/topup-requests/{request_id}",
+        f"Note: {note or '—'}",
         request_id=request_id,
     )
 
