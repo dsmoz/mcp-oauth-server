@@ -1,0 +1,361 @@
+<style>
+/* ── ds-select: shared dropdown component (auto-enhances <select class="ds-select">) ── */
+.ds-select-wrap { position: relative; display: inline-block; font-family: inherit; }
+.ds-select-wrap > select.ds-select { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+.ds-select-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  width: 100%; min-height: 38px;
+  padding: 8px 32px 8px 12px;
+  background: var(--bg-card, #1a2330);
+  color: var(--text-h, var(--fg-1, #e8eef5));
+  border: 1px solid var(--border, var(--line-2, #2a3441));
+  border-radius: 8px;
+  font: inherit; font-size: 0.875rem; line-height: 1.2;
+  text-align: left; cursor: pointer;
+  position: relative;
+  transition: border-color 0.12s, background 0.12s;
+}
+.ds-select-btn:hover { border-color: var(--accent, #ff5e00); }
+.ds-select-btn:focus-visible { outline: 2px solid var(--accent, #ff5e00); outline-offset: 1px; border-color: var(--accent, #ff5e00); }
+.ds-select-wrap[data-open="true"] .ds-select-btn { border-color: var(--accent, #ff5e00); }
+.ds-select-btn::after {
+  content: ''; position: absolute; right: 10px; top: 50%;
+  width: 8px; height: 8px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: translateY(-65%) rotate(45deg);
+  opacity: 0.55; pointer-events: none;
+}
+.ds-select-wrap[data-open="true"] .ds-select-btn::after {
+  transform: translateY(-30%) rotate(-135deg);
+}
+.ds-select-icon, .ds-select-option-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; flex-shrink: 0;
+  color: var(--accent, #ff5e00);
+}
+.ds-select-icon svg, .ds-select-option-icon svg { width: 16px; height: 16px; }
+.ds-select-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ds-select-menu {
+  position: absolute; z-index: 200;
+  top: calc(100% + 4px); left: 0; min-width: 100%;
+  max-height: 320px; overflow-y: auto;
+  background: var(--bg-card, #1a2330);
+  border: 1px solid var(--border, var(--line-2, #2a3441));
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+  padding: 4px;
+  display: none;
+}
+.ds-select-wrap[data-open="true"] .ds-select-menu { display: block; }
+.ds-select-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: var(--text-h, var(--fg-1, #e8eef5));
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ds-select-option:hover, .ds-select-option[data-active="true"] {
+  background: rgba(255, 94, 0, 0.10);
+  color: var(--accent, #ff5e00);
+}
+.ds-select-option[aria-selected="true"] {
+  background: rgba(255, 94, 0, 0.15);
+  font-weight: 600;
+}
+.ds-select-option[aria-selected="true"] .ds-select-option-icon { color: var(--accent, #ff5e00); }
+.ds-select-option-check { margin-left: auto; opacity: 0; color: var(--accent, #ff5e00); width: 14px; height: 14px; flex-shrink: 0; }
+.ds-select-option-check svg { width: 14px; height: 14px; }
+.ds-select-option[aria-selected="true"] .ds-select-option-check { opacity: 1; }
+
+.ds-select-wrap.ds-select-compact .ds-select-btn {
+  min-height: 30px; padding: 4px 28px 4px 8px; font-size: 0.78rem;
+}
+.ds-select-wrap.ds-select-compact .ds-select-icon { width: 14px; height: 14px; }
+.ds-select-wrap.ds-select-compact .ds-select-icon svg { width: 13px; height: 13px; }
+
+.ds-select-wrap[data-disabled="true"] .ds-select-btn {
+  opacity: 0.5; cursor: not-allowed; pointer-events: none;
+}
+</style>
+
+<!-- Icon sprite: referenced by <use href="#dssIcon-..."> -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <defs>
+    <symbol id="dssIcon-gift" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/>
+      <line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>
+    </symbol>
+    <symbol id="dssIcon-feather" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17.5" y1="15" x2="9" y2="15"/>
+    </symbol>
+    <symbol id="dssIcon-tag" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
+    </symbol>
+    <symbol id="dssIcon-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    </symbol>
+    <symbol id="dssIcon-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+    </symbol>
+    <symbol id="dssIcon-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </symbol>
+    <symbol id="dssIcon-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </symbol>
+    <symbol id="dssIcon-crown" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m2 18 2-13 6 5 4-7 4 7 6-5 2 13"/><path d="M2 18h20v3H2z"/>
+    </symbol>
+    <symbol id="dssIcon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </symbol>
+    <symbol id="dssIcon-dot" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="dssIcon-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+      <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+    </symbol>
+    <symbol id="dssIcon-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </symbol>
+    <symbol id="dssIcon-coin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5h4.5a1.5 1.5 0 0 1 0 3H9m0 0h5"/>
+    </symbol>
+    <symbol id="dssIcon-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="2.5" fill="currentColor"/>
+    </symbol>
+    <symbol id="dssIcon-language" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 5h12M9 3v2c0 5-3 9-7 9"/><path d="M5 9c0 4 4 7 9 7"/><path d="m13 21 4-8 4 8"/><path d="M14.5 17h5"/>
+    </symbol>
+  </defs>
+</svg>
+
+<script>
+(function () {
+  if (window.__dsSelectInstalled) return;
+  window.__dsSelectInstalled = true;
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const XLINK_NS = 'http://www.w3.org/1999/xlink';
+  // Allowlist of known sprite icon ids
+  const ICON_NAMES = new Set([
+    'gift','feather','tag','star','flame','zap','shield','crown','check','dot',
+    'list','globe','coin','toggle','language',
+  ]);
+
+  function makeIconSvg(name) {
+    if (!name || !ICON_NAMES.has(name)) return null;
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS(SVG_NS, 'use');
+    use.setAttribute('href', '#dssIcon-' + name);
+    use.setAttributeNS(XLINK_NS, 'xlink:href', '#dssIcon-' + name);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  function setIconInto(slot, name) {
+    while (slot.firstChild) slot.removeChild(slot.firstChild);
+    const svg = makeIconSvg(name);
+    if (svg) { slot.appendChild(svg); slot.style.display = ''; }
+    else { slot.style.display = 'none'; }
+  }
+
+  function uid() { return 'dss-' + Math.random().toString(36).slice(2, 9); }
+
+  function enhance(select) {
+    if (select.dataset.dssEnhanced === '1') return;
+    select.dataset.dssEnhanced = '1';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'ds-select-wrap';
+    if (select.classList.contains('ds-select-compact') || select.dataset.compact === '1') {
+      wrap.classList.add('ds-select-compact');
+    }
+    if (select.disabled) wrap.dataset.disabled = 'true';
+    if (select.style.width) wrap.style.width = select.style.width;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ds-select-btn';
+    btn.setAttribute('role', 'combobox');
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
+    const menuId = uid();
+    btn.setAttribute('aria-controls', menuId);
+
+    const iconSlot = document.createElement('span');
+    iconSlot.className = 'ds-select-icon';
+    const labelSlot = document.createElement('span');
+    labelSlot.className = 'ds-select-label';
+    btn.append(iconSlot, labelSlot);
+
+    const menu = document.createElement('div');
+    menu.className = 'ds-select-menu';
+    menu.id = menuId;
+    menu.setAttribute('role', 'listbox');
+
+    function buildMenu() {
+      while (menu.firstChild) menu.removeChild(menu.firstChild);
+      Array.from(select.options).forEach((opt, idx) => {
+        const row = document.createElement('div');
+        row.className = 'ds-select-option';
+        row.setAttribute('role', 'option');
+        row.dataset.value = opt.value;
+        row.dataset.idx = String(idx);
+        const oIcon = document.createElement('span');
+        oIcon.className = 'ds-select-option-icon';
+        setIconInto(oIcon, opt.dataset.icon || '');
+        const oLabel = document.createElement('span');
+        oLabel.className = 'ds-select-label';
+        oLabel.textContent = opt.textContent.trim();
+        const check = document.createElement('span');
+        check.className = 'ds-select-option-check';
+        const checkSvg = makeIconSvg('check');
+        if (checkSvg) check.appendChild(checkSvg);
+        row.append(oIcon, oLabel, check);
+        if (opt.selected) row.setAttribute('aria-selected', 'true');
+        row.addEventListener('mouseenter', () => setActive(idx));
+        row.addEventListener('click', (e) => { e.preventDefault(); pick(idx); });
+        menu.appendChild(row);
+      });
+    }
+
+    function syncBtn() {
+      const opt = select.options[select.selectedIndex];
+      if (!opt) { labelSlot.textContent = ''; setIconInto(iconSlot, ''); return; }
+      labelSlot.textContent = opt.textContent.trim();
+      setIconInto(iconSlot, opt.dataset.icon || '');
+    }
+
+    function setActive(idx) {
+      menu.querySelectorAll('[data-active="true"]').forEach(r => r.removeAttribute('data-active'));
+      const row = menu.querySelector('.ds-select-option[data-idx="' + idx + '"]');
+      if (row) row.dataset.active = 'true';
+    }
+
+    function pick(idx) {
+      if (idx < 0 || idx >= select.options.length) return;
+      if (select.selectedIndex !== idx) {
+        select.selectedIndex = idx;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        select.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      menu.querySelectorAll('[aria-selected]').forEach(r => r.removeAttribute('aria-selected'));
+      const row = menu.querySelector('.ds-select-option[data-idx="' + idx + '"]');
+      if (row) row.setAttribute('aria-selected', 'true');
+      syncBtn();
+      close();
+    }
+
+    function open() {
+      if (wrap.dataset.disabled === 'true') return;
+      document.querySelectorAll('.ds-select-wrap[data-open="true"]').forEach(w => {
+        if (w !== wrap) w.removeAttribute('data-open');
+      });
+      wrap.dataset.open = 'true';
+      btn.setAttribute('aria-expanded', 'true');
+      setActive(select.selectedIndex);
+      const sel = menu.querySelector('[aria-selected="true"]');
+      if (sel) sel.scrollIntoView({ block: 'nearest' });
+    }
+
+    function close() {
+      wrap.removeAttribute('data-open');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      wrap.dataset.open === 'true' ? close() : open();
+    });
+
+    btn.addEventListener('keydown', (e) => {
+      const isOpen = wrap.dataset.open === 'true';
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!isOpen) { open(); return; }
+        const activeEl = menu.querySelector('[data-active="true"]');
+        const cur = activeEl ? parseInt(activeEl.dataset.idx, 10) : select.selectedIndex;
+        const next = e.key === 'ArrowDown'
+          ? Math.min(cur + 1, select.options.length - 1)
+          : Math.max(cur - 1, 0);
+        setActive(next);
+        const nextEl = menu.querySelector('.ds-select-option[data-idx="' + next + '"]');
+        if (nextEl) nextEl.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        if (isOpen) {
+          e.preventDefault();
+          const activeEl = menu.querySelector('[data-active="true"]');
+          const cur = activeEl ? parseInt(activeEl.dataset.idx, 10) : select.selectedIndex;
+          pick(cur);
+        } else if (e.key === ' ') {
+          e.preventDefault(); open();
+        }
+      } else if (e.key === 'Escape') {
+        if (isOpen) { e.preventDefault(); close(); }
+      } else if (e.key === 'Tab') {
+        if (isOpen) close();
+      } else if (e.key.length === 1 && /\S/.test(e.key)) {
+        const ch = e.key.toLowerCase();
+        const start = (select.selectedIndex + 1) % select.options.length;
+        for (let i = 0; i < select.options.length; i++) {
+          const idx = (start + i) % select.options.length;
+          if (select.options[idx].textContent.trim().toLowerCase().startsWith(ch)) {
+            if (!isOpen) open();
+            setActive(idx);
+            break;
+          }
+        }
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (wrap.dataset.open !== 'true') return;
+      if (!wrap.contains(e.target)) close();
+    });
+
+    select.parentNode.insertBefore(wrap, select);
+    wrap.append(select, btn, menu);
+
+    buildMenu();
+    syncBtn();
+
+    select.addEventListener('change', () => {
+      syncBtn();
+      menu.querySelectorAll('[aria-selected]').forEach(r => r.removeAttribute('aria-selected'));
+      const row = menu.querySelector('.ds-select-option[data-idx="' + select.selectedIndex + '"]');
+      if (row) row.setAttribute('aria-selected', 'true');
+    });
+  }
+
+  function scan(root) {
+    (root || document).querySelectorAll('select.ds-select:not([data-dss-enhanced])').forEach(enhance);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => scan());
+  } else {
+    scan();
+  }
+
+  const mo = new MutationObserver(muts => {
+    muts.forEach(m => {
+      m.addedNodes.forEach(n => {
+        if (n.nodeType !== 1) return;
+        if (n.matches && n.matches('select.ds-select')) enhance(n);
+        else scan(n);
+      });
+    });
+  });
+  mo.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.dsSelect = { enhance, scan };
+})();
+</script>

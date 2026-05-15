@@ -59,14 +59,14 @@
           </td>
           <td>
             {% set cc = e.credit_cost_per_call %}
-            <select name="cost_{{ e.slug }}" class="form-input" style="width:220px;font-size:0.82rem">
+            <select name="cost_{{ e.slug }}" class="ds-select" style="width:240px">
               {% for t in tiers %}
-              <option value="{{ t.value }}" {% if cc == t.value %}selected{% endif %}>
+              <option value="{{ t.value }}" data-icon="{{ t.icon }}" {% if cc == t.value %}selected{% endif %}>
                 {{ t.value }} — {{ t.label }}
               </option>
               {% endfor %}
               {% if cc not in [0,1,2,3,5,10] %}
-              <option value="{{ cc }}" selected>{{ cc }} — Custom</option>
+              <option value="{{ cc }}" data-icon="dot" selected>{{ cc }} — Custom</option>
               {% endif %}
             </select>
           </td>

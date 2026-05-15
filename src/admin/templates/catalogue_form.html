@@ -51,17 +51,17 @@
     </div>
     <div class="form-group">
       <label class="form-label">Category</label>
-      <select name="category" class="form-input">
+      <select name="category" class="ds-select" style="min-width:260px">
         {% for cat in categories %}
-        <option value="{{ cat.name }}" {% if entry and entry.category == cat.name %}selected{% endif %}>{{ cat.name }}</option>
+        <option value="{{ cat.name }}" data-icon="list" {% if entry and entry.category == cat.name %}selected{% endif %}>{{ cat.name }}</option>
         {% endfor %}
       </select>
     </div>
     <div class="form-group">
       <label class="form-label">Tier <small>Standard users can only access standard-tier MCPs</small></label>
-      <select name="tier" class="form-input" style="width:200px">
-        <option value="standard" {% if not entry or entry.tier == 'standard' %}selected{% endif %}>Standard</option>
-        <option value="super" {% if entry and entry.tier == 'super' %}selected{% endif %}>Super</option>
+      <select name="tier" class="ds-select" style="width:220px">
+        <option value="standard" data-icon="shield" {% if not entry or entry.tier == 'standard' %}selected{% endif %}>Standard</option>
+        <option value="super" data-icon="crown" {% if entry and entry.tier == 'super' %}selected{% endif %}>Super</option>
       </select>
     </div>
     <div class="form-group">
@@ -115,15 +115,15 @@
     <div class="form-group">
       <label class="form-label">Credit Cost Per Call</label>
       {% set current_cost = (entry.credit_cost_per_call if entry and entry.credit_cost_per_call is not none else 0) | float %}
-      <select name="credit_cost_per_call" class="form-input" style="width:240px">
-        <option value="0"  {% if current_cost == 0  %}selected{% endif %}>Free — 0 credits</option>
-        <option value="1"  {% if current_cost == 1  %}selected{% endif %}>Light — 1 credit</option>
-        <option value="2"  {% if current_cost == 2  %}selected{% endif %}>Standard — 2 credits</option>
-        <option value="3"  {% if current_cost == 3  %}selected{% endif %}>Premium — 3 credits</option>
-        <option value="5"  {% if current_cost == 5  %}selected{% endif %}>Heavy — 5 credits</option>
-        <option value="10" {% if current_cost == 10 %}selected{% endif %}>Super-heavy — 10 credits</option>
+      <select name="credit_cost_per_call" class="ds-select" style="width:280px">
+        <option value="0"  data-icon="gift"    {% if current_cost == 0  %}selected{% endif %}>Free — 0 credits</option>
+        <option value="1"  data-icon="feather" {% if current_cost == 1  %}selected{% endif %}>Light — 1 credit</option>
+        <option value="2"  data-icon="tag"     {% if current_cost == 2  %}selected{% endif %}>Standard — 2 credits</option>
+        <option value="3"  data-icon="star"    {% if current_cost == 3  %}selected{% endif %}>Premium — 3 credits</option>
+        <option value="5"  data-icon="flame"   {% if current_cost == 5  %}selected{% endif %}>Heavy — 5 credits</option>
+        <option value="10" data-icon="zap"     {% if current_cost == 10 %}selected{% endif %}>Super-heavy — 10 credits</option>
         {% if current_cost not in [0,1,2,3,5,10] %}
-        <option value="{{ current_cost }}" selected>Custom — {{ current_cost }} credits</option>
+        <option value="{{ current_cost }}" data-icon="dot" selected>Custom — {{ current_cost }} credits</option>
         {% endif %}
       </select>
       <div class="form-text">Credits deducted per LLM call inside this upstream MCP. Use the global <a href="/admin/credits" style="color:var(--accent-vivid)">Credits Manager</a> to update many at once.</div>
