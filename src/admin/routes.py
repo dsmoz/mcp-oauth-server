@@ -1799,6 +1799,27 @@ async def reject_topup(request_id: str, _: str = Depends(_require_admin)):
     return RedirectResponse(url="/admin/topup-requests", status_code=303)
 
 
+# ── Telegram webhook management ───────────────────────────────────────────────
+
+@router.get("/telegram/webhook-info")
+async def telegram_webhook_info(_: str = Depends(_require_admin)):
+    from src import telegram as tg
+    data = await tg.get_webhook_info()
+    return data
+
+
+@router.post("/telegram/re-register-webhook")
+async def telegram_reregister_webhook(_: str = Depends(_require_admin)):
+    from src import telegram as tg
+    from src.config import get_settings
+    settings = get_settings()
+    delete_result = await tg.delete_webhook()
+    webhook_url = f"{settings.OAUTH_ISSUER_URL}/telegram/webhook"
+    await tg.register_webhook(webhook_url)
+    info = await tg.get_webhook_info()
+    return {"deleted": delete_result, "webhook_info": info}
+
+
 # ── Landing testimonials ───────────────────────────────────────────────────────
 
 @router.get("/testimonials", response_class=HTMLResponse)
