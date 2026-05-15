@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if pkg else 'New' }} Top-up Package — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>{{ 'Edit' if pkg else 'New' }} Top-up Package</h1>
+  <a href="/admin/topup-packages" class="btn btn-secondary">
+    <i class="ph-light ph-arrow-left"></i> Packages
+  </a>
+</div>
+
+{% if error %}
+<div class="card" style="border-color:var(--danger-border);background:var(--danger-bg);margin-bottom:1rem">
+  <p style="color:var(--danger-fg);font-size:0.875rem">{{ error }}</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <form method="post" action="{{ '/admin/topup-packages/' + pkg.id + '/edit' if pkg else '/admin/topup-packages' }}">
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input type="text" name="name" class="form-input" required
+             value="{{ pkg.name if pkg else '' }}"
+             placeholder="e.g. Pro">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+      <div class="form-group">
+        <label class="form-label">Price</label>
+        <input type="number" name="price_amount" class="form-input" step="0.01" min="0" required
+               value="{{ '%.2f'|format(pkg.price_amount|float) if pkg else '' }}"
+               placeholder="40.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Currency</label>
+        <input type="text" name="currency" class="form-input" maxlength="8" required
+               value="{{ pkg.currency if pkg else 'USD' }}"
+               placeholder="USD" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Credits</label>
+        <input type="number" name="credits" class="form-input" min="1" required
+               value="{{ pkg.credits if pkg else '' }}"
+               placeholder="50">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Tag <small>Short label shown on the card (e.g. "most popular")</small></label>
+      <input type="text" name="tag" class="form-input" maxlength="80"
+             value="{{ pkg.tag if pkg else '' }}"
+             placeholder="best value">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Sort Order <small>Lower numbers appear first</small></label>
+      <input type="number" name="sort_order" class="form-input" value="{{ pkg.sort_order if pkg else 0 }}" min="0" style="width:120px">
+    </div>
+
+    <div class="form-group" style="display:flex;gap:1.5rem;margin-top:1rem">
+      <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.9rem">
+        <input type="checkbox" name="is_featured" {% if pkg and pkg.is_featured %}checked{% endif %}>
+        Featured <small style="color:var(--text-muted)">(highlighted card; only one at a time)</small>
+      </label>
+      <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.9rem">
+        <input type="checkbox" name="is_published" {% if (pkg and pkg.is_published) or not pkg %}checked{% endif %}>
+        Published <small style="color:var(--text-muted)">(visible to users)</small>
+      </label>
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="margin-top:1rem">
+      <i class="ph-light ph-floppy-disk"></i> Save
+    </button>
+  </form>
+</div>
+{% endblock %}

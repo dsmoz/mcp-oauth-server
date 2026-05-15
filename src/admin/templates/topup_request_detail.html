@@ -30,6 +30,18 @@
       <td style="padding:0.6rem 0;color:var(--text-muted)">Amount</td>
       <td style="font-weight:600">{{ topup.amount | int }} credits</td>
     </tr>
+    {% if topup.price_amount is not none %}
+    <tr>
+      <td style="padding:0.6rem 0;color:var(--text-muted)">Price</td>
+      <td>{{ topup.currency or '' }} {{ '%.2f'|format(topup.price_amount|float) }}</td>
+    </tr>
+    {% endif %}
+    {% if topup.package_id %}
+    <tr>
+      <td style="padding:0.6rem 0;color:var(--text-muted)">Package</td>
+      <td><code style="font-size:0.8rem">{{ topup.package_id }}</code></td>
+    </tr>
+    {% endif %}
     <tr>
       <td style="padding:0.6rem 0;color:var(--text-muted)">Note</td>
       <td>{{ topup.note or '—' }}</td>

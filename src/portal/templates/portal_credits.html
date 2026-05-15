@@ -33,22 +33,21 @@
 <div style="font-family:'Raleway',sans-serif;font-size:18px;font-weight:700;color:var(--fg-1);margin-bottom:6px">Request Top-up</div>
 <p style="font-size:13px;color:var(--fg-3);margin-bottom:20px">Submit a request and the admin will add credits to your account manually.</p>
 
+{% set currency_symbols = {'USD':'$','EUR':'€','GBP':'£','MZN':'MT ','BRL':'R$','ZAR':'R'} %}
+{% if topup_packages %}
 <form method="post" action="/portal/credits/request" id="topup-form">
-  <input type="hidden" name="amount" id="topup-amount" value="50">
-
   <div class="plan-grid">
-    {% for plan in [
-      {'id':'starter','name':'Starter','price':'$10','credits':10,'tag':'~5 days of use'},
-      {'id':'pro','name':'Pro','price':'$40','credits':50,'tag':'most popular','featured':true},
-      {'id':'enterprise','name':'Enterprise','price':'$150','credits':200,'tag':'best value'},
-    ] %}
-    <label class="plan-card{% if plan.featured %} plan-card-featured{% endif %}" data-credits="{{ plan.credits }}">
-      <input type="radio" name="plan" value="{{ plan.id }}" {% if plan.featured %}checked{% endif %}>
+    {% for plan in topup_packages %}
+    {% set sym = currency_symbols.get(plan.currency, plan.currency ~ ' ') %}
+    {% set price_int = plan.price_amount|float %}
+    {% set price_str = ('%g' % price_int) if price_int == price_int|int else ('%.2f' % price_int) %}
+    <label class="plan-card{% if plan.is_featured %} plan-card-featured{% endif %}" data-credits="{{ plan.credits }}">
+      <input type="radio" name="package_id" value="{{ plan.id }}" {% if plan.is_featured or loop.first and not topup_packages|selectattr('is_featured')|list %}checked{% endif %} required>
       <div class="plan-head">
         <div class="plan-name">{{ plan.name }}</div>
         <span class="plan-radio"></span>
       </div>
-      <div class="plan-price">{{ plan.price }}</div>
+      <div class="plan-price">{{ sym }}{{ price_str }}</div>
       <div class="plan-credits">{{ plan.credits }} credits</div>
       <div class="plan-tag">{{ plan.tag }}</div>
     </label>
@@ -69,6 +68,11 @@
     </button>
   </div>
 </form>
+{% else %}
+<div style="padding:24px;border:1px dashed var(--line-2);border-radius:var(--radius);color:var(--fg-3);font-size:14px">
+  Top-ups are currently unavailable. Please check back later or contact support.
+</div>
+{% endif %}
 
 <style>
 .plan-grid {
