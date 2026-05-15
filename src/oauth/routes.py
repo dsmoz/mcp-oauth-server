@@ -145,7 +145,25 @@ async def authorize(
 @router.get("/telegram/webhook-diag")
 async def telegram_webhook_diag():
     """Marker endpoint to confirm latest diagnostic build is live."""
-    return JSONResponse({"build": "diag-v3-2026-05-15", "secret_present": bool(tg._webhook_secret())})
+    sentry_state: dict = {"installed": False, "dsn_set": bool(os.getenv("SENTRY_DSN"))}
+    try:
+        import sentry_sdk
+        hub = sentry_sdk.Hub.current
+        client = hub.client
+        sentry_state["installed"] = client is not None
+        if client is not None:
+            sentry_state["dsn_configured"] = bool(client.dsn)
+            test_event_id = sentry_sdk.capture_message(
+                "diag endpoint test event", level="warning"
+            )
+            sentry_state["test_event_id"] = test_event_id
+    except Exception as exc:
+        sentry_state["error"] = str(exc)
+    return JSONResponse({
+        "build": "diag-v4-2026-05-15",
+        "secret_present": bool(tg._webhook_secret()),
+        "sentry": sentry_state,
+    })
 
 
 @router.post("/telegram/webhook")
