@@ -1494,6 +1494,37 @@ async def save_settings(request: Request, _: str = Depends(_require_admin)):
     return RedirectResponse(url="/admin/settings?saved=true", status_code=303)
 
 
+# ── Telegram test ─────────────────────────────────────────────────────────────
+
+@router.post("/telegram/test")
+async def telegram_test(_: str = Depends(_require_admin)):
+    """Send a test Markdown message to the configured owner chat. Returns JSON."""
+    from fastapi.responses import JSONResponse
+    from src.admin.settings import get_setting
+    import httpx as _httpx
+    token = get_setting("telegram_bot_token") or get_settings().TELEGRAM_BOT_TOKEN
+    chat_id = get_setting("telegram_chat_id") or get_settings().TELEGRAM_OWNER_CHAT_ID
+    if not token or not chat_id:
+        return JSONResponse({"ok": False, "error": "Bot Token and Owner Chat ID must both be set"}, status_code=400)
+    try:
+        async with _httpx.AsyncClient() as client:
+            resp = await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": "✅ *DS-MOZ Connect* — test message from admin settings.",
+                    "parse_mode": "Markdown",
+                },
+                timeout=10.0,
+            )
+        data = resp.json()
+        if data.get("ok"):
+            return JSONResponse({"ok": True, "message": "Test message sent — check your Telegram."})
+        return JSONResponse({"ok": False, "error": data.get("description", "Unknown error")}, status_code=502)
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=502)
+
+
 # ── Credit top-up request queue ───────────────────────────────────────────────
 
 @router.get("/topup-requests", response_class=HTMLResponse)
