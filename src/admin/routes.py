@@ -1775,11 +1775,10 @@ async def approve_topup(request_id: str, _: str = Depends(_require_admin)):
         return RedirectResponse(url="/admin/topup-requests", status_code=303)
     user_id = row["user_id"]
     amount = float(row["amount"])
-    provider = SupabaseOAuthProvider()
-    user = provider.get_user(user_id)
-    if user is None:
+    user_res = db.table("users").select("credit_balance").eq("id", user_id).limit(1).execute()
+    if not user_res.data:
         raise HTTPException(status_code=404, detail="User not found")
-    new_balance = float(user.credit_balance or 0) + amount
+    new_balance = float(user_res.data[0].get("credit_balance") or 0) + amount
     db.table("users").update({"credit_balance": new_balance}).eq("id", user_id).execute()
     db.table("credit_topup_requests").update({
         "status": "approved",
