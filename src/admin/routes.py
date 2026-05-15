@@ -1744,7 +1744,7 @@ async def approve_topup(request_id: str, _: str = Depends(_require_admin)):
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     new_balance = float(user.credit_balance or 0) + amount
-    db.table("users").update({"credit_balance": new_balance}).eq("id", user_id).execute()
+    db.table("users").update({"credit_balance": new_balance}).eq("user_id", user_id).execute()
     db.table("credit_topup_requests").update({
         "status": "approved",
         "reviewed_at": datetime.datetime.utcnow().isoformat(),

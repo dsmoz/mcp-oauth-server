@@ -200,11 +200,11 @@ def _do_approve_topup(request_id: str) -> str:
             return "already_done"
         user_id = row["user_id"]
         amount = float(row["amount"])
-        user_res = db.table("users").select("credit_balance").eq("id", user_id).limit(1).execute()
+        user_res = db.table("users").select("credit_balance").eq("user_id", user_id).limit(1).execute()
         if not user_res.data:
             return "error"
         current = float(user_res.data[0].get("credit_balance") or 0)
-        db.table("users").update({"credit_balance": current + amount}).eq("id", user_id).execute()
+        db.table("users").update({"credit_balance": current + amount}).eq("user_id", user_id).execute()
         db.table("credit_topup_requests").update({
             "status": "approved",
             "reviewed_at": datetime.datetime.utcnow().isoformat(),
@@ -430,12 +430,21 @@ async def introspect(
     except Exception:
         pass
 
+    user_is_admin = False
+    try:
+        user_row = get_db().table("users").select("is_admin").eq("user_id", at.user_id).limit(1).execute()
+        if user_row.data:
+            user_is_admin = bool(user_row.data[0].get("is_admin", False))
+    except Exception:
+        pass
+
     response: dict = {
         "active": True,
         "client_id": at.client_id,
         "user_id": at.user_id,
         "scope": " ".join(at.scopes) if at.scopes else "mcp",
         "exp": at.expires_at,
+        "is_admin": user_is_admin,
     }
     if credits_remaining is not None:
         response["credits_remaining"] = credits_remaining
