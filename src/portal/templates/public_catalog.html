@@ -168,10 +168,12 @@ h1 {
   font-size: 11px;
   font-weight: 600;
   color: var(--fg2);
-  padding: 4px 8px;
+  padding: 2px 7px;
   background: rgba(7,43,49,0.05);
   border-radius: 999px;
+  white-space: nowrap;
 }
+.cost-chip.free { color: #086d4f; background: rgba(8,109,79,0.08); }
 .btn-cta {
   padding: 7px 14px;
   background: var(--deep);
@@ -252,9 +254,11 @@ footer a { text-decoration: none; margin-left: 16px; }
     <div class="card-name">{{ mcp.name }}</div>
     <p class="card-desc">{{ mcp.description or '' }}</p>
     <div class="card-foot">
-      <span class="cost-chip">
-        {% if mcp.credit_cost_per_call %}{{ mcp.credit_cost_per_call }} cr / call{% else %}Free{% endif %}
-      </span>
+      {% if mcp.credit_cost_per_call and mcp.credit_cost_per_call > 0 %}
+      <span class="cost-chip">{{ "%.1f"|format(mcp.credit_cost_per_call) }} cr/call</span>
+      {% else %}
+      <span class="cost-chip free">Free</span>
+      {% endif %}
       {% if is_authenticated %}
       <a href="/portal/catalog" class="btn-cta add">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
