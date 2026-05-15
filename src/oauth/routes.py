@@ -146,7 +146,13 @@ async def authorize(
 async def telegram_webhook(request: Request):
     """Receive Telegram webhook updates."""
     import sys
-    print(f"[telegram_webhook] hit from {request.client.host if request.client else '?'}", file=sys.stderr, flush=True)
+    client_host = request.client.host if request.client else "?"
+    print(f"[telegram_webhook] hit from {client_host}", file=sys.stderr, flush=True)
+    try:
+        import sentry_sdk
+        sentry_sdk.capture_message(f"telegram_webhook hit from {client_host}", level="info")
+    except Exception:
+        pass
 
     expected_secret = tg._webhook_secret()
     incoming = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
@@ -179,6 +185,14 @@ async def telegram_webhook(request: Request):
         return JSONResponse({"ok": False, "reason": "bad json"}, status_code=400)
 
     print(f"[telegram_webhook] body keys: {list(body.keys())}", file=sys.stderr, flush=True)
+    try:
+        import sentry_sdk
+        sentry_sdk.capture_message(
+            f"telegram_webhook body keys={list(body.keys())} cq_data={body.get('callback_query', {}).get('data')!r}",
+            level="info",
+        )
+    except Exception:
+        pass
 
     cq = body.get("callback_query")
     if cq:
