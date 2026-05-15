@@ -2024,3 +2024,195 @@ async def delete_partner(item_id: str, _: str = Depends(_require_admin)):
     db = get_db()
     db.table("landing_partners").delete().eq("id", item_id).execute()
     return RedirectResponse(url="/admin/partners", status_code=303)
+
+
+# ── Top-up packages ───────────────────────────────────────────────────────────
+
+
+def _list_topup_packages(db) -> list[dict]:
+    res = (
+        db.table("topup_packages")
+        .select("*")
+        .order("sort_order")
+        .execute()
+    )
+    return res.data or []
+
+
+def _get_topup_package(db, pkg_id: str) -> dict | None:
+    res = db.table("topup_packages").select("*").eq("id", pkg_id).limit(1).execute()
+    return res.data[0] if res.data else None
+
+
+@router.get("/topup-packages", response_class=HTMLResponse)
+async def list_topup_packages(request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
+    return templates.TemplateResponse(
+        request=request, name="topup_packages_list.html",
+        context={"packages": _list_topup_packages(db)},
+    )
+
+
+@router.get("/topup-packages/new", response_class=HTMLResponse)
+async def new_topup_package_form(request: Request, _: str = Depends(_require_admin)):
+    return templates.TemplateResponse(
+        request=request, name="topup_packages_form.html",
+        context={"error": None, "pkg": None},
+    )
+
+
+def _clear_other_featured(db, exclude_id: str | None = None) -> None:
+    """Ensure only one package is featured at a time."""
+    q = db.table("topup_packages").update({"is_featured": False}).eq("is_featured", True)
+    if exclude_id:
+        q = q.neq("id", exclude_id)
+    q.execute()
+
+
+@router.post("/topup-packages", response_class=HTMLResponse)
+async def create_topup_package(
+    request: Request,
+    name: str = Form(...),
+    price_amount: float = Form(...),
+    currency: str = Form("USD"),
+    credits: int = Form(...),
+    tag: str = Form(""),
+    is_featured: str = Form(""),
+    is_published: str = Form("on"),
+    sort_order: int = Form(0),
+    _: str = Depends(_require_admin),
+):
+    name = name.strip()
+    currency = currency.strip().upper()[:8] or "USD"
+    if not name:
+        return templates.TemplateResponse(
+            request=request, name="topup_packages_form.html",
+            context={"error": "Name required", "pkg": None},
+        )
+    if price_amount < 0 or credits <= 0:
+        return templates.TemplateResponse(
+            request=request, name="topup_packages_form.html",
+            context={"error": "Price must be ≥ 0 and credits > 0", "pkg": None},
+        )
+    db = get_db()
+    featured = is_featured == "on"
+    if featured:
+        _clear_other_featured(db)
+    db.table("topup_packages").insert({
+        "name": name,
+        "price_amount": price_amount,
+        "currency": currency,
+        "credits": credits,
+        "tag": tag.strip()[:80],
+        "is_featured": featured,
+        "is_published": is_published == "on",
+        "sort_order": sort_order,
+    }).execute()
+    return RedirectResponse(url="/admin/topup-packages", status_code=303)
+
+
+@router.get("/topup-packages/{pkg_id}/edit", response_class=HTMLResponse)
+async def edit_topup_package_form(
+    pkg_id: str, request: Request, _: str = Depends(_require_admin)
+):
+    db = get_db()
+    pkg = _get_topup_package(db, pkg_id)
+    if pkg is None:
+        raise HTTPException(status_code=404, detail="Package not found")
+    return templates.TemplateResponse(
+        request=request, name="topup_packages_form.html",
+        context={"error": None, "pkg": pkg},
+    )
+
+
+@router.post("/topup-packages/{pkg_id}/edit", response_class=HTMLResponse)
+async def update_topup_package(
+    pkg_id: str,
+    request: Request,
+    name: str = Form(...),
+    price_amount: float = Form(...),
+    currency: str = Form("USD"),
+    credits: int = Form(...),
+    tag: str = Form(""),
+    is_featured: str = Form(""),
+    is_published: str = Form(""),
+    sort_order: int = Form(0),
+    _: str = Depends(_require_admin),
+):
+    db = get_db()
+    pkg = _get_topup_package(db, pkg_id)
+    if pkg is None:
+        raise HTTPException(status_code=404, detail="Package not found")
+    name = name.strip()
+    currency = currency.strip().upper()[:8] or "USD"
+    if not name or price_amount < 0 or credits <= 0:
+        return templates.TemplateResponse(
+            request=request, name="topup_packages_form.html",
+            context={"error": "Invalid input", "pkg": pkg},
+        )
+    featured = is_featured == "on"
+    if featured:
+        _clear_other_featured(db, exclude_id=pkg_id)
+    db.table("topup_packages").update({
+        "name": name,
+        "price_amount": price_amount,
+        "currency": currency,
+        "credits": credits,
+        "tag": tag.strip()[:80],
+        "is_featured": featured,
+        "is_published": is_published == "on",
+        "sort_order": sort_order,
+        "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }).eq("id", pkg_id).execute()
+    return RedirectResponse(url="/admin/topup-packages", status_code=303)
+
+
+@router.post("/topup-packages/{pkg_id}/publish", response_class=HTMLResponse)
+async def toggle_topup_package_published(
+    pkg_id: str, _: str = Depends(_require_admin)
+):
+    db = get_db()
+    pkg = _get_topup_package(db, pkg_id)
+    if pkg is None:
+        raise HTTPException(status_code=404, detail="Package not found")
+    db.table("topup_packages").update(
+        {"is_published": not pkg.get("is_published", False)}
+    ).eq("id", pkg_id).execute()
+    return RedirectResponse(url="/admin/topup-packages", status_code=303)
+
+
+@router.post("/topup-packages/{pkg_id}/feature", response_class=HTMLResponse)
+async def toggle_topup_package_featured(
+    pkg_id: str, _: str = Depends(_require_admin)
+):
+    db = get_db()
+    pkg = _get_topup_package(db, pkg_id)
+    if pkg is None:
+        raise HTTPException(status_code=404, detail="Package not found")
+    new_state = not pkg.get("is_featured", False)
+    if new_state:
+        _clear_other_featured(db, exclude_id=pkg_id)
+    db.table("topup_packages").update({"is_featured": new_state}).eq("id", pkg_id).execute()
+    return RedirectResponse(url="/admin/topup-packages", status_code=303)
+
+
+@router.post("/topup-packages/{pkg_id}/delete", response_class=HTMLResponse)
+async def delete_topup_package(pkg_id: str, _: str = Depends(_require_admin)):
+    db = get_db()
+    db.table("topup_packages").delete().eq("id", pkg_id).execute()
+    return RedirectResponse(url="/admin/topup-packages", status_code=303)
+
+
+@router.post("/topup-packages/reorder")
+async def reorder_topup_packages(request: Request, _: str = Depends(_require_admin)):
+    try:
+        body = await request.json()
+        ids: list[str] = body.get("order", [])
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid_json_body")
+    if not ids:
+        raise HTTPException(status_code=400, detail="order list empty")
+    db = get_db()
+    for i, pkg_id in enumerate(ids):
+        db.table("topup_packages").update({"sort_order": i}).eq("id", pkg_id).execute()
+    return JSONResponse({"ok": True})

@@ -1160,6 +1160,17 @@ async def portal_setup_download(request: Request, user_id: str = Depends(_requir
 
 # ── Credits ───────────────────────────────────────────────────────────────────
 
+def _published_topup_packages(db) -> list[dict]:
+    res = (
+        db.table("topup_packages")
+        .select("*")
+        .eq("is_published", True)
+        .order("sort_order")
+        .execute()
+    )
+    return res.data or []
+
+
 @router.get("/credits", response_class=HTMLResponse)
 async def portal_credits_get(
     request: Request,
@@ -1170,6 +1181,7 @@ async def portal_credits_get(
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
 
+    db = get_db()
     client_ctx = {
         "client_id": user_id,
         "client_name": user.display_name or user.email,
@@ -1182,6 +1194,7 @@ async def portal_credits_get(
             "active_nav": "credits",
             "credit_balance": float(user.credit_balance or 0),
             "success": success,
+            "topup_packages": _published_topup_packages(db),
         }
     )
 
@@ -1189,19 +1202,32 @@ async def portal_credits_get(
 @router.post("/credits/request", response_class=HTMLResponse)
 async def portal_credits_request(
     request: Request,
-    amount: float = Form(...),
+    package_id: str = Form(...),
     note: str = Form(""),
     user_id: str = Depends(_require_portal_user),
 ):
-    if amount <= 0 or amount > 10000:
-        raise HTTPException(status_code=400, detail="Invalid amount")
     user = _users().get_user(user_id)
     if user is None:
         raise HTTPException(status_code=401, detail="Not found")
     db = get_db()
+    pkg_res = (
+        db.table("topup_packages")
+        .select("*")
+        .eq("id", package_id)
+        .eq("is_published", True)
+        .limit(1)
+        .execute()
+    )
+    if not pkg_res.data:
+        raise HTTPException(status_code=400, detail="Invalid or unpublished package")
+    pkg = pkg_res.data[0]
+    credits = int(pkg["credits"])
     result = db.table("credit_topup_requests").insert({
         "user_id": user_id,
-        "amount": amount,
+        "amount": credits,
+        "package_id": pkg["id"],
+        "price_amount": pkg["price_amount"],
+        "currency": pkg["currency"],
         "note": note.strip()[:500],
         "status": "pending",
     }).execute()
@@ -1211,7 +1237,7 @@ async def portal_credits_request(
     asyncio.create_task(send_topup_request_notice(
         user_id=user_id,
         user_email=user.email,
-        amount=amount,
+        amount=credits,
         note=note,
         request_id=request_id,
     ))
@@ -1226,7 +1252,8 @@ async def portal_credits_request(
             "user": user,
             "active_nav": "credits",
             "credit_balance": float(user.credit_balance or 0),
-            "success": f"Top-up request for {amount:.0f} credits submitted. Admin will review shortly.",
+            "success": f"Top-up request for {credits} credits ({pkg['name']}) submitted. Admin will review shortly.",
+            "topup_packages": _published_topup_packages(db),
         }
     )
 

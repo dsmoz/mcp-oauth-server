@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Top-up Packages — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Top-up Packages</h1>
+  <a href="/admin/topup-packages/new" class="btn btn-primary">
+    <i class="ph-light ph-plus"></i> New Package
+  </a>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+  {% if packages %}
+  <table id="pkg-table">
+    <thead>
+      <tr>
+        <th style="width:32px"></th>
+        <th>Name</th>
+        <th>Price</th>
+        <th>Credits</th>
+        <th>Tag</th>
+        <th>Featured</th>
+        <th>Published</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="pkg-tbody">
+      {% for pkg in packages %}
+      <tr draggable="true" data-id="{{ pkg.id }}" style="cursor:default">
+        <td style="text-align:center;color:var(--text-muted);cursor:grab;padding:0 0.5rem" class="drag-handle">
+          <i class="ph-light ph-dots-six-vertical" style="font-size:1.1rem;vertical-align:middle"></i>
+        </td>
+        <td style="font-weight:600;color:var(--text-h)">{{ pkg.name }}</td>
+        <td>{{ pkg.currency }} {{ '%.2f'|format(pkg.price_amount|float) }}</td>
+        <td>{{ pkg.credits }}</td>
+        <td style="font-size:0.85rem;color:var(--text-muted)">{{ pkg.tag or '—' }}</td>
+        <td>
+          <form method="post" action="/admin/topup-packages/{{ pkg.id }}/feature" style="display:inline">
+            <button type="submit" class="btn {{ 'btn-primary' if pkg.is_featured else 'btn-secondary' }} btn-sm"
+                    style="font-size:0.75rem;padding:0.25rem 0.6rem">
+              {{ 'Featured' if pkg.is_featured else 'Make featured' }}
+            </button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="/admin/topup-packages/{{ pkg.id }}/publish" style="display:inline">
+            <button type="submit" class="btn {{ 'btn-primary' if pkg.is_published else 'btn-secondary' }} btn-sm"
+                    style="font-size:0.75rem;padding:0.25rem 0.6rem">
+              {{ 'Published' if pkg.is_published else 'Unpublished' }}
+            </button>
+          </form>
+        </td>
+        <td class="actions" style="justify-content:flex-end;gap:0.5rem">
+          <a href="/admin/topup-packages/{{ pkg.id }}/edit" class="btn btn-secondary"
+             style="font-size:0.75rem;padding:0.3rem 0.7rem">
+            <i class="ph-light ph-pencil-simple"></i> Edit
+          </a>
+          <form method="post" action="/admin/topup-packages/{{ pkg.id }}/delete"
+                onsubmit="return confirm('Delete package {{ pkg.name }}?')">
+            <button type="submit" class="btn btn-danger" style="font-size:0.75rem;padding:0.3rem 0.7rem">
+              <i class="ph-light ph-trash"></i> Delete
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="padding:2rem;text-align:center;color:var(--text-muted)">No packages yet. Create one to enable portal top-ups.</div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const tbody = document.getElementById('pkg-tbody');
+  if (!tbody) return;
+  let dragging = null;
+
+  tbody.addEventListener('dragstart', (e) => {
+    dragging = e.target.closest('tr');
+    if (!dragging) return;
+    dragging.style.opacity = '0.4';
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  tbody.addEventListener('dragend', () => {
+    if (dragging) dragging.style.opacity = '';
+    dragging = null;
+    tbody.querySelectorAll('tr').forEach(r => r.style.borderTop = '');
+  });
+
+  tbody.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const target = e.target.closest('tr');
+    if (!target || target === dragging) return;
+    tbody.querySelectorAll('tr').forEach(r => r.style.borderTop = '');
+    const rect = target.getBoundingClientRect();
+    const mid = rect.top + rect.height / 2;
+    target.style.borderTop = e.clientY < mid ? '2px solid var(--accent)' : '';
+  });
+
+  tbody.addEventListener('drop', (e) => {
+    e.preventDefault();
+    tbody.querySelectorAll('tr').forEach(r => r.style.borderTop = '');
+    const target = e.target.closest('tr');
+    if (!target || target === dragging || !dragging) return;
+    const rect = target.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    tbody.insertBefore(dragging, before ? target : target.nextSibling);
+    const order = Array.from(tbody.querySelectorAll('tr[data-id]')).map(r => r.dataset.id);
+    fetch('/admin/topup-packages/reorder', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({order}),
+    });
+  });
+})();
+</script>
+{% endblock %}
