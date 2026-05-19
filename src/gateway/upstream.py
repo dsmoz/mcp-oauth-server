@@ -409,12 +409,82 @@ async def call_upstream_tool(
                 await anyio.sleep(_RETRY_BACKOFF_SECONDS)
                 continue
 
-            # Non-retryable or final attempt — re-raise
-            raise
+            # Non-retryable or final attempt — re-raise, but unwrap any
+            # ExceptionGroup / BaseExceptionGroup so Sentry RCA shows the
+            # underlying cause (ConnectTimeout, etc.) instead of the opaque
+            # "unhandled errors in a TaskGroup (1 sub-exception)" wrapper.
+            # Fixes MCP-AUTH-SERVER-11 RCA visibility.
+            raise _unwrap_for_raise(exc, upstream_url, tool_name) from exc
 
     # Should not reach here, but satisfy type checker
     assert last_exc is not None
-    raise last_exc
+    raise _unwrap_for_raise(last_exc, upstream_url, tool_name) from last_exc
+
+
+def _unwrap_for_raise(
+    exc: BaseException, upstream_url: str, tool_name: str
+) -> Exception:
+    """Reduce a (possibly nested) ExceptionGroup to its most informative leaf
+    so Sentry surfaces ConnectTimeout / HTTPStatusError / etc. directly instead
+    of the opaque TaskGroup wrapper.
+
+    Returns the original exception unchanged when it isn't an ExceptionGroup,
+    so existing handlers (auth, timeout, session-terminated) keep working.
+    """
+    if not isinstance(exc, BaseExceptionGroup):
+        return exc if isinstance(exc, Exception) else RuntimeError(str(exc))
+
+    # Walk leaves; prefer concrete network/HTTP errors over plain Exception.
+    leaves: list[BaseException] = []
+    for e in _walk_exceptions(exc):
+        if not isinstance(e, BaseExceptionGroup):
+            leaves.append(e)
+    if not leaves:
+        return RuntimeError(
+            f"Upstream {upstream_url} tool '{tool_name}' failed with empty "
+            f"ExceptionGroup: {exc}"
+        )
+
+    # Rank: HTTP/timeout/connect first, then anything else.
+    def _rank(e: BaseException) -> int:
+        name = type(e).__name__.lower()
+        if "timeout" in name or "connect" in name:
+            return 0
+        if "http" in name:
+            return 1
+        return 2
+
+    leaves.sort(key=_rank)
+    best = leaves[0]
+    flat = _flatten_exception_message_local(exc)
+    logger.warning(
+        "Unwrapping ExceptionGroup from upstream %s tool=%s: %s",
+        upstream_url, tool_name, flat,
+    )
+    if isinstance(best, Exception):
+        return best
+    return RuntimeError(str(best))
+
+
+def _flatten_exception_message_local(exc: BaseException) -> str:
+    """Local copy of routes._flatten_exception_message to avoid an import
+    cycle (routes imports from upstream)."""
+    leaves: list[str] = []
+    for e in _walk_exceptions(exc):
+        if isinstance(e, BaseExceptionGroup):
+            continue
+        msg = str(e).strip()
+        if msg:
+            leaves.append(f"{type(e).__name__}: {msg}")
+    if not leaves:
+        return f"{type(exc).__name__}: {exc}"
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for m in leaves:
+        if m not in seen:
+            seen.add(m)
+            uniq.append(m)
+    return " | ".join(uniq[:5])
 
 
 # ---------------------------------------------------------------------------
