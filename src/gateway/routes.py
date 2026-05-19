@@ -303,16 +303,51 @@ def _get_credit_cost(mcp_slug: str) -> float:
     return cost
 
 
-def _deduct_credits(user_id: str, amount: float) -> float:
-    """Atomically deduct credits from a user via Supabase RPC. Returns new balance or -1 if insufficient."""
+def _deduct_credits(user_id: str, amount: float) -> tuple[str, float | None]:
+    """Atomically deduct credits via Supabase RPC.
+
+    Returns ``(status, new_balance)``:
+      * ``("ok", new_balance)`` — deducted, balance >= 0.
+      * ``("insufficient", None)`` — RPC raised INSUFFICIENT_CREDITS (P0001).
+      * ``("error", None)`` — RPC failed for any other reason (network, schema,
+        missing user row). Captured to Sentry so we know billing is broken
+        instead of misreporting it as an insufficient-balance error.
+    """
     try:
         result = get_db().rpc(
             "deduct_credits_user", {"p_user_id": user_id, "p_amount": amount}
         ).execute()
-        return float(result.data) if result.data is not None else -1
     except Exception as exc:
+        msg = str(exc)
+        if "INSUFFICIENT_CREDITS" in msg or "P0001" in msg:
+            return "insufficient", None
         print(f"WARNING: credit deduction failed for user {user_id}: {exc}", file=sys.stderr)
-        return -1
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_exception(exc)
+        except Exception:
+            pass
+        return "error", None
+    if result.data is None:
+        # RPC returned no row — treat as billing failure, not "insufficient".
+        print(f"WARNING: credit deduction returned null for user {user_id}", file=sys.stderr)
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_message(
+                f"deduct_credits_user returned null for user_id={user_id!r} amount={amount}",
+                level="error",
+            )
+        except Exception:
+            pass
+        return "error", None
+    return "ok", float(result.data)
+
+
+_BILLING_ERROR_MSG = (
+    "Billing system error — your credits were not deducted and no upstream "
+    "tool was called. Please retry. If this persists, contact support."
+)
+_INSUFFICIENT_CREDITS_MSG = "Insufficient credits. Visit your portal to buy more credits."
 
 
 def _log_tool_call(
@@ -822,10 +857,15 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                     )
                 credit_cost = _get_credit_cost(slug)
                 if credit_cost > 0:
-                    new_balance = _deduct_credits(user_id, credit_cost)
-                    if new_balance < 0:
+                    status, _new_balance = _deduct_credits(user_id, credit_cost)
+                    if status != "ok":
+                        err_msg = (
+                            _INSUFFICIENT_CREDITS_MSG
+                            if status == "insufficient"
+                            else _BILLING_ERROR_MSG
+                        )
                         return types.CallToolResult(
-                            content=[types.TextContent(type="text", text=json.dumps({"error": "Insufficient credits. Visit your portal to buy more credits."}))],
+                            content=[types.TextContent(type="text", text=json.dumps({"error": err_msg}))],
                             isError=True,
                         )
                 t0 = time.monotonic()
@@ -1047,9 +1087,14 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                 credit_cost = _get_credit_cost(slug)
                 # Atomic credit gate — deduct before calling upstream (refund not implemented)
                 if credit_cost > 0:
-                    new_balance = _deduct_credits(user_id, credit_cost)
-                    if new_balance < 0:
-                        structured = {"error": "Insufficient credits. Visit your portal to buy more credits."}
+                    status, _new_balance = _deduct_credits(user_id, credit_cost)
+                    if status != "ok":
+                        err_msg = (
+                            _INSUFFICIENT_CREDITS_MSG
+                            if status == "insufficient"
+                            else _BILLING_ERROR_MSG
+                        )
+                        structured = {"error": err_msg}
                         text = json.dumps(structured)
                         return [types.TextContent(type="text", text=text)], structured
                 t0 = time.monotonic()
