@@ -124,19 +124,29 @@
                 </div>
               </label>
               {% if mcp.slug == 'mcp-microsoft365' %}
-              <div class="ms365-connect" style="padding:8px 12px 12px 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <div class="ms365-row">
                 {% if ms365_connected %}
-                  <span class="cost-chip" style="background:#1f7a3a;color:#fff">
-                    Connected{% if ms365_upn %} as {{ ms365_upn }}{% endif %}
+                  <span class="ms365-chip ok" title="Connected{% if ms365_upn %}: {{ ms365_upn }}{% endif %}">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    Connected{% if ms365_upn %} · {{ ms365_upn }}{% endif %}
                   </span>
+                  <a class="ms365-icon" href="/portal/integrations/microsoft365/connect" title="Re-link / refresh consent" aria-label="Re-link">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"/></svg>
+                  </a>
                   <form method="post" action="/portal/integrations/microsoft365/disconnect" style="display:inline">
-                    <button type="submit" class="btn-cfg-save" style="background:#a33">Disconnect</button>
+                    <button type="submit" class="ms365-icon danger" title="Disconnect" aria-label="Disconnect">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                    </button>
                   </form>
-                  <a class="btn-cfg-save" href="/portal/integrations/microsoft365/connect" style="background:#2a5da8">Re-link / refresh consent</a>
                 {% else %}
-                  <span class="cost-chip" style="background:#a33;color:#fff">Not connected</span>
-                  <a class="btn-cfg-save" href="/portal/integrations/microsoft365/connect" style="background:#2a5da8">Connect Microsoft 365</a>
-                  <span class="cat-sub">Grant access to mailbox, calendar, OneDrive, contacts, tasks.</span>
+                  <span class="ms365-chip off">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Not connected
+                  </span>
+                  <a class="ms365-link" href="/portal/integrations/microsoft365/connect" title="Connect Microsoft 365">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 0 1 0 12.72"/><path d="M5.64 17.36a9 9 0 0 1 0-12.72"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+                    Connect
+                  </a>
                 {% endif %}
               </div>
               {% endif %}
@@ -226,6 +236,49 @@
   white-space: nowrap;
 }
 .cost-chip.free { color: var(--success); border-color: var(--success-bg); background: var(--success-bg); }
+.ms365-row {
+  padding: 6px 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ms365-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--bg-card);
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ms365-chip.ok { color: var(--success); border-color: var(--success-bg); background: var(--success-bg); }
+.ms365-chip.off { color: var(--fg-3); }
+.ms365-icon, .ms365-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--bg-card);
+  color: var(--fg-2);
+  cursor: pointer;
+  text-decoration: none;
+  padding: 4px;
+  height: 24px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ms365-link { padding: 4px 8px; color: var(--fg-1); }
+.ms365-icon:hover, .ms365-link:hover { background: var(--bg-2); color: var(--fg-1); }
+.ms365-icon.danger:hover { background: #fde7e7; color: #a33; border-color: #f3c4c4; }
 .search-wrap {
   position: relative;
   display: flex; align-items: center;
