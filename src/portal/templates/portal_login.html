@@ -124,6 +124,31 @@ input:focus {
   margin-top: 8px;
 }
 .btn-submit:hover { opacity: 0.88; }
+.btn-current {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  background: #072B31;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 4px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+.btn-current:hover { opacity: 0.90; }
+.current-hint {
+  font-size: 12px;
+  color: #6B7E81;
+  text-align: center;
+  margin-bottom: 14px;
+}
+.current-hint a { color: #072B31; text-decoration: underline; }
 .social-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
 .btn-social {
   display: flex;
@@ -196,11 +221,20 @@ input:focus {
 
 <div class="auth-right">
   <div class="auth-form-wrap">
-    <div class="auth-form-title">Welcome back</div>
-    <div class="auth-form-sub">{% if next_session %}Sign in to authorise access to your MCP tools.{% else %}Sign in to manage your MCP tools and configuration.{% endif %}</div>
+    <div class="auth-form-title">{% if current_user and next_session %}Authorise access{% else %}Welcome back{% endif %}</div>
+    <div class="auth-form-sub">{% if current_user and next_session %}Choose which account to use for this app.{% elif next_session %}Sign in to authorise access to your MCP tools.{% else %}Sign in to manage your MCP tools and configuration.{% endif %}</div>
 
     {% if error %}
     <div class="alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if current_user and next_session %}
+    <form method="post" action="/portal/approve-current">
+      <input type="hidden" name="next_session" value="{{ next_session }}">
+      <button type="submit" class="btn-current">Continue as {{ current_user.display_name or current_user.email }}</button>
+    </form>
+    <div class="current-hint">Not you? <a href="/portal/login?next_session={{ next_session }}&amp;switch=1">Use a different account</a></div>
+    <div class="divider">or sign in with another account</div>
     {% endif %}
 
     {% set social_qs %}{% if next_session %}?next_session={{ next_session }}{% elif next_path %}?next={{ next_path | urlencode }}{% endif %}{% endset %}
