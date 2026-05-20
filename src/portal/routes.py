@@ -93,8 +93,11 @@ def _hash_setup_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def create_setup_token(user_id: str) -> str:
-    """Generate a one-time setup token keyed on user_id, return raw token."""
+def create_setup_token(user_id: str, purpose: str = "setup") -> str:
+    """Generate a one-time token keyed on user_id, return raw token.
+    purpose: 'setup' (initial account setup) or 'reset' (forgot-password)."""
+    if purpose not in ("setup", "reset"):
+        raise ValueError(f"invalid token purpose: {purpose!r}")
     raw = generate_token(32)
     token_hash = _hash_setup_token(raw)
     expires_at = (datetime.now(timezone.utc) + timedelta(hours=_SETUP_TOKEN_TTL_HOURS)).isoformat()
@@ -102,12 +105,15 @@ def create_setup_token(user_id: str) -> str:
         "user_id": user_id,
         "token_hash": token_hash,
         "expires_at": expires_at,
+        "purpose": purpose,
     }).execute()
     return raw
 
 
-def _redeem_setup_token(raw: str) -> Optional[str]:
-    """Return user_id if token is valid and unused."""
+def _redeem_setup_token(raw: str, expected_purpose: str) -> Optional[str]:
+    """Return user_id if token is valid, unused, and matches expected_purpose."""
+    if expected_purpose not in ("setup", "reset"):
+        raise ValueError(f"invalid expected_purpose: {expected_purpose!r}")
     token_hash = _hash_setup_token(raw)
     db = get_db()
     result = (
@@ -124,6 +130,9 @@ def _redeem_setup_token(raw: str) -> Optional[str]:
         return None
     expires_at = datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00"))
     if datetime.now(timezone.utc) > expires_at:
+        return None
+    # Legacy rows default to 'setup' via the migration's default.
+    if (row.get("purpose") or "setup") != expected_purpose:
         return None
     return row.get("user_id") or row.get("client_id")  # fallback for legacy tokens
 
@@ -373,7 +382,7 @@ async def plugin_login(request: Request):
 
 @router.get("/setup-password", response_class=HTMLResponse)
 async def setup_password_get(request: Request, token: str = ""):
-    user_id = _redeem_setup_token(token)
+    user_id = _redeem_setup_token(token, expected_purpose="setup")
     if not user_id:
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
@@ -384,6 +393,11 @@ async def setup_password_get(request: Request, token: str = ""):
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
             context={"error": "Account not found."},
+        )
+    if user.password_hash:
+        return templates.TemplateResponse(
+            request=request, name="portal_login.html",
+            context={"error": "Account already set up. Use the login form or 'Forgot password'."},
         )
     return templates.TemplateResponse(
         request=request, name="portal_setup_password.html",
@@ -399,7 +413,7 @@ async def setup_password_post(
     password: str = Form(...),
     password_confirm: str = Form(...),
 ):
-    user_id = _redeem_setup_token(token)
+    user_id = _redeem_setup_token(token, expected_purpose="setup")
     if not user_id:
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
@@ -412,6 +426,11 @@ async def setup_password_post(
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
             context={"error": "Account not found."},
+        )
+    if user.password_hash:
+        return templates.TemplateResponse(
+            request=request, name="portal_login.html",
+            context={"error": "Account already set up. Use the login form or 'Forgot password'."},
         )
 
     def _err(msg: str):
@@ -426,6 +445,7 @@ async def setup_password_post(
         return _err("Password must be at least 8 characters")
 
     users.set_password(user.user_id, password)
+    users.activate_user(user.user_id)
     _consume_setup_token(token)
 
     response = RedirectResponse(url="/portal/", status_code=303)
@@ -458,8 +478,10 @@ async def forgot_password_post(request: Request, email: str = Form(...)):
     identifier = email.strip().lower()
     user = _users().get_user_by_email(identifier)
     # Always show the same "sent" page to prevent email enumeration
-    if user is not None:
-        raw = create_setup_token(user.user_id)
+    if user is not None and user.password_hash:
+        # Only mint reset tokens for accounts that completed initial setup.
+        # Inactive/never-set-up accounts should re-use the setup-password path.
+        raw = create_setup_token(user.user_id, purpose="reset")
         issuer_url = get_settings().OAUTH_ISSUER_URL
         reset_url = f"{issuer_url}/portal/reset-password?token={raw}"
         try:
@@ -480,7 +502,7 @@ async def forgot_password_post(request: Request, email: str = Form(...)):
 
 @router.get("/reset-password", response_class=HTMLResponse)
 async def reset_password_get(request: Request, token: str = ""):
-    user_id = _redeem_setup_token(token)
+    user_id = _redeem_setup_token(token, expected_purpose="reset")
     if not user_id:
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
@@ -499,7 +521,7 @@ async def reset_password_post(
     password: str = Form(...),
     password_confirm: str = Form(...),
 ):
-    user_id = _redeem_setup_token(token)
+    user_id = _redeem_setup_token(token, expected_purpose="reset")
     if not user_id:
         return templates.TemplateResponse(
             request=request, name="portal_login.html",
