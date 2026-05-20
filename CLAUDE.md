@@ -4,11 +4,12 @@ OAuth 2.1 IDP + multi-tenant gateway in front of all DS-MOZ MCP servers. Hosted 
 
 ## Building new upstream MCPs
 
-**REQUIRED READING:** [`docs/saas-mcp-development-guide.md`](docs/saas-mcp-development-guide.md)
+**REQUIRED READING (both):**
 
-Covers: BearerAuthMiddleware (4-tier auth), `current_user_token` ContextVar, `credit.py` template, `/introspect` contract, gateway header forwarding (`X-User-Token`, `X-User-ID`, `X-MCP-Credentials`), cost table, Railway env vars, admin catalogue registration, anti-patterns.
+1. [`docs/saas-mcp-development-guide.md`](docs/saas-mcp-development-guide.md) — auth + ContextVar plumbing, gateway header forwarding (`X-User-Token`, `X-User-ID`, `X-MCP-Credentials`), Railway env vars, admin catalogue registration, anti-patterns.
+2. **Pricing model:** `~/Library/CloudStorage/OneDrive-dsmozconsultancy.com/Consultancies/_ADMIN/Reference-Documents/2026-05-20_saas-mcp-pricing-model.md` — single source of truth for credit cost formula, schema (`pricing_config`, `compute_rates`, `model_prices`, `mcp_cost_profile`), Mozambique tax stack, and upstream MCP contract (NO self-deduction; gateway is sole biller).
 
-Any new MCP added to the catalogue MUST follow this guide before deployment.
+Any new MCP added to the catalogue MUST follow both before deployment. Upstream MCPs MUST NOT call `/introspect` with `cost > 0` and MUST NOT ship a `src/credit.py`. LLM-using calls report usage via `_meta.usage_usd` or `_meta.llm` in the response body — see the pricing model doc for the contract.
 
 ## Related docs
 
