@@ -1314,6 +1314,9 @@ async def _gateway_asgi(scope, receive, send):
     # Extract user_id from /gateway/{user_id} or /gateway/{user_id}/mcp
     parts = path.strip("/").split("/")
     url_user_id = parts[1] if len(parts) >= 2 else ""
+    # Tolerate trailing punctuation (e.g. ".") commonly introduced when users
+    # paste the connector URL from the end of a sentence.
+    url_user_id = url_user_id.rstrip(".")
 
     token = _get_bearer(request)
     if not token:

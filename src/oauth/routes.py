@@ -80,7 +80,10 @@ async def oauth_protected_resource(request: Request, path: str = ""):
     not match the path-specific resource URI.
     """
     base = get_settings().OAUTH_ISSUER_URL.rstrip("/")
-    resource = f"{base}/{path}" if path else base
+    # Strip trailing punctuation (e.g. ".") that some clients include when
+    # the connector URL was pasted from the end of a sentence.
+    normalized_path = path.rstrip("./") if path else ""
+    resource = f"{base}/{normalized_path}" if normalized_path else base
     return JSONResponse(
         {
             "resource": resource,
