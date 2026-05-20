@@ -212,22 +212,25 @@ async def portal_login_get(
     next_session: Optional[str] = Query(None),
     next: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
+    switch: Optional[str] = Query(None),
 ):
     next_path = _safe_next(next)
-    # If already signed in, send straight to next_path
-    if next_path:
-        token = request.cookies.get(_COOKIE_NAME)
-        if token and _verify_session(token):
-            return RedirectResponse(url=next_path, status_code=302)
-    # Auto-complete OAuth if user already has a valid portal session
-    if next_session:
-        token = request.cookies.get(_COOKIE_NAME)
-        if token:
-            user_id = _verify_session(token)
-            if user_id:
-                response = _complete_oauth_session(next_session, user_id)
-                if response is not None:
-                    return response
+    current_user = None
+    token = request.cookies.get(_COOKIE_NAME)
+    if token and not switch:
+        user_id = _verify_session(token)
+        if user_id:
+            # Non-OAuth navigation: jump to next_path or portal home.
+            if not next_session:
+                return RedirectResponse(url=next_path or "/portal/", status_code=302)
+            # OAuth approval: show chooser instead of silently completing.
+            user = _users().get_user(user_id)
+            if user is not None:
+                current_user = {
+                    "user_id": user.user_id,
+                    "email": user.email,
+                    "display_name": user.display_name,
+                }
     from src.portal.social import provider_enabled
     return templates.TemplateResponse(
         request=request,
@@ -238,8 +241,27 @@ async def portal_login_get(
             "next_path": next_path,
             "google_enabled": provider_enabled("google"),
             "microsoft_enabled": provider_enabled("microsoft"),
+            "current_user": current_user,
         },
     )
+
+
+@router.post("/approve-current", response_class=HTMLResponse)
+async def portal_approve_current(
+    request: Request,
+    next_session: str = Form(...),
+):
+    """Approve a pending MCP OAuth session using the cookie's current user."""
+    token = request.cookies.get(_COOKIE_NAME)
+    user_id = _verify_session(token) if token else None
+    if not user_id:
+        return RedirectResponse(
+            url=f"/portal/login?next_session={next_session}", status_code=303
+        )
+    response = _complete_oauth_session(next_session, user_id)
+    if response is None:
+        response = RedirectResponse(url="/portal/?oauth_expired=1", status_code=303)
+    return response
 
 
 @router.post("/login", response_class=HTMLResponse)
