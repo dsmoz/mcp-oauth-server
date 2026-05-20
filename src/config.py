@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     MICROSOFT_OAUTH_CLIENT_ID: str = ""
     MICROSOFT_OAUTH_CLIENT_SECRET: str = ""
     MICROSOFT_OAUTH_TENANT: str = "common"
+    # Fernet key (url-safe base64, 32 bytes) used to encrypt MS Graph refresh
+    # tokens at rest. Generate with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    GRAPH_TOKEN_ENCRYPTION_KEY: str = ""
 
 
 @lru_cache()

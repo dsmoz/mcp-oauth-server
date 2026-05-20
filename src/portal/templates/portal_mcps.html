@@ -27,6 +27,16 @@
   'Other':    'var(--fg-3)',
 } %}
 
+{% if ms365_banner and (ms365_banner.ok or ms365_banner.error or ms365_banner.status) %}
+<div class="card" style="margin-bottom:14px;padding:10px 14px;background:{% if ms365_banner.error %}#fde7e7{% else %}#e6f5ec{% endif %};color:{% if ms365_banner.error %}#822{% else %}#1f6b3a{% endif %}">
+  {% if ms365_banner.error %}{{ ms365_banner.error }}
+  {% elif ms365_banner.ok %}{{ ms365_banner.ok }}
+  {% elif ms365_banner.status == 'connected' %}Microsoft 365 connected.
+  {% elif ms365_banner.status == 'disconnected' %}Microsoft 365 disconnected.
+  {% endif %}
+</div>
+{% endif %}
+
 <!-- ── Page header ── -->
 <div class="page-header" style="align-items:flex-start">
   <div>
@@ -113,6 +123,23 @@
                   <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
                 </div>
               </label>
+              {% if mcp.slug == 'mcp-microsoft365' %}
+              <div class="ms365-connect" style="padding:8px 12px 12px 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                {% if ms365_connected %}
+                  <span class="cost-chip" style="background:#1f7a3a;color:#fff">
+                    Connected{% if ms365_upn %} as {{ ms365_upn }}{% endif %}
+                  </span>
+                  <form method="post" action="/portal/integrations/microsoft365/disconnect" style="display:inline">
+                    <button type="submit" class="btn-cfg-save" style="background:#a33">Disconnect</button>
+                  </form>
+                  <a class="btn-cfg-save" href="/portal/integrations/microsoft365/connect" style="background:#2a5da8">Re-link / refresh consent</a>
+                {% else %}
+                  <span class="cost-chip" style="background:#a33;color:#fff">Not connected</span>
+                  <a class="btn-cfg-save" href="/portal/integrations/microsoft365/connect" style="background:#2a5da8">Connect Microsoft 365</a>
+                  <span class="cat-sub">Grant access to mailbox, calendar, OneDrive, contacts, tasks.</span>
+                {% endif %}
+              </div>
+              {% endif %}
               {% if has_cfg %}
               <div class="cfg-panel" id="cfg-{{ mcp.slug }}" style="display:none" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Configure {{ mcp.name }}">
                 <div class="cfg-panel-inner">

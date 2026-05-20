@@ -189,13 +189,47 @@ def _user_config_headers(config_schema, user_config: dict) -> dict[str, str]:
     return {"X-MCP-Credentials": encoded}
 
 
-def _extra_headers_for(mcp: dict, user_id: str) -> dict[str, str]:
-    """Combined per-MCP user-credential headers. Returns {} when MCP has no config_schema."""
+async def _extra_headers_for(mcp: dict, user_id: str) -> dict[str, str]:
+    """Combined per-MCP user-credential headers.
+
+    Returns {} when the MCP has no config_schema *and* requires no
+    dynamic credential injection (e.g. MS Graph token for mcp-microsoft365).
+    """
     schema = mcp.get("config_schema")
-    if not schema:
+    payload: dict[str, str] = {}
+    if schema:
+        cfg = _load_user_mcp_config(user_id, mcp["slug"])
+        # Reuse the existing packer but unpack back into payload so we can
+        # merge dynamic fields below.
+        packed = _user_config_headers(schema, cfg)
+        if packed:
+            import base64 as _b64, json as _json
+            try:
+                decoded = _json.loads(_b64.b64decode(packed["X-MCP-Credentials"]).decode())
+                if isinstance(decoded, dict):
+                    payload.update({str(k): str(v) for k, v in decoded.items()})
+            except Exception:
+                pass
+
+    # Dynamic per-user credentials.
+    slug = mcp.get("slug")
+    if slug == "mcp-microsoft365":
+        try:
+            from src.integrations.microsoft_graph import get_user_graph_token
+            graph_token = await get_user_graph_token(user_id)
+            if graph_token:
+                payload["graph_access_token"] = graph_token
+        except Exception as exc:
+            print(
+                f"WARNING: failed to mint Graph token for user={user_id}: {exc}",
+                file=sys.stderr,
+            )
+
+    if not payload:
         return {}
-    cfg = _load_user_mcp_config(user_id, mcp["slug"])
-    return _user_config_headers(schema, cfg)
+    import base64 as _b64, json as _json
+    encoded = _b64.b64encode(_json.dumps(payload).encode()).decode()
+    return {"X-MCP-Credentials": encoded}
 
 
 GATEWAY_INSTRUCTIONS = """\
@@ -531,8 +565,8 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
     # Resource origins: uri -> slug (populated lazily by list_resources_handler)
     _resource_origin: dict[str, str] = {}
 
-    def _user_extra_headers(mcp: dict) -> dict[str, str]:
-        headers = _extra_headers_for(mcp, user_id)
+    async def _user_extra_headers(mcp: dict) -> dict[str, str]:
+        headers = await _extra_headers_for(mcp, user_id)
         if token:
             headers["X-User-Token"] = token
         return headers
@@ -868,7 +902,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
             mcp.get("upstream_api_key", ""),
             user_id=user_id,
             client_id=client_id,
-            extra_headers=_user_extra_headers(mcp),
+            extra_headers=await _user_extra_headers(mcp),
         )
         _tool_cache.set(cache_key, tools)
         return tools
@@ -917,7 +951,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                         api_key=mcp.get("upstream_api_key", ""),
                         user_id=user_id,
                         client_id=client_id,
-                        extra_headers=_user_extra_headers(mcp),
+                        extra_headers=await _user_extra_headers(mcp),
                     )
                 except RuntimeError as exc:
                     print(f"GATEWAY: upstream auth/config error {slug}/{upstream_name}: {exc}", file=sys.stderr)
@@ -1147,7 +1181,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                         mcp.get("upstream_api_key", ""),
                         user_id=user_id,
                         client_id=client_id,
-                        extra_headers=_user_extra_headers(mcp),
+                        extra_headers=await _user_extra_headers(mcp),
                     )
                 except RuntimeError as exc:
                     print(f"GATEWAY: upstream auth/config error {slug}/{tool_name}: {exc}", file=sys.stderr)
@@ -1227,7 +1261,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                     api_key=mcp.get("upstream_api_key", ""),
                     user_id=user_id,
                     client_id=client_id,
-                    extra_headers=_user_extra_headers(mcp),
+                    extra_headers=await _user_extra_headers(mcp),
                 )
             except Exception as exc:
                 print(f"GATEWAY: list_resources failed for {slug}: {exc}", file=sys.stderr)
@@ -1271,7 +1305,7 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
             api_key=mcp.get("upstream_api_key", ""),
             user_id=user_id,
             client_id=client_id,
-            extra_headers=_user_extra_headers(mcp),
+            extra_headers=await _user_extra_headers(mcp),
         )
         out: list[ReadResourceContents] = []
         for c in raw.get("contents") or []:
