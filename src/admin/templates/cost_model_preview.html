@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Cost Preview — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Cost Preview</h1>
+  <a href="/admin/cost-model/" class="btn btn-secondary"><i class="ph-light ph-arrow-left"></i> Back</a>
+</div>
+
+<p style="color:var(--text-muted);font-size:0.9rem">
+  Simulate a tool call. Outputs raw USD, sell USD, and credits charged using current
+  <a href="/admin/cost-model/">pricing config</a> + <a href="/admin/cost-model/profiles">profile</a>.
+</p>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+  <div class="card" style="padding:1rem">
+    <h2 style="margin-top:0">Inputs</h2>
+    <form method="post" action="/admin/cost-model/preview" style="display:grid;gap:0.75rem">
+      <label>MCP slug
+        <select name="mcp_slug" required>
+          {% for s in slugs %}
+          <option value="{{ s }}" {% if inputs.mcp_slug == s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Duration (ms)
+        <input type="number" min="0" name="duration_ms" required value="{{ inputs.duration_ms or 1500 }}">
+      </label>
+      <label>Response bytes
+        <input type="number" min="0" name="response_bytes" required value="{{ inputs.response_bytes or 4096 }}">
+      </label>
+
+      <div style="border-top:1px solid var(--border);padding-top:0.75rem">
+        <strong>LLM usage</strong>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin:0.25rem 0">
+          Set <em>either</em> token counts <em>or</em> a USD passthrough. USD wins if both set.
+        </p>
+      </div>
+      <label>Model
+        <select name="model">
+          <option value="">— none —</option>
+          {% for m in models %}
+          <option value="{{ m }}" {% if inputs.model == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem">
+        <label>Input tokens<input type="number" min="0" name="input_tokens" value="{{ inputs.input_tokens or 0 }}"></label>
+        <label>Output tokens<input type="number" min="0" name="output_tokens" value="{{ inputs.output_tokens or 0 }}"></label>
+        <label>Cached input<input type="number" min="0" name="cached_input_tokens" value="{{ inputs.cached_input_tokens or 0 }}"></label>
+      </div>
+      <label>USD passthrough <small>(optional)</small>
+        <input type="number" step="0.0001" min="0" name="usage_usd" value="{{ inputs.usage_usd or '' }}" placeholder="0.0127">
+      </label>
+
+      <div><button type="submit" class="btn btn-primary">Compute</button></div>
+    </form>
+  </div>
+
+  <div class="card" style="padding:1rem">
+    <h2 style="margin-top:0">Result</h2>
+    {% if result %}
+    <table>
+      <tbody>
+        <tr><td>Compute + egress USD</td><td><strong>${{ '%.8f'|format(result.compute_usd) }}</strong></td></tr>
+        <tr><td>LLM USD</td><td><strong>${{ '%.8f'|format(result.llm_usd) }}</strong></td></tr>
+        <tr><td>Raw USD</td><td><strong>${{ '%.8f'|format(result.raw_usd) }}</strong></td></tr>
+        <tr><td>Sell USD</td><td><strong>${{ '%.8f'|format(result.sell_usd) }}</strong></td></tr>
+        <tr style="border-top:2px solid var(--border)"><td><strong>Credits charged</strong></td>
+            <td><strong style="color:var(--accent);font-size:1.2rem">{{ '%.4f'|format(result.credits_charged) }}</strong></td></tr>
+        <tr><td>Model used</td><td><code>{{ result.model_used or '—' }}</code></td></tr>
+        <tr><td>Tokens in/out</td><td>{{ result.input_tokens }} / {{ result.output_tokens }}</td></tr>
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text-muted)">Fill the form and submit to see a breakdown.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

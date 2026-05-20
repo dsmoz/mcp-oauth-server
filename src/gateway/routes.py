@@ -30,6 +30,7 @@ from mcp import types
 from src.cache import TTLCache
 from src.config import get_settings
 from src.db import get_db
+from src.gateway import billing
 from src.gateway.upstream import (
     _walk_exceptions,
     call_upstream_tool,
@@ -389,6 +390,7 @@ def _log_tool_call(
     user_id: str, client_id: str, mcp_slug: str, tool_name: str,
     credits_used: float = 0.0, duration_ms: int | None = None,
     response_bytes: int | None = None,
+    cost: billing.CostBreakdown | None = None,
 ) -> None:
     try:
         row: dict = {
@@ -401,9 +403,65 @@ def _log_tool_call(
             row["duration_ms"] = duration_ms
         if response_bytes is not None:
             row["response_bytes"] = response_bytes
+        if cost is not None:
+            row["compute_usd"] = cost.compute_usd
+            row["llm_usd"] = cost.llm_usd
+            row["raw_usd"] = cost.raw_usd
+            row["sell_usd"] = cost.sell_usd
+            row["credits_charged"] = cost.credits_charged
+            if cost.model_used:
+                row["model_used"] = cost.model_used
+            if cost.input_tokens:
+                row["input_tokens"] = cost.input_tokens
+            if cost.output_tokens:
+                row["output_tokens"] = cost.output_tokens
         get_db().table("oauth_usage_logs").insert(row).execute()
     except Exception as exc:
         print(f"WARNING: usage log failed for user {user_id}: {exc}", file=sys.stderr)
+
+
+def _has_min_balance(user_id: str, min_balance: float) -> tuple[bool, float | None]:
+    """Read-only precheck: returns (allowed, current_balance).
+
+    Conservative: on DB error we return (True, None) so a transient outage
+    doesn't lock everyone out; settlement still runs and will be logged.
+    """
+    try:
+        row = (
+            get_db().table("users").select("credit_balance")
+            .eq("user_id", user_id).limit(1).execute()
+        )
+        if not row.data:
+            return False, None
+        balance = float(row.data[0]["credit_balance"] or 0)
+        return balance >= min_balance, balance
+    except Exception as exc:
+        print(f"BILLING: precheck failed for {user_id}: {exc}", file=sys.stderr)
+        return True, None
+
+
+def _settle_credits(user_id: str, amount: float) -> tuple[str, float | None]:
+    """Post-call settlement — deducts the computed amount via ``settle_credits_user``
+    RPC. Allows negative balance (call already happened). Returns ``(status, balance)``
+    with ``status`` in {"ok", "error"}.
+    """
+    if amount <= 0:
+        return "ok", None
+    try:
+        result = get_db().rpc(
+            "settle_credits_user", {"p_user_id": user_id, "p_amount": amount}
+        ).execute()
+    except Exception as exc:
+        print(f"BILLING: settle_credits failed for {user_id}: {exc}", file=sys.stderr)
+        try:
+            import sentry_sdk
+            sentry_sdk.capture_exception(exc)
+        except Exception:
+            pass
+        return "error", None
+    if result.data is None:
+        return "error", None
+    return "ok", float(result.data)
 
 
 _user_tier_cache: TTLCache[str, str] = TTLCache(ttl=60, maxsize=1024)
@@ -481,6 +539,7 @@ def _log_tool_call_async(
     user_id: str, client_id: str, mcp_slug: str, tool_name: str,
     credits_used: float = 0.0, duration_ms: int | None = None,
     response_bytes: int | None = None,
+    cost: billing.CostBreakdown | None = None,
 ) -> None:
     """Fire-and-forget wrapper for _log_tool_call.
 
@@ -491,7 +550,7 @@ def _log_tool_call_async(
         try:
             await asyncio.to_thread(
                 _log_tool_call, user_id, client_id, mcp_slug, tool_name,
-                credits_used, duration_ms, response_bytes,
+                credits_used, duration_ms, response_bytes, cost,
             )
         except Exception as exc:
             print(f"WARNING: background usage log failed for user {user_id}: {exc}", file=sys.stderr)
@@ -501,7 +560,7 @@ def _log_tool_call_async(
         # No running loop (shouldn't happen in handler context) — fall back to sync.
         _log_tool_call(
             user_id, client_id, mcp_slug, tool_name,
-            credits_used, duration_ms, response_bytes,
+            credits_used, duration_ms, response_bytes, cost,
         )
 
 
@@ -926,19 +985,14 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                         content=[types.TextContent(type="text", text=json.dumps({"error": f"MCP '{slug}' not enabled"}))],
                         isError=True,
                     )
-                credit_cost = _get_credit_cost(slug)
-                if credit_cost > 0:
-                    status, _new_balance = _deduct_credits(user_id, credit_cost)
-                    if status != "ok":
-                        err_msg = (
-                            _INSUFFICIENT_CREDITS_MSG
-                            if status == "insufficient"
-                            else _BILLING_ERROR_MSG
-                        )
-                        return types.CallToolResult(
-                            content=[types.TextContent(type="text", text=json.dumps({"error": err_msg}))],
-                            isError=True,
-                        )
+                # Pre-call precheck (read-only). Real cost computed post-call.
+                _min_balance = billing.get_min_balance_to_call()
+                _ok, _bal = _has_min_balance(user_id, _min_balance)
+                if not _ok:
+                    return types.CallToolResult(
+                        content=[types.TextContent(type="text", text=json.dumps({"error": _INSUFFICIENT_CREDITS_MSG}))],
+                        isError=True,
+                    )
                 t0 = time.monotonic()
                 try:
                     print(
@@ -992,11 +1046,23 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                             blocks.append(types.TextContent(type="text", text=json.dumps(b)))
                 if not blocks:
                     blocks = [types.TextContent(type="text", text="")]
+                # Post-call billing: parse usage, compute cost, settle.
+                response_bytes = len(json.dumps(raw).encode("utf-8"))
+                structured_payload = raw.get("structuredContent") or raw
+                usage_meta = billing.parse_usage_meta(structured_payload if isinstance(structured_payload, dict) else None)
+                # Also check top-level _meta on raw
+                if isinstance(raw, dict) and isinstance(raw.get("_meta"), dict):
+                    usage_meta = billing.parse_usage_meta({"_meta": raw["_meta"]}) or usage_meta
+                cost = billing.compute_cost(slug, elapsed_ms, response_bytes, usage_meta)
+                is_error_resp = bool(raw.get("isError"))
+                if not is_error_resp and cost.credits_charged > 0:
+                    _settle_credits(user_id, cost.credits_charged)
                 _log_tool_call_async(
                     user_id, client_id, slug, upstream_name,
-                    credits_used=credit_cost,
+                    credits_used=cost.credits_charged if not is_error_resp else 0.0,
                     duration_ms=elapsed_ms,
-                    response_bytes=len(json.dumps(raw).encode("utf-8")),
+                    response_bytes=response_bytes,
+                    cost=cost if not is_error_resp else None,
                 )
                 return types.CallToolResult(
                     content=blocks,
@@ -1155,19 +1221,15 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                 structured = {"error": f"MCP '{slug}' not found"}
             else:
                 mcp = mcp_by_slug[slug]
-                credit_cost = _get_credit_cost(slug)
-                # Atomic credit gate — deduct before calling upstream (refund not implemented)
-                if credit_cost > 0:
-                    status, _new_balance = _deduct_credits(user_id, credit_cost)
-                    if status != "ok":
-                        err_msg = (
-                            _INSUFFICIENT_CREDITS_MSG
-                            if status == "insufficient"
-                            else _BILLING_ERROR_MSG
-                        )
-                        structured = {"error": err_msg}
-                        text = json.dumps(structured)
-                        return [types.TextContent(type="text", text=text)], structured
+                # Pre-call balance precheck — cheap read-only guard against
+                # runaway free use when the user is broke. Actual billing
+                # happens post-call from observed effort (compute + LLM tokens).
+                min_balance = billing.get_min_balance_to_call()
+                allowed, _bal = _has_min_balance(user_id, min_balance)
+                if not allowed:
+                    structured = {"error": _INSUFFICIENT_CREDITS_MSG}
+                    text = json.dumps(structured)
+                    return [types.TextContent(type="text", text=text)], structured
                 t0 = time.monotonic()
                 upstream_text: str | None = None
                 try:
@@ -1223,10 +1285,19 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                 elapsed_ms = int((time.monotonic() - t0) * 1000)
                 text_for_log = upstream_text if upstream_text is not None else json.dumps(structured)
                 resp_bytes = len(text_for_log.encode("utf-8")) if text_for_log else 0
+                # Post-call cost: compute from observed effort + any
+                # ``_meta.usage_usd`` / ``_meta.llm`` reported by upstream.
+                usage = billing.parse_usage_meta(structured if isinstance(structured, dict) else None)
+                cost = billing.compute_cost(slug, elapsed_ms, resp_bytes, usage)
+                # Skip settlement on upstream errors — user got nothing.
+                is_error_result = isinstance(structured, dict) and "error" in structured
+                if not is_error_result and cost.credits_charged > 0:
+                    _settle_credits(user_id, cost.credits_charged)
                 _log_tool_call_async(
                     user_id, client_id, slug, tool_name,
-                    credits_used=credit_cost,
+                    credits_used=cost.credits_charged if not is_error_result else 0.0,
                     duration_ms=elapsed_ms, response_bytes=resp_bytes,
+                    cost=cost if not is_error_result else None,
                 )
                 # Prefer raw upstream text for the human-readable block when available.
                 text = upstream_text if upstream_text is not None else json.dumps(structured)

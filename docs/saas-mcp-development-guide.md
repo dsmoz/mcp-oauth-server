@@ -2,7 +2,11 @@
 
 **Audience:** developers building new MCP servers that will be exposed through the DS-MOZ Connect gateway (`connect.dsmozconsultancy.com`) and monetized per call.
 
-**Scope:** end-to-end blueprint covering authentication middleware, per-user context propagation, credit deduction, gateway registration, and operational checklists. Read this before writing any new upstream MCP.
+**Scope:** end-to-end blueprint covering authentication middleware, per-user context propagation, LLM-usage reporting, gateway registration, and operational checklists. Read this before writing any new upstream MCP.
+
+**Pricing model (v1, 2026-05-20):** all pricing & cost-formula details live in
+[`_ADMIN/Reference-Documents/2026-05-20_saas-mcp-pricing-model.md`](../../OneDrive-dsmozconsultancy.com/Consultancies/_ADMIN/Reference-Documents/2026-05-20_saas-mcp-pricing-model.md).
+This guide MUST be read together with that doc — single source of truth.
 
 ---
 
@@ -10,29 +14,30 @@
 
 ```
 end user (Claude Desktop / portal)
-        │  Bearer <oauth_access_token>
+        │  Bearer <oauth_access_token | dsmoz_*>
         ▼
 ┌────────────────────────────────┐
 │ mcp-oauth-server (gateway+IDP) │  ← issues tokens, owns user/credit DB,
-│  connect.dsmozconsultancy.com  │    exposes /introspect (atomic deduction)
+│  connect.dsmozconsultancy.com  │    SOLE biller (post-call settlement)
 └──────────────┬─────────────────┘
                │  proxied request +
-               │  X-User-Token: <raw oauth token>
+               │  X-User-Token: <raw bearer>
                │  X-User-ID:    <user uuid>
                │  X-MCP-Credentials: <base64 json>
                ▼
 ┌────────────────────────────────┐
 │   Upstream MCP (your server)   │  ← validates token via /introspect,
-│   *-production.up.railway.app  │    deducts credit before each LLM/API call
+│   *-production.up.railway.app  │    reports LLM usage via _meta on response
 └────────────────────────────────┘
 ```
 
 Key facts:
 
 - **Gateway is the single source of truth** for users and credit balance.
-- **Upstream MCPs never touch the user table** — they only call `/introspect`.
-- **Credits deducted at the upstream**, atomically, per LLM call (academia model).
-- **Token never leaves Railway** — gateway forwards the raw token via `X-User-Token` header so upstreams can introspect.
+- **Gateway is the SOLE biller.** Upstreams MUST NOT deduct credits — neither directly nor via `/introspect`. Any cost field sent to `/introspect` is ignored by the IDP.
+- **Cost is computed post-call** by the gateway from observed Railway compute (duration × vCPU rate), egress bytes, plus any LLM usage the upstream reports via response `_meta`.
+- **Upstream MCPs never touch the user table** — they only call `/introspect` to validate the token (returns active/inactive + user_id).
+- **Tokens never leave Railway** — gateway forwards the raw token via `X-User-Token` header so upstreams can introspect.
 
 ---
 
@@ -47,7 +52,9 @@ Every upstream MCP must implement the same four-tier `BearerAuthMiddleware`. Tie
 | **2. OAuth introspection** | `Authorization: Bearer <token>` validated via `/introspect` | All gateway-routed traffic (default) |
 | **3. Admin/gateway token** | Token in `API_TOKENS` env CSV | Internal admin tools, gateway proxy |
 
-Reference implementation: [`mcp-scholar/src/auth/middleware.py`](../../mcp-servers/mcp-scholar/src/auth/middleware.py). Copy-and-adapt this file for any new MCP.
+`/introspect` transparently accepts both OAuth access tokens and agent tokens (`dsmoz_*`). Upstreams don't need to branch on token format.
+
+Reference implementation: [`mcp-scholar/src/auth/middleware.py`](../../mcp-servers/mcp-scholar/src/auth/middleware.py). Copy-and-adapt for any new MCP.
 
 ### 2.1 Required env vars (per upstream)
 
@@ -57,16 +64,17 @@ INTROSPECT_SECRET=<shared secret — match oauth-server>
 API_TOKENS=<comma-separated admin tokens, optional>
 OAUTH_INTROSPECT_TIMEOUT=3.0
 OAUTH_INTROSPECT_CACHE_TTL=60
-CREDIT_COST_PER_LLM_CALL=<3.0 | 5.0>   # cost per LLM/API call
 ```
+
+`CREDIT_COST_PER_LLM_CALL` is **deprecated and ignored**. Remove it from new MCPs.
 
 ### 2.2 Headers the gateway forwards
 
 | Header | Purpose |
 |--------|---------|
-| `Authorization: Bearer <token>` | OAuth access token (raw) |
+| `Authorization: Bearer <token>` | OAuth access token or agent token (raw) |
 | `X-User-Token` | Same token, exposed to upstream for introspection |
-| `X-User-ID` | UUID of the authenticated user (post-multi-device migration) |
+| `X-User-ID` | UUID of the authenticated user |
 | `X-Client-ID` | Legacy tenancy hint (still accepted) |
 | `X-MCP-Credentials` | Base64-encoded JSON of user-supplied provider credentials (API keys, etc.) |
 
@@ -74,145 +82,92 @@ Upstreams MUST honour `X-User-ID` first (user-level tenancy) and fall back to `X
 
 ---
 
-## 3. Credit Deduction (Monetization)
+## 3. Billing — Reporting Usage to the Gateway
 
-### 3.1 The contract
+### 3.1 The contract (single-biller pattern)
 
-The oauth-server exposes `POST /introspect`:
+The gateway bills post-call. After your tool returns, the gateway computes:
 
-```json
-// request
-{ "token": "<raw_oauth_token>", "cost": 3.0, "upstream": "mcp-yourname" }
-// header: x-introspect-secret: <INTROSPECT_SECRET>
-
-// response (success)
-{ "active": true, "user_id": "...", "credits_remaining": 12.5 }
-
-// response (insufficient)
-{ "active": false, "reason": "insufficient_credits" }
-
-// response (billing system error)
-{ "active": false, "reason": "billing_error" }
+```
+raw_usd       = compute_usd + egress_usd + llm_usd + base + surcharge
+sell_usd      = raw_usd × (1 + withholding) × (1 + margin) × (1 + iva)
+credits       = sell_usd / usd_per_credit
 ```
 
-Deduction is **atomic** server-side via the `deduct_credits_user` Postgres RPC. There is no race window.
+`compute_usd` and `egress_usd` come from the observed request duration + response size. **You don't need to do anything for these.**
 
-### 3.2 Required `credit.py` module
+`llm_usd` is OPTIONAL but recommended. Without it the gateway only bills compute (cheap). For LLM-heavy MCPs, report usage via the response `_meta` field — see 3.2.
 
-Drop this verbatim into `src/credit.py` (or `tools/credit.py`) of every new MCP. Adjust default cost to match the cost table:
+### 3.2 `_meta` reporting contract
+
+When your tool calls one or more LLMs, attach a `_meta` block to the response JSON. Two equivalent forms; pick whichever is easier:
+
+**Form A — token counts (preferred):**
 
 ```python
-"""Per-LLM-call credit deduction via mcp-oauth-server /introspect."""
-import os
-from contextvars import ContextVar
-
-import requests
-
-# Set by BearerAuthMiddleware from X-User-Token header — read by deduct_credits.
-current_user_token: ContextVar[str | None] = ContextVar("current_user_token", default=None)
-
-COST_PER_LLM_CALL: float = float(os.getenv("CREDIT_COST_PER_LLM_CALL", "3.0"))
-
-
-def deduct_credits(upstream_name: str = "mcp-yourname") -> bool:
-    """Deduct credits before an LLM/API call. Return True to proceed, False to abort.
-
-    Fail-open policy:
-      - missing token (stdio/dev mode)        → allow
-      - cost <= 0                              → allow
-      - misconfigured (no URL/secret)          → allow
-      - HTTP error / timeout                   → allow (don't block on infra)
-    Fail-closed:
-      - oauth-server returns active=false      → reject
-    """
-    token = current_user_token.get()
-    if not token:
-        return True
-    cost = COST_PER_LLM_CALL
-    if cost <= 0:
-        return True
-    base_url = os.getenv("OAUTH_ISSUER_URL", "").rstrip("/")
-    secret = os.getenv("INTROSPECT_SECRET", "").strip()
-    if not base_url or not secret:
-        return True
-    try:
-        resp = requests.post(
-            f"{base_url}/introspect",
-            json={"token": token, "cost": cost, "upstream": upstream_name},
-            headers={"x-introspect-secret": secret},
-            timeout=5.0,
-        )
-        if resp.status_code != 200:
-            return True
-        return resp.json().get("active", False)
-    except Exception:
-        return True
+return {
+    "content": [...],
+    "_meta": {
+        "llm": {
+            "model": "claude-sonnet-4-6",
+            "input_tokens": 1240,
+            "output_tokens": 380,
+            "cached_input_tokens": 0,  # optional
+        },
+    },
+}
 ```
 
-### 3.3 Wiring `current_user_token` from middleware
+The gateway looks up `model_prices` and computes `llm_usd` itself. List of priced models is in the `model_prices` Supabase table and editable via `/admin/cost-model/models`.
 
-In `BearerAuthMiddleware.__call__`, after extracting headers, set the ContextVar so `deduct_credits()` can read it deeper in the call stack:
+**Form B — USD passthrough:**
 
 ```python
-from src.credit import current_user_token
-
-user_token_header = headers.get(b"x-user-token", b"").decode().strip() or None
-ctx_user_token = current_user_token.set(user_token_header)
-try:
-    await self.app(scope, receive, send)
-finally:
-    current_user_token.reset(ctx_user_token)
+return {
+    "content": [...],
+    "_meta": {"usage_usd": 0.0127},  # exact LLM cost in USD
+}
 ```
 
-### 3.4 Where to place the guard
+Use this when the model isn't priced yet, or when you've already paid an upstream provider (e.g. OpenRouter returned a USD cost in the response).
 
-**Place the guard on the actual API-calling function, not on routers/dispatchers.** One LLM call = one deduction. Do NOT guard CRUD / DB-only endpoints.
+If both fields are present, `usage_usd` wins.
 
-```python
-# Correct — guard at the LLM call site
-async def stream_llm_response(prompt: str):
-    if not deduct_credits():
-        yield f"data: {json.dumps({'error': 'Insufficient credits'})}\n\n"
-        return
-    # ... actually call OpenAI/Anthropic/etc.
-```
+### 3.3 Multi-step LLM orchestration
 
-Patterns by response type:
+If your tool makes several LLM calls before responding, sum the costs and report once in `_meta`. Either:
 
-- **Streaming (SSE)**: yield an `error` event then `return`.
-- **JSON**: `raise HTTPException(status_code=402, detail="Insufficient credits")` (HTTP 402 Payment Required).
-- **Plain function**: return a sentinel error result your caller already handles.
+- Aggregate token counts per model into `_meta.llm` (if all calls used the same model), OR
+- Set `_meta.usage_usd` to the total USD spend.
 
-### 3.5 Cost table (current production values)
+### 3.4 Errors
 
-| MCP | Cost / call | Reasoning |
-|-----|-------------|-----------|
-| mcp-linguist | 3.0 | Single Anthropic translate call |
-| mcp-scholar | 3.0 | Single Anthropic chat call |
-| mcp-loom | 5.0 | Multi-step LLM orchestration |
-| mcp-dsmoz-nexus | 5.0 | Multi-step retrieval + chat |
-| mcp-design-engine | 5.0 | Image/video generation API |
-| mcp-academia | 0.0 | No direct LLM calls (delegates to linguist) |
-| mcp-surveylab | 0.0 | Pure stats — numpy/pandas |
+If your tool returns an error response (`isError: true` or `{"error": "..."}`), the gateway **does not bill**. Free tries on errors are intentional — don't game it by silently swallowing exceptions.
 
-New MCPs default to **3.0** unless they orchestrate multiple model calls or hit expensive paid APIs.
+### 3.5 What NOT to do
+
+- ❌ Do not import a `credit.py` module that calls `/introspect` with a `cost` field — that field is now ignored, but the call itself wastes a round-trip.
+- ❌ Do not write to `users.credit_balance` directly.
+- ❌ Do not hard-code a flat `CREDIT_COST_PER_LLM_CALL` env var.
+- ❌ Do not refuse to serve on insufficient credits — the gateway's pre-call balance check handles that.
 
 ---
 
 ## 4. Gateway Registration
 
-Once your upstream is deployed and credit-gated:
+Once your upstream is deployed:
 
-1. **Generate an upstream API key** (32 random bytes, base64) — this is the token the gateway uses to authenticate as itself when proxying. Add it to your upstream's `API_TOKENS` env var.
+1. **Generate an upstream API key** (32 random bytes, base64) — gateway uses this to authenticate as itself when proxying. Add it to your upstream's `API_TOKENS` env var.
 2. **In the admin panel** (`/admin/catalogue/new`), register the MCP:
    - **Slug**: short machine key (`linguist`, `scholar`, …) — immutable.
    - **Display Name** + **Description** (use "Generate Description" after first save).
    - **Category** + **Tier** (standard or super).
    - **Upstream URL**: `https://mcp-<slug>-production.up.railway.app/mcp`.
    - **API Key**: paste the upstream API key.
-   - **Credit Cost Per Call**: must match the upstream's `CREDIT_COST_PER_LLM_CALL`. This value is informational for the user (gateway does not enforce it — the upstream does, atomically).
    - **Config Schema**: JSON array of credential fields the user must fill in (see [`per-user-mcp-credentials.md`](per-user-mcp-credentials.md) for schema format).
-3. **Test end-to-end**: enable the MCP from `/portal/toolbox`, invoke a tool, check that credit balance decreases and `oauth_usage_logs` records the call.
+   - `credit_cost_per_call` column is **deprecated** — leave at 0; gateway computes cost from the formula.
+3. **Cost profile** (optional): in `/admin/cost-model/profiles`, attach a `compute_rate_name` (e.g. `high-mem` for memory-heavy services) and a `fixed_surcharge_usd` (e.g. for paid API passthroughs not modeled as tokens).
+4. **Test end-to-end**: enable from `/portal/toolbox`, invoke a tool, verify `oauth_usage_logs` records `compute_usd`, `llm_usd`, `sell_usd`, `credits_charged`.
 
 ---
 
@@ -221,12 +176,12 @@ Once your upstream is deployed and credit-gated:
 ### 5.1 Pre-deploy checklist (new MCP)
 
 - [ ] `BearerAuthMiddleware` copied + adapted; supports all 4 tiers.
-- [ ] `credit.py` module present with correct `COST_PER_LLM_CALL` default.
-- [ ] All LLM/expensive-API call sites guarded with `if not deduct_credits(): ...`.
-- [ ] `current_user_token.set(...)` wired in middleware.
+- [ ] `current_user_token` ContextVar wired from `X-User-Token` header.
+- [ ] All LLM call sites attach `_meta.llm` or `_meta.usage_usd` to the response.
+- [ ] Errors return `isError: true` (gateway skips billing on errors).
 - [ ] Health endpoint at `/health` (skipped by middleware).
-- [ ] Tests cover: insufficient credits → reject, no token → allow (stdio mode), introspect 5xx → allow.
-- [ ] No direct DB writes to `users.credit_balance` from upstream — only via `/introspect`.
+- [ ] Tests cover: introspect 200/active → allow, introspect inactive → reject, no token → allow (stdio mode), `_meta` propagated to response.
+- [ ] **No `credit.py` self-deduction code.** No `CREDIT_COST_PER_LLM_CALL` env var.
 
 ### 5.2 Railway env vars (per upstream)
 
@@ -234,39 +189,44 @@ Once your upstream is deployed and credit-gated:
 railway variables --service mcp-<slug> \
   --set "OAUTH_ISSUER_URL=https://connect.dsmozconsultancy.com" \
   --set "INTROSPECT_SECRET=<shared_secret>" \
-  --set "CREDIT_COST_PER_LLM_CALL=<3.0|5.0>" \
   --set "API_TOKENS=<gateway_upstream_token>"
 ```
 
 Then `railway redeploy --service mcp-<slug>` to pick up.
 
-### 5.3 Admin onboarding checklist
+### 5.3 Migration of an existing MCP from flat-fee to formula model
 
-- [ ] Register MCP via `/admin/catalogue/new`.
-- [ ] Set Telegram bot settings (`/admin/settings` → Telegram Bot) so registration/topup notifications work.
-- [ ] Smoke test: enable MCP from a test user's `/portal/toolbox`, invoke a free meta-tool (`list_mcp_tools`), then a paid tool, verify deduction.
+1. Delete `src/credit.py` (or `tools/credit.py`).
+2. Remove all `if not deduct_credits(): ...` guards.
+3. Remove `CREDIT_COST_PER_LLM_CALL` and `INTROSPECT_SECRET` from your tool-call logic (`INTROSPECT_SECRET` stays in env for token validation by middleware, just not consulted for deduction).
+4. Attach `_meta.llm` (or `_meta.usage_usd`) to every tool response that involves LLM work.
+5. Set `mcp_catalogue.credit_cost_per_call = 0` for your slug.
+6. Redeploy.
 
 ---
 
 ## 6. Anti-Patterns (Don't Do This)
 
-- **Direct DB credit deduction** from upstream — defeats atomicity, races with gateway.
+- **Self-deduction via `/introspect`** — gateway is the sole biller. `cost` field is ignored by the IDP. Remove this code.
+- **Direct DB credit writes** from upstream — defeats atomicity, races with gateway.
 - **Caching `/introspect` results past 60s** without honouring the token's `exp` — security risk.
-- **Guarding cheap endpoints** (CRUD, listings, health) — degrades UX, wastes credits.
+- **Guarding cheap endpoints** (CRUD, listings, health) — gateway's pre-call balance check is enough.
 - **Failing closed on introspect timeouts** — outages on the oauth-server should not cascade to all upstreams.
-- **Storing user credentials in DB** when the user already supplies them per-call via `X-MCP-Credentials` — use the gateway-forwarded creds instead.
+- **Storing user credentials in DB** when the user already supplies them per-call via `X-MCP-Credentials` — use gateway-forwarded creds instead.
 - **Bearer token in query string** — leaks into logs/referrers. Headers only.
+- **Swallowing errors silently** to avoid `isError: true` — that breaks free-tries-on-errors and is dishonest. Return proper error responses.
 
 ---
 
 ## 7. References
 
+- [Pricing model v1 (2026-05-20)](../../OneDrive-dsmozconsultancy.com/Consultancies/_ADMIN/Reference-Documents/2026-05-20_saas-mcp-pricing-model.md) — formula, tax stack, package design, change log.
 - [`per-user-oauth-billing.md`](per-user-oauth-billing.md) — billing integration deep dive.
 - [`per-user-mcp-credentials.md`](per-user-mcp-credentials.md) — credential storage / config schema.
 - Reference implementations:
-  - [`mcp-scholar`](../../mcp-servers/mcp-scholar/) — full BearerAuthMiddleware + credit guards.
-  - [`mcp-linguist`](../../mcp-servers/mcp-linguist/) — minimal upstream pattern.
+  - [`mcp-scholar`](../../mcp-servers/mcp-scholar/) — full BearerAuthMiddleware + `_meta` reporting.
 - Code locations in this repo:
-  - Gateway forwarding: `src/gateway/routes.py`
+  - Gateway billing: `src/gateway/billing.py`
+  - Gateway forwarding + post-call settlement: `src/gateway/routes.py`
   - `/introspect` endpoint: `src/oauth/routes.py`
-  - Atomic deduction RPC: see `migrations/2026-05-15_credit_costs_and_topup_requests.sql`
+  - Pricing migration: `migrations/2026-05-20_pricing_model.sql`

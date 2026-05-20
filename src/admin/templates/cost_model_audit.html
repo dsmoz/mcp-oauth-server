@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Cost Audit — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Cost Audit</h1>
+  <a href="/admin/cost-model/" class="btn btn-secondary"><i class="ph-light ph-arrow-left"></i> Back</a>
+</div>
+
+<p style="color:var(--text-muted);font-size:0.9rem">
+  Most recent {{ rows|length }} entries from <code>oauth_usage_logs</code>. Filter <code>?limit=N</code>.
+</p>
+
+<div class="card" style="padding:0;overflow:hidden;overflow-x:auto">
+  <table style="font-size:0.85rem">
+    <thead>
+      <tr>
+        <th>Timestamp</th>
+        <th>User</th>
+        <th>Client</th>
+        <th>Endpoint</th>
+        <th>Dur (ms)</th>
+        <th>Bytes</th>
+        <th>Compute $</th>
+        <th>LLM $</th>
+        <th>Raw $</th>
+        <th>Sell $</th>
+        <th>Credits</th>
+        <th>Model</th>
+        <th>Tokens</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td style="font-family:monospace;font-size:0.75rem">{{ r.created_at[:19] if r.created_at else '' }}</td>
+        <td style="font-family:monospace;font-size:0.75rem">{{ (r.user_id or '')[:8] }}</td>
+        <td style="font-family:monospace;font-size:0.75rem">{{ (r.client_id or '')[:14] }}</td>
+        <td>{{ r.endpoint or '—' }}</td>
+        <td>{{ r.duration_ms or '' }}</td>
+        <td>{{ r.response_bytes or '' }}</td>
+        <td>{% if r.compute_usd is not none %}{{ '%.6f'|format(r.compute_usd|float) }}{% else %}—{% endif %}</td>
+        <td>{% if r.llm_usd is not none %}{{ '%.6f'|format(r.llm_usd|float) }}{% else %}—{% endif %}</td>
+        <td>{% if r.raw_usd is not none %}{{ '%.6f'|format(r.raw_usd|float) }}{% else %}—{% endif %}</td>
+        <td>{% if r.sell_usd is not none %}{{ '%.6f'|format(r.sell_usd|float) }}{% else %}—{% endif %}</td>
+        <td>
+          {% if r.credits_charged is not none %}
+            <strong>{{ '%.4f'|format(r.credits_charged|float) }}</strong>
+          {% else %}
+            {{ '%.2f'|format((r.credits_used or 0)|float) }}
+          {% endif %}
+        </td>
+        <td style="font-size:0.75rem"><code>{{ r.model_used or '' }}</code></td>
+        <td style="font-size:0.75rem">{{ r.input_tokens or 0 }}/{{ r.output_tokens or 0 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="margin-top:1rem;display:flex;gap:0.5rem">
+  <a href="?limit=50" class="btn btn-secondary btn-sm">50</a>
+  <a href="?limit=200" class="btn btn-secondary btn-sm">200</a>
+  <a href="?limit=500" class="btn btn-secondary btn-sm">500</a>
+  <a href="?limit=1000" class="btn btn-secondary btn-sm">1000</a>
+</div>
+{% endblock %}

@@ -644,6 +644,8 @@ async def approve_registration(
             display_name=reg["company_name"],
             is_active=False,  # flipped to True once password is set
         )
+        from src.users.provider import apply_signup_grant
+        apply_signup_grant(user.user_id)
 
     # Generate per-device client credentials, bound to the user
     client_id = generate_client_id()

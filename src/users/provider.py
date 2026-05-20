@@ -5,11 +5,73 @@ here. OAuth clients are per-device and reference users via user_id.
 """
 from __future__ import annotations
 
+import sys
+from datetime import datetime, timezone
 from typing import Optional
 
 from src.crypto import generate_user_id, hash_secret, verify_secret
 from src.db import get_db
 from src.models import User
+
+
+def apply_signup_grant(user_id: str) -> float:
+    """Grant the auto-grant Trial pack credits to a brand-new user.
+
+    Idempotent: guarded by ``users.signup_grant_at IS NULL``. Logs the grant
+    to ``oauth_usage_logs`` with ``endpoint='signup/grant'`` for audit.
+    Returns the granted amount (0 if already granted or no Trial pack found).
+    """
+    db = get_db()
+    try:
+        u = db.table("users").select("signup_grant_at,credit_balance").eq("user_id", user_id).limit(1).execute()
+        if not u.data:
+            return 0.0
+        if u.data[0].get("signup_grant_at"):
+            return 0.0
+        cur = float(u.data[0].get("credit_balance") or 0)
+
+        pack = (
+            db.table("topup_packages")
+            .select("credits,name")
+            .eq("auto_grant_on_signup", True)
+            .eq("is_published", True)
+            .limit(1)
+            .execute()
+        )
+        # Fall back to any auto-grant pack even if unpublished (Trial defaults to is_published=false)
+        if not pack.data:
+            pack = (
+                db.table("topup_packages")
+                .select("credits,name")
+                .eq("auto_grant_on_signup", True)
+                .limit(1)
+                .execute()
+            )
+        if not pack.data:
+            return 0.0
+        amount = float(pack.data[0].get("credits") or 0)
+        if amount <= 0:
+            return 0.0
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        db.table("users").update({
+            "credit_balance": cur + amount,
+            "signup_grant_at": now_iso,
+        }).eq("user_id", user_id).execute()
+
+        try:
+            db.table("oauth_usage_logs").insert({
+                "user_id": user_id,
+                "client_id": "signup",
+                "credits_used": -amount,  # negative = grant (credit)
+                "endpoint": "signup/grant",
+            }).execute()
+        except Exception as exc:
+            print(f"WARNING: signup grant log failed for {user_id}: {exc}", file=sys.stderr)
+        return amount
+    except Exception as exc:
+        print(f"WARNING: signup grant failed for {user_id}: {exc}", file=sys.stderr)
+        return 0.0
 
 
 class SupabaseUserProvider:

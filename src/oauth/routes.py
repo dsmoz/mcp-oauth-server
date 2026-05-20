@@ -424,34 +424,40 @@ async def introspect(
     ):
         raise HTTPException(status_code=403, detail="forbidden")
 
-    provider = _provider()
-    at = provider.load_access_token(body.token)
+    # Agent tokens (long-lived PATs minted from /portal/setup) live in a
+    # separate table from OAuth access tokens. Support both transparently so
+    # upstream MCPs don't need to care which kind of bearer they received.
+    if body.token and body.token.startswith("dsmoz_"):
+        from src.users.agent_tokens import AgentTokenProvider
+        agent_row = AgentTokenProvider().lookup(body.token)
+        if not agent_row:
+            return JSONResponse({"active": False})
+        from types import SimpleNamespace
+        at = SimpleNamespace(
+            token=body.token,
+            user_id=agent_row["user_id"],
+            client_id="agent-token",
+            scopes=["mcp"],
+            expires_at=None,
+            is_revoked=False,
+        )
+    else:
+        provider = _provider()
+        at = provider.load_access_token(body.token)
 
-    if at is None or at.is_revoked:
-        return JSONResponse({"active": False})
+        if at is None or at.is_revoked:
+            return JSONResponse({"active": False})
 
-    from src.crypto import now_unix
-    if at.expires_at and at.expires_at < now_unix():
-        return JSONResponse({"active": False})
+        from src.crypto import now_unix
+        if at.expires_at and at.expires_at < now_unix():
+            return JSONResponse({"active": False})
 
-    # Optional atomic credit deduction. When ``cost`` is None or <= 0 we keep
-    # the legacy behaviour (no deduction, no ``credits_remaining`` field) so
-    # existing callers — notably the MCP gateway — are unaffected.
+    # As of pricing model v1 (2026-05-20) the gateway is the sole biller — it
+    # deducts post-call from observed compute + LLM cost. Upstreams MUST NOT
+    # request deduction here. We ignore ``body.cost`` so any lingering
+    # self-deduction code on old upstream deployments becomes a no-op (token
+    # validity still checked, no double-charge).
     credits_remaining: float | None = None
-    if body.cost is not None and body.cost > 0:
-        status, new_balance = _deduct_or_reject(at.user_id, body.cost)
-        if status == "insufficient":
-            return JSONResponse(
-                {"active": False, "reason": "insufficient_credits"},
-                status_code=200,
-            )
-        if status == "error":
-            # Fail closed on billing system failure — never grant a free call.
-            return JSONResponse(
-                {"active": False, "reason": "billing_error"},
-                status_code=200,
-            )
-        credits_remaining = new_balance
 
     # Log usage — fire and forget, never block the response. We reuse the
     # oauth_usage_logs schema the gateway already writes to.
@@ -459,7 +465,7 @@ async def introspect(
         log_row: dict = {
             "client_id": at.client_id,
             "user_id": at.user_id,
-            "credits_used": body.cost or 0,
+            "credits_used": 0,  # gateway is sole biller; introspect never charges
         }
         if body.upstream:
             log_row["endpoint"] = f"introspect/{body.upstream}"
@@ -623,12 +629,16 @@ async def register_submit(
         user = users.create_user(
             email=contact_email,
             display_name=contact_name,
-            credit_balance=5.0,
+            credit_balance=0.0,
             allowed_mcp_resources=allowed_mcps,
             is_active=False,
         )
     except ValueError:
         return RedirectResponse(url="/register/success", status_code=303)
+
+    # Auto-grant Trial pack credits (idempotent via signup_grant_at).
+    from src.users.provider import apply_signup_grant
+    apply_signup_grant(user.user_id)
 
     # Create an OAuth client bound to the user (claimed on creation).
     client_id = generate_client_id()
