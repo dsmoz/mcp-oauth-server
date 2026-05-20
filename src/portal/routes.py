@@ -741,6 +741,26 @@ async def portal_mcps_get(request: Request, user_id: str = Depends(_require_port
     )
     user_configs: dict = {r["mcp_slug"]: r["config"] for r in config_rows}
 
+    # Microsoft 365 connection status — surfaced only when mcp-microsoft365 is
+    # in the catalogue so users see a Connect/Disconnect button.
+    ms365_connected = False
+    ms365_upn: Optional[str] = None
+    try:
+        from src.integrations.microsoft_graph import _get_row
+        row = _get_row(user_id)
+        if row:
+            ms365_connected = True
+            ms365_upn = row.get("ms_user_principal_name")
+    except Exception:
+        pass
+
+    # Surface ms365 banner from connect/disconnect/error redirect params.
+    ms365_banner = {
+        "ok": request.query_params.get("ms365_ok"),
+        "error": request.query_params.get("ms365_error"),
+        "status": request.query_params.get("ms365"),  # 'connected' | 'disconnected'
+    }
+
     client_ctx = {
         "client_id": user_id,
         "client_name": user.display_name or user.email,
@@ -755,6 +775,9 @@ async def portal_mcps_get(request: Request, user_id: str = Depends(_require_port
             "catalogue": catalogue,
             "enabled": enabled,
             "user_configs": user_configs,
+            "ms365_connected": ms365_connected,
+            "ms365_upn": ms365_upn,
+            "ms365_banner": ms365_banner,
         }
     )
 
