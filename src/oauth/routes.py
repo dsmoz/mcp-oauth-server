@@ -80,10 +80,14 @@ async def oauth_protected_resource(request: Request, path: str = ""):
     not match the path-specific resource URI.
     """
     base = get_settings().OAUTH_ISSUER_URL.rstrip("/")
-    # Strip trailing punctuation (e.g. ".") that some clients include when
-    # the connector URL was pasted from the end of a sentence.
-    normalized_path = path.rstrip("./") if path else ""
-    resource = f"{base}/{normalized_path}" if normalized_path else base
+    # Echo the requested path verbatim. RFC 8707 strict clients (Claude.ai)
+    # verify that the `resource` field matches the URL they registered the
+    # connector with — even quirks like a trailing "." must be preserved or
+    # the client treats the connector as misconfigured and refuses to list
+    # tools. Server-side path tolerance is handled separately in
+    # _gateway_asgi (rstrip on url_user_id) so the dotted URL still resolves
+    # to the same user.
+    resource = f"{base}/{path}" if path else base
     return JSONResponse(
         {
             "resource": resource,
