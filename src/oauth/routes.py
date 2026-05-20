@@ -506,10 +506,17 @@ def _verify_captcha(user_answer: str, signed_answer: str) -> bool:
 @router.get("/register", response_class=HTMLResponse)
 async def register_get(request: Request):
     question, signed = _make_captcha()
+    from src.portal.social import provider_enabled
     return templates.TemplateResponse(
         request=request,
         name="register.html",
-        context={"error": None, "captcha_question": question, "captcha_signed": signed},
+        context={
+            "error": None,
+            "captcha_question": question,
+            "captcha_signed": signed,
+            "google_enabled": provider_enabled("google"),
+            "microsoft_enabled": provider_enabled("microsoft"),
+        },
     )
 
 
@@ -553,6 +560,8 @@ async def register_submit(
                 "company_name": company_name,
                 "contact_name": contact_name,
                 "contact_email": contact_email,
+                "google_enabled": __import__("src.portal.social", fromlist=["provider_enabled"]).provider_enabled("google"),
+                "microsoft_enabled": __import__("src.portal.social", fromlist=["provider_enabled"]).provider_enabled("microsoft"),
             },
             status_code=422,
         )
@@ -567,10 +576,13 @@ async def register_submit(
 
     # Create user row (the tenant). Inactive until password is set via email link.
     existing = users.get_user_by_email(contact_email)
-    if existing is not None and not existing.is_active:
-        # Retry path: unconfirmed user — mint fresh setup token + resend email.
+    if existing is not None and not existing.is_active and not existing.password_hash:
+        # Retry path: genuinely unconfirmed user (no password ever set) — mint
+        # fresh setup token + resend email. Inactive accounts that already have
+        # a password fall through to the "account exists" branch instead, so
+        # setup links cannot be used to reset an existing password.
         from src.portal.routes import create_setup_token
-        setup_token = create_setup_token(existing.user_id)
+        setup_token = create_setup_token(existing.user_id, purpose="setup")
         try:
             await em.send_approval_email(
                 contact_name=contact_name,
@@ -595,6 +607,8 @@ async def register_submit(
                 "company_name": company_name,
                 "contact_name": contact_name,
                 "contact_email": contact_email,
+                "google_enabled": __import__("src.portal.social", fromlist=["provider_enabled"]).provider_enabled("google"),
+                "microsoft_enabled": __import__("src.portal.social", fromlist=["provider_enabled"]).provider_enabled("microsoft"),
             },
             status_code=409,
         )
@@ -644,7 +658,7 @@ async def register_submit(
 
     # Generate portal setup token (one-time 24h link to set password). Keyed on user_id.
     from src.portal.routes import create_setup_token
-    setup_token = create_setup_token(user.user_id)
+    setup_token = create_setup_token(user.user_id, purpose="setup")
 
     # Send credentials email
     try:
