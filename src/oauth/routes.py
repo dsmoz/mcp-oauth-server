@@ -506,7 +506,7 @@ def _verify_captcha(user_answer: str, signed_answer: str) -> bool:
 @router.get("/register", response_class=HTMLResponse)
 async def register_get(request: Request):
     question, signed = _make_captcha()
-    s = get_settings()
+    from src.portal.social import provider_enabled
     return templates.TemplateResponse(
         request=request,
         name="register.html",
@@ -514,8 +514,8 @@ async def register_get(request: Request):
             "error": None,
             "captcha_question": question,
             "captcha_signed": signed,
-            "google_enabled": bool(s.GOOGLE_OAUTH_CLIENT_ID),
-            "microsoft_enabled": bool(s.MICROSOFT_OAUTH_CLIENT_ID),
+            "google_enabled": provider_enabled("google"),
+            "microsoft_enabled": provider_enabled("microsoft"),
         },
     )
 
@@ -560,8 +560,8 @@ async def register_submit(
                 "company_name": company_name,
                 "contact_name": contact_name,
                 "contact_email": contact_email,
-                "google_enabled": bool(get_settings().GOOGLE_OAUTH_CLIENT_ID),
-                "microsoft_enabled": bool(get_settings().MICROSOFT_OAUTH_CLIENT_ID),
+                "google_enabled": __import__("src.portal.social", fromlist=["provider_enabled"]).provider_enabled("google"),
+                "microsoft_enabled": __import__("src.portal.social", fromlist=["provider_enabled"]).provider_enabled("microsoft"),
             },
             status_code=422,
         )
@@ -604,8 +604,8 @@ async def register_submit(
                 "company_name": company_name,
                 "contact_name": contact_name,
                 "contact_email": contact_email,
-                "google_enabled": bool(get_settings().GOOGLE_OAUTH_CLIENT_ID),
-                "microsoft_enabled": bool(get_settings().MICROSOFT_OAUTH_CLIENT_ID),
+                "google_enabled": __import__("src.portal.social", fromlist=["provider_enabled"]).provider_enabled("google"),
+                "microsoft_enabled": __import__("src.portal.social", fromlist=["provider_enabled"]).provider_enabled("microsoft"),
             },
             status_code=409,
         )

@@ -219,7 +219,7 @@ async def portal_login_get(
                 response = _complete_oauth_session(next_session, user_id)
                 if response is not None:
                     return response
-    s = get_settings()
+    from src.portal.social import provider_enabled
     return templates.TemplateResponse(
         request=request,
         name="portal_login.html",
@@ -227,8 +227,8 @@ async def portal_login_get(
             "error": error,
             "next_session": next_session,
             "next_path": next_path,
-            "google_enabled": bool(s.GOOGLE_OAUTH_CLIENT_ID),
-            "microsoft_enabled": bool(s.MICROSOFT_OAUTH_CLIENT_ID),
+            "google_enabled": provider_enabled("google"),
+            "microsoft_enabled": provider_enabled("microsoft"),
         },
     )
 

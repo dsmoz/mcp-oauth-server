@@ -32,33 +32,71 @@ _STATE_COOKIE = "portal_social_state"
 
 
 # ── Provider config ──────────────────────────────────────────────────────────
+#
+# Credentials are admin-managed via the admin_settings table (see
+# `social_auth` category). Env vars stay as a fallback for local dev and
+# bootstrap. DB value (when non-empty) wins.
 
-def _provider_config(provider: str) -> dict:
+def _resolve(db_key: str, env_value: str) -> str:
+    try:
+        from src.admin.settings import get_setting
+        v = get_setting(db_key)
+        if v:
+            return v
+    except Exception:
+        pass
+    return env_value or ""
+
+
+def _provider_creds(provider: str) -> tuple[str, str, str]:
+    """Return (client_id, client_secret, extra) for a provider. `extra` is the
+    Microsoft tenant; empty for Google."""
     s = get_settings()
     if provider == "google":
-        if not s.GOOGLE_OAUTH_CLIENT_ID or not s.GOOGLE_OAUTH_CLIENT_SECRET:
-            raise HTTPException(status_code=503, detail="Google sign-in not configured")
+        return (
+            _resolve("google_oauth_client_id", s.GOOGLE_OAUTH_CLIENT_ID),
+            _resolve("google_oauth_client_secret", s.GOOGLE_OAUTH_CLIENT_SECRET),
+            "",
+        )
+    if provider == "microsoft":
+        return (
+            _resolve("microsoft_oauth_client_id", s.MICROSOFT_OAUTH_CLIENT_ID),
+            _resolve("microsoft_oauth_client_secret", s.MICROSOFT_OAUTH_CLIENT_SECRET),
+            _resolve("microsoft_oauth_tenant", s.MICROSOFT_OAUTH_TENANT) or "common",
+        )
+    raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+
+
+def provider_enabled(provider: str) -> bool:
+    """True when both client_id and client_secret are present (DB or env)."""
+    try:
+        cid, secret, _ = _provider_creds(provider)
+    except HTTPException:
+        return False
+    return bool(cid and secret)
+
+
+def _provider_config(provider: str) -> dict:
+    client_id, client_secret, tenant = _provider_creds(provider)
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=503, detail=f"{provider.title()} sign-in not configured")
+    if provider == "google":
         return {
-            "client_id": s.GOOGLE_OAUTH_CLIENT_ID,
-            "client_secret": s.GOOGLE_OAUTH_CLIENT_SECRET,
+            "client_id": client_id,
+            "client_secret": client_secret,
             "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
             "token_url": "https://oauth2.googleapis.com/token",
             "userinfo_url": "https://openidconnect.googleapis.com/v1/userinfo",
             "scopes": "openid email profile",
         }
-    if provider == "microsoft":
-        if not s.MICROSOFT_OAUTH_CLIENT_ID or not s.MICROSOFT_OAUTH_CLIENT_SECRET:
-            raise HTTPException(status_code=503, detail="Microsoft sign-in not configured")
-        tenant = s.MICROSOFT_OAUTH_TENANT or "common"
-        return {
-            "client_id": s.MICROSOFT_OAUTH_CLIENT_ID,
-            "client_secret": s.MICROSOFT_OAUTH_CLIENT_SECRET,
-            "authorize_url": f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize",
-            "token_url": f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
-            "userinfo_url": "https://graph.microsoft.com/oidc/userinfo",
-            "scopes": "openid email profile",
-        }
-    raise HTTPException(status_code=404, detail=f"Unknown provider: {provider}")
+    return {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "authorize_url": f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize",
+        "token_url": f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token",
+        "userinfo_url": "https://graph.microsoft.com/oidc/userinfo",
+        "scopes": "openid email profile",
+    }
 
 
 def _redirect_uri(provider: str) -> str:
