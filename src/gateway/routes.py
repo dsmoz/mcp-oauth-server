@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 import time
 
@@ -780,20 +781,56 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
     async def _promoted_ui_tools() -> list[types.Tool]:
         """Discover UI-bearing upstream tools and expose them as first-class
         gateway tools named `{slug}__{tool_name}`. Preserves `_meta` so
-        MCP Apps hosts (Claude.ai, ChatGPT) can render their UI resource."""
+        MCP Apps hosts (Claude.ai, ChatGPT) can render their UI resource.
+
+        Bounded by MCP_PROMOTE_BUDGET (default 4s) so a single slow upstream
+        cannot stall `list_tools` past the client's deadline. Skipped MCPs
+        get retried on the next list_tools call; meta-tools always return.
+        """
         promoted: list[types.Tool] = []
-        tool_lists = await asyncio.gather(
-            *[_get_tools(mcp["slug"]) for mcp in enabled_mcps],
-            return_exceptions=True,
-        )
-        for mcp, tools in zip(enabled_mcps, tool_lists):
+        budget = float(os.getenv("MCP_PROMOTE_BUDGET", "4.0"))
+
+        async def _safe_get(slug: str):
+            try:
+                return slug, await _get_tools(slug)
+            except BaseException as exc:  # noqa: BLE001 — surface as result
+                return slug, exc
+
+        tasks = [
+            asyncio.create_task(_safe_get(m["slug"]), name=f"promote:{m['slug']}")
+            for m in enabled_mcps
+        ]
+        results: dict[str, object] = {}
+        if tasks:
+            done, pending = await asyncio.wait(tasks, timeout=budget)
+            for p in pending:
+                p.cancel()
+            if pending:
+                skipped = sorted(t.get_name().split(":", 1)[-1] for t in pending)
+                print(
+                    f"GATEWAY: UI-tool promotion budget {budget}s exceeded; "
+                    f"skipped this cycle: {skipped}",
+                    file=sys.stderr,
+                )
+            for d in done:
+                try:
+                    slug, tools_or_exc = d.result()
+                    results[slug] = tools_or_exc
+                except BaseException as exc:  # noqa: BLE001
+                    print(f"GATEWAY: UI-tool task crashed: {exc}", file=sys.stderr)
+
+        for mcp in enabled_mcps:
             slug = mcp["slug"]
+            tools = results.get(slug)
+            if tools is None:
+                continue
             if isinstance(tools, BaseException):
                 print(
                     f"GATEWAY: UI-tool discovery failed for {slug}, skipping: {tools}",
                     file=sys.stderr,
                 )
                 continue
+
             for t in tools:
                 if not _tool_has_ui(t):
                     continue
