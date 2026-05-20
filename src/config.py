@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     RAILWAY_PROJECT_IDS: str = ""  # Comma-separated; overrides RAILWAY_PROJECT_ID when set
     ANTHROPIC_API_KEY: str = ""
     TELEGRAM_WEBHOOK_SECRET: str = ""
+    # Social sign-in (Google + Microsoft). Buttons hidden when client_id blank.
+    GOOGLE_OAUTH_CLIENT_ID: str = ""
+    GOOGLE_OAUTH_CLIENT_SECRET: str = ""
+    MICROSOFT_OAUTH_CLIENT_ID: str = ""
+    MICROSOFT_OAUTH_CLIENT_SECRET: str = ""
+    MICROSOFT_OAUTH_TENANT: str = "common"
 
 
 @lru_cache()

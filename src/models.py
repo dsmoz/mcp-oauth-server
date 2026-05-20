@@ -15,6 +15,9 @@ class User(BaseModel):
     tier: str = "standard"
     is_active: bool = False
     is_admin: bool = False
+    oauth_provider: Optional[str] = None
+    oauth_sub: Optional[str] = None
+    avatar_url: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

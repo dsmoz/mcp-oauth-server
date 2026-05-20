@@ -63,6 +63,7 @@ CATEGORY_META = {
     "auth": {"label": "Authentication", "icon": "ph-shield-check", "order": 2},
     "notifications": {"label": "Notifications", "icon": "ph-bell", "order": 3},
     "telegram": {"label": "Telegram Bot", "icon": "ph-telegram-logo", "order": 4},
+    "social_auth": {"label": "Social Sign-In", "icon": "ph-users", "order": 7},
     "search": {"label": "Search & Indexing", "icon": "ph-magnifying-glass", "order": 5},
     "branding": {"label": "Branding", "icon": "ph-palette", "order": 6},
 }
