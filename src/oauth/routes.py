@@ -506,10 +506,17 @@ def _verify_captcha(user_answer: str, signed_answer: str) -> bool:
 @router.get("/register", response_class=HTMLResponse)
 async def register_get(request: Request):
     question, signed = _make_captcha()
+    s = get_settings()
     return templates.TemplateResponse(
         request=request,
         name="register.html",
-        context={"error": None, "captcha_question": question, "captcha_signed": signed},
+        context={
+            "error": None,
+            "captcha_question": question,
+            "captcha_signed": signed,
+            "google_enabled": bool(s.GOOGLE_OAUTH_CLIENT_ID),
+            "microsoft_enabled": bool(s.MICROSOFT_OAUTH_CLIENT_ID),
+        },
     )
 
 
@@ -553,6 +560,8 @@ async def register_submit(
                 "company_name": company_name,
                 "contact_name": contact_name,
                 "contact_email": contact_email,
+                "google_enabled": bool(get_settings().GOOGLE_OAUTH_CLIENT_ID),
+                "microsoft_enabled": bool(get_settings().MICROSOFT_OAUTH_CLIENT_ID),
             },
             status_code=422,
         )
@@ -595,6 +604,8 @@ async def register_submit(
                 "company_name": company_name,
                 "contact_name": contact_name,
                 "contact_email": contact_email,
+                "google_enabled": bool(get_settings().GOOGLE_OAUTH_CLIENT_ID),
+                "microsoft_enabled": bool(get_settings().MICROSOFT_OAUTH_CLIENT_ID),
             },
             status_code=409,
         )

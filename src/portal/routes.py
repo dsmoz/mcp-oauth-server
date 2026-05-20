@@ -202,6 +202,7 @@ async def portal_login_get(
     request: Request,
     next_session: Optional[str] = Query(None),
     next: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
 ):
     next_path = _safe_next(next)
     # If already signed in, send straight to next_path
@@ -218,10 +219,17 @@ async def portal_login_get(
                 response = _complete_oauth_session(next_session, user_id)
                 if response is not None:
                     return response
+    s = get_settings()
     return templates.TemplateResponse(
         request=request,
         name="portal_login.html",
-        context={"error": None, "next_session": next_session, "next_path": next_path},
+        context={
+            "error": error,
+            "next_session": next_session,
+            "next_path": next_path,
+            "google_enabled": bool(s.GOOGLE_OAUTH_CLIENT_ID),
+            "microsoft_enabled": bool(s.MICROSOFT_OAUTH_CLIENT_ID),
+        },
     )
 
 

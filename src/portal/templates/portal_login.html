@@ -124,6 +124,44 @@ input:focus {
   margin-top: 8px;
 }
 .btn-submit:hover { opacity: 0.88; }
+.social-stack { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+.btn-social {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: #FFFFFF;
+  border: 1px solid rgba(7,43,49,0.18);
+  border-radius: 4px;
+  color: #072B31;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-social:hover { background: #F4EDE8; border-color: rgba(7,43,49,0.30); }
+.btn-social svg { width: 18px; height: 18px; flex-shrink: 0; }
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6B7E81;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.divider::before, .divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(7,43,49,0.12);
+}
 .alert-error {
   background: rgba(185,28,28,0.08);
   border: 1px solid rgba(185,28,28,0.20);
@@ -163,6 +201,35 @@ input:focus {
 
     {% if error %}
     <div class="alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% set social_qs %}{% if next_session %}?next_session={{ next_session }}{% elif next_path %}?next={{ next_path | urlencode }}{% endif %}{% endset %}
+    {% if google_enabled or microsoft_enabled %}
+    <div class="social-stack">
+      {% if google_enabled %}
+      <a class="btn-social" href="/portal/oauth/google/start{{ social_qs }}">
+        <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/>
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.3 19 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.4 6.3 14.7z"/>
+          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2c-2 1.4-4.5 2.4-7.2 2.4-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.5 16.2 44 24 44z"/>
+          <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.6l6.2 5.2C41 36.2 44 30.6 44 24c0-1.2-.1-2.3-.4-3.5z"/>
+        </svg>
+        Continue with Google
+      </a>
+      {% endif %}
+      {% if microsoft_enabled %}
+      <a class="btn-social" href="/portal/oauth/microsoft/start{{ social_qs }}">
+        <svg viewBox="0 0 23 23" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path fill="#F25022" d="M1 1h10v10H1z"/>
+          <path fill="#7FBA00" d="M12 1h10v10H12z"/>
+          <path fill="#00A4EF" d="M1 12h10v10H1z"/>
+          <path fill="#FFB900" d="M12 12h10v10H12z"/>
+        </svg>
+        Continue with Microsoft
+      </a>
+      {% endif %}
+    </div>
+    <div class="divider">or sign in with email</div>
     {% endif %}
 
     <form method="post" action="/portal/login{% if next_session %}?next_session={{ next_session }}{% elif next_path %}?next={{ next_path | urlencode }}{% endif %}">

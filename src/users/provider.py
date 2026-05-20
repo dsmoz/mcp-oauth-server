@@ -44,6 +44,9 @@ class SupabaseUserProvider:
         credit_balance: float = 0.0,
         allowed_mcp_resources: Optional[list[str]] = None,
         is_active: bool = False,
+        oauth_provider: Optional[str] = None,
+        oauth_sub: Optional[str] = None,
+        avatar_url: Optional[str] = None,
     ) -> User:
         """Create a new user. Raises ValueError if email already exists."""
         existing = self.get_user_by_email(email)
@@ -59,12 +62,35 @@ class SupabaseUserProvider:
             "credit_balance": credit_balance,
             "allowed_mcp_resources": allowed_mcp_resources or [],
             "is_active": is_active,
+            "oauth_provider": oauth_provider,
+            "oauth_sub": oauth_sub,
+            "avatar_url": avatar_url,
         }
         try:
             self.db.table("users").insert(row).execute()
         except Exception as exc:
             raise ValueError("User creation failed") from exc
         return User(**row)
+
+    # ── Social sign-in helpers ───────────────────────────────────────────────
+
+    def get_user_by_oauth(self, provider: str, sub: str) -> Optional[User]:
+        row = self._single("users", oauth_provider=provider, oauth_sub=sub)
+        return User(**row) if row else None
+
+    def link_oauth(
+        self,
+        user_id: str,
+        provider: str,
+        sub: str,
+        avatar_url: Optional[str] = None,
+    ) -> None:
+        """Attach (provider, sub) to an existing user. Used for auto-link when
+        a social sign-in matches an email that already has a password account."""
+        patch: dict = {"oauth_provider": provider, "oauth_sub": sub}
+        if avatar_url:
+            patch["avatar_url"] = avatar_url
+        self.db.table("users").update(patch).eq("user_id", user_id).execute()
 
     def set_password(self, user_id: str, password: str) -> None:
         self.db.table("users").update(
