@@ -314,11 +314,14 @@ def _find_or_create_user(
     user = users.create_user(
         email=email,
         display_name=display_name,
-        credit_balance=5.0,
+        credit_balance=0.0,
         allowed_mcp_resources=allowed_mcps,
         is_active=True,
         oauth_provider=provider,
         oauth_sub=sub,
         avatar_url=avatar_url,
     )
+    # Auto-grant Trial pack credits (idempotent via signup_grant_at).
+    from src.users.provider import apply_signup_grant
+    apply_signup_grant(user.user_id)
     return user
