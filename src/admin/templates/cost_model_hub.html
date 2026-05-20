@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Cost Model — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Cost Model</h1>
+  <div style="display:flex;gap:0.5rem">
+    <a href="/admin/cost-model/models" class="btn btn-secondary"><i class="ph-light ph-brain"></i> Model prices</a>
+    <a href="/admin/cost-model/profiles" class="btn btn-secondary"><i class="ph-light ph-sliders-horizontal"></i> Per-MCP profiles</a>
+    <a href="/admin/cost-model/preview" class="btn btn-secondary"><i class="ph-light ph-calculator"></i> Preview</a>
+    <a href="/admin/cost-model/audit" class="btn btn-secondary"><i class="ph-light ph-list-magnifying-glass"></i> Audit</a>
+  </div>
+</div>
+
+{% if saved %}<div class="alert alert-success">Saved. Caches invalidated.</div>{% endif %}
+
+<div class="card" style="padding:1rem;margin-bottom:1rem">
+  <h2 style="margin-top:0">Pricing config</h2>
+  <p style="color:var(--text-muted);font-size:0.9rem">
+    Formula: <code>sell = raw × (1 + withholding) × (1 + margin) × (1 + iva)</code> &nbsp;·&nbsp; <code>credits = sell / usd_per_credit</code>
+  </p>
+  <form method="post" action="/admin/cost-model/" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem">
+    <label>Withholding rate
+      <input type="number" step="0.0001" min="0" name="withholding_rate"
+             value="{{ '%.4f'|format(pricing.withholding_rate|float) }}">
+      <small>0.0000 = suppliers invoice net (default).</small>
+    </label>
+    <label>Margin rate
+      <input type="number" step="0.0001" min="0" name="margin_rate"
+             value="{{ '%.4f'|format(pricing.margin_rate|float) }}">
+      <small>0.6000 = 60% margin on costs.</small>
+    </label>
+    <label>IVA rate
+      <input type="number" step="0.0001" min="0" name="iva_rate"
+             value="{{ '%.4f'|format(pricing.iva_rate|float) }}">
+      <small>0.1600 = Mozambique IVA 16%.</small>
+    </label>
+    <label>USD per credit
+      <input type="number" step="0.00000001" min="0.0000001" name="usd_per_credit"
+             value="{{ '%.8f'|format(pricing.usd_per_credit|float) }}">
+      <small>0.01 = 1 credit costs USD 0.01.</small>
+    </label>
+    <label>FX USD→MZN
+      <input type="number" step="0.01" min="0" name="fx_usd_mzn"
+             value="{{ '%.2f'|format(pricing.fx_usd_mzn|float) }}">
+      <small>Informational for portal display.</small>
+    </label>
+    <label>Min balance to call
+      <input type="number" step="0.01" min="0" name="min_balance_to_call"
+             value="{{ '%.2f'|format(pricing.min_balance_to_call|float) }}">
+      <small>Pre-call guard threshold (credits).</small>
+    </label>
+    <div style="grid-column:1/-1">
+      <button type="submit" class="btn btn-primary">Save pricing config</button>
+    </div>
+  </form>
+</div>
+
+<div class="card" style="padding:1rem;margin-bottom:1rem">
+  <h2 style="margin-top:0">Compute rates</h2>
+  <p style="color:var(--text-muted);font-size:0.9rem">
+    Railway-derived USD rates. Profiles attach an MCP to one of these names.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th><th>USD/vCPU·s</th><th>USD/GB egress</th><th>Base/call USD</th><th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rates %}
+      <tr>
+        <td><code>{{ r.name }}</code></td>
+        <td>{{ '%.10f'|format(r.usd_per_vcpu_sec|float) }}</td>
+        <td>{{ '%.6f'|format(r.usd_per_gb_egress|float) }}</td>
+        <td>{{ '%.6f'|format(r.credit_base_per_call_usd|float) }}</td>
+        <td style="color:var(--text-muted);font-size:0.85rem">{{ r.notes or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <details style="margin-top:1rem">
+    <summary style="cursor:pointer;font-weight:600">+ Add / update a rate</summary>
+    <form method="post" action="/admin/cost-model/rates" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;margin-top:0.75rem">
+      <label>Name<input type="text" name="name" required placeholder="default"></label>
+      <label>USD/vCPU·s<input type="number" step="0.0000000001" min="0" name="usd_per_vcpu_sec" required></label>
+      <label>USD/GB egress<input type="number" step="0.000001" min="0" name="usd_per_gb_egress" required value="0.05"></label>
+      <label>Base/call USD<input type="number" step="0.000001" min="0" name="credit_base_per_call_usd" required value="0.0001"></label>
+      <label style="grid-column:1/-1">Notes<input type="text" name="notes"></label>
+      <div style="grid-column:1/-1"><button type="submit" class="btn btn-primary">Save rate</button></div>
+    </form>
+  </details>
+</div>
+
+<div class="card" style="padding:1rem">
+  <h2 style="margin-top:0">Quick stats</h2>
+  <ul>
+    <li><strong>{{ model_count }}</strong> models priced — <a href="/admin/cost-model/models">manage</a></li>
+    <li><strong>{{ profile_count }}</strong> MCP cost profiles — <a href="/admin/cost-model/profiles">manage</a></li>
+  </ul>
+</div>
+{% endblock %}

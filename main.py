@@ -27,6 +27,7 @@ from slowapi.errors import RateLimitExceeded
 from src.limiter import limiter
 from src.oauth.routes import router as oauth_router
 from src.admin.routes import router as admin_router
+from src.admin.cost_model import router as admin_cost_model_router
 from src.portal.routes import router as portal_router, landing_router
 from src.portal.social import router as portal_social_router
 from src.portal.integrations import router as portal_integrations_router
@@ -94,6 +95,7 @@ async def startup_checks():
 app.include_router(landing_router)
 app.include_router(oauth_router)
 app.include_router(admin_router)
+app.include_router(admin_cost_model_router)
 app.include_router(portal_router)
 app.include_router(portal_social_router)
 app.include_router(portal_integrations_router)

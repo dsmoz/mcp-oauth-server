@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}MCP Cost Profiles — DS-MOZ MCP OAuth{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Per-MCP Cost Profiles</h1>
+  <a href="/admin/cost-model/" class="btn btn-secondary"><i class="ph-light ph-arrow-left"></i> Back</a>
+</div>
+
+{% if saved %}<div class="alert alert-success">Saved. Caches invalidated.</div>{% endif %}
+
+<p style="color:var(--text-muted);font-size:0.9rem">
+  One row per catalogue MCP. Override the compute rate (e.g. <code>high-mem</code> for memory-heavy services),
+  attach a fixed USD surcharge (e.g. per-call API passthrough fee), or pin a margin override.
+  Leave margin blank to inherit from pricing config.
+</p>
+
+<form method="post" action="/admin/cost-model/profiles">
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <thead>
+      <tr>
+        <th>MCP</th>
+        <th>Compute rate</th>
+        <th>Margin override</th>
+        <th>Fixed surcharge USD</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>
+          <code>{{ r.slug }}</code><br>
+          <small style="color:var(--text-muted)">{{ r.name }}{% if not r.is_published %} <em>(unpublished)</em>{% endif %}</small>
+        </td>
+        <td>
+          <select name="rate_{{ r.slug }}">
+            {% for rn in rate_names %}
+            <option value="{{ rn }}" {% if rn == r.compute_rate_name %}selected{% endif %}>{{ rn }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td>
+          <input type="number" step="0.0001" min="0" name="margin_{{ r.slug }}"
+                 value="{% if r.llm_margin_override is not none %}{{ '%.4f'|format(r.llm_margin_override|float) }}{% endif %}"
+                 placeholder="inherit" style="width:90px">
+        </td>
+        <td>
+          <input type="number" step="0.000001" min="0" name="surcharge_{{ r.slug }}"
+                 value="{{ '%.6f'|format(r.fixed_surcharge_usd|float) }}" style="width:110px">
+        </td>
+        <td>
+          <input type="text" name="notes_{{ r.slug }}" value="{{ r.notes }}" style="width:100%">
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div style="margin-top:1rem">
+  <button type="submit" class="btn btn-primary">Save all profiles</button>
+</div>
+</form>
+{% endblock %}
