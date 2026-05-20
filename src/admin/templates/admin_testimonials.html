@@ -39,10 +39,14 @@
           <span class="badge badge-secondary">inactive</span>
           {% endif %}
         </td>
-        <td style="white-space:nowrap">
-          <a href="/admin/testimonials/{{ t.id }}/edit" class="btn btn-secondary btn-sm">Edit</a>
+        <td style="white-space:nowrap;text-align:right">
+          <a href="/admin/testimonials/{{ t.id }}/edit" class="btn btn-ghost btn-sm btn-icon" title="Edit" aria-label="Edit">
+            <i class="ph-light ph-pencil-simple"></i>
+          </a>
           <form method="post" action="/admin/testimonials/{{ t.id }}/delete" style="display:inline" onsubmit="return confirm('Delete this testimonial?')">
-            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            <button type="submit" class="btn btn-ghost btn-sm btn-icon btn-danger" title="Delete" aria-label="Delete">
+              <i class="ph-light ph-trash"></i>
+            </button>
           </form>
         </td>
       </tr>

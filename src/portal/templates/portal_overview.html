@@ -66,7 +66,10 @@
   <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
     <div class="copy-pill" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.12);color:#fff;margin-top:0;flex:1;min-width:0">
       <span class="pill-value" style="color:rgba(255,255,255,0.85)">{{ gateway_url }}</span>
-      <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)">Copy</button>
+      <button class="pill-copy-icon" onclick="copyText('{{ gateway_url }}', this)" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:rgba(255,255,255,0.85)" title="Copy URL" aria-label="Copy URL" type="button">
+        <svg class="icon-idle" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg class="icon-done" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
     </div>
     <a href="/portal/setup" class="btn btn-ghost" style="background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.18);color:#fff">Manage gateway</a>
   </div>

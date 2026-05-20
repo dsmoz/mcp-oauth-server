@@ -129,7 +129,10 @@
       <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px">
         <span style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:var(--fg-3);width:50px;flex-shrink:0">URL</span>
         <span class="pill-value" style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:var(--fg-2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ gateway_url }}</span>
-        <button class="pill-copy" onclick="copyText('{{ gateway_url }}', this)" type="button">Copy</button>
+        <button class="pill-copy-icon" onclick="copyText('{{ gateway_url }}', this)" type="button" title="Copy URL" aria-label="Copy URL">
+          <svg class="icon-idle" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <svg class="icon-done" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
       </div>
     </div>
     {% endif %}
@@ -138,7 +141,10 @@
     {% if sel_client == 'cursor' %}
     <div style="background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:16px;display:flex;align-items:flex-start;gap:8px">
       <pre style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--fg-2);flex:1;min-width:0;white-space:pre-wrap;word-break:break-all;margin:0">{ "mcpServers": { "dsmoz": { "url": "{{ gateway_url }}" } } }</pre>
-      <button class="pill-copy" onclick='copyText({{ ("{ \"mcpServers\": { \"dsmoz\": { \"url\": \"" ~ gateway_url ~ "\" } } }") | tojson }}, this)' type="button">Copy</button>
+      <button class="pill-copy-icon" onclick='copyText({{ ("{ \"mcpServers\": { \"dsmoz\": { \"url\": \"" ~ gateway_url ~ "\" } } }") | tojson }}, this)' type="button" title="Copy snippet" aria-label="Copy snippet">
+        <svg class="icon-idle" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg class="icon-done" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
     </div>
     {% endif %}
 
@@ -146,7 +152,10 @@
     {% if sel_client == 'claude-code' %}
     <div style="background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:8px">
       <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:var(--fg-2);flex:1;min-width:0;overflow-x:auto;white-space:nowrap">claude mcp add --transport http --scope user gateway {{ gateway_me_url }}</span>
-      <button class="pill-copy" onclick="copyText('claude mcp add --transport http --scope user gateway {{ gateway_me_url }}', this)" type="button">Copy</button>
+      <button class="pill-copy-icon" onclick="copyText('claude mcp add --transport http --scope user gateway {{ gateway_me_url }}', this)" type="button" title="Copy command" aria-label="Copy command">
+        <svg class="icon-idle" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <svg class="icon-done" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </button>
     </div>
     <p style="font-size:12px;color:var(--fg-3);margin-bottom:14px;line-height:1.6">The <code style="font-size:11px;background:var(--bg);padding:2px 5px;border-radius:3px">/gateway/me</code> URL is shared &mdash; identity comes from your OAuth token.</p>
     {% endif %}
@@ -302,7 +311,9 @@
             {% if not t.revoked_at %}
             <form method="post" action="/portal/setup/agent-tokens/revoke" style="display:inline" onsubmit="return confirm('Revoke this token? Agents using it will lose access immediately.')">
               <input type="hidden" name="token_id" value="{{ t.id }}">
-              <button type="submit" style="background:none;border:0;color:var(--fg-3);cursor:pointer;font-size:12px;text-decoration:underline">Revoke</button>
+              <button type="submit" class="btn btn-ghost btn-sm btn-icon btn-danger" title="Revoke token" aria-label="Revoke token">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              </button>
             </form>
             {% endif %}
           </td>
