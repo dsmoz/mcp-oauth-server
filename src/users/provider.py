@@ -67,9 +67,16 @@ class SupabaseUserProvider:
         return User(**row)
 
     def set_password(self, user_id: str, password: str) -> None:
+        """Write password hash only. Does NOT touch is_active — callers must
+        activate explicitly via activate_user() on the initial-setup path."""
         self.db.table("users").update(
-            {"password_hash": hash_secret(password), "is_active": True}
+            {"password_hash": hash_secret(password)}
         ).eq("user_id", user_id).execute()
+
+    def activate_user(self, user_id: str) -> None:
+        self.db.table("users").update({"is_active": True}).eq(
+            "user_id", user_id
+        ).execute()
 
     def verify_password(self, user: User, password: str) -> bool:
         if not user.password_hash:

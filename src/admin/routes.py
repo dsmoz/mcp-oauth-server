@@ -674,7 +674,7 @@ async def approve_registration(
     }).eq("id", request_id).execute()
 
     from src.portal.routes import create_setup_token
-    setup_token = create_setup_token(user.user_id)
+    setup_token = create_setup_token(user.user_id, purpose="setup")
 
     import asyncio
     try:
@@ -1515,7 +1515,7 @@ async def create_user_admin(
     }).execute()
 
     from src.portal.routes import create_setup_token
-    setup_token = create_setup_token(user.user_id)
+    setup_token = create_setup_token(user.user_id, purpose="setup")
 
     import asyncio
     try:
