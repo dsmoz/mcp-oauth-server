@@ -8,8 +8,19 @@
   </a>
 </div>
 
+{# ── Pricing context strip ───────────────────────────────────────────────── #}
+<div class="card" style="margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;font-size:0.85rem">
+  <div><span style="color:var(--text-muted)">Sell rate</span> <strong>${{ '%.4f'|format(pricing.usd_per_credit) }}</strong>/credit</div>
+  <div><span style="color:var(--text-muted)">FX</span> <strong>MT {{ '%.2f'|format(pricing.fx_usd_mzn) }}</strong>/USD</div>
+  <div><span style="color:var(--text-muted)">IVA</span> <strong>{{ '%.0f'|format(pricing.iva_rate * 100) }}%</strong></div>
+  <div><span style="color:var(--text-muted)">Margin</span> <strong>{{ '%.0f'|format(pricing.margin_rate * 100) }}%</strong></div>
+  <a href="/admin/cost-model/" style="margin-left:auto;font-size:0.8rem;color:var(--accent);text-decoration:none">
+    <i class="ph-light ph-gear"></i> Edit pricing config
+  </a>
+</div>
+
 <div class="card" style="padding:0;overflow:hidden">
-  {% if packages %}
+  {% if rows %}
   <table id="pkg-table">
     <thead>
       <tr>
@@ -17,47 +28,78 @@
         <th>Name</th>
         <th>Price</th>
         <th>Credits</th>
+        <th title="Effective USD per credit">$/credit</th>
+        <th title="vs standard sell rate">Δ vs std</th>
+        <th title="Implied raw cost given configured margin + IVA">Raw cost</th>
+        <th title="Gross margin after IVA (net − raw cost)">Margin</th>
         <th>Tag</th>
-        <th>Featured</th>
-        <th>Published</th>
+        <th>Feat</th>
+        <th>Pub</th>
         <th></th>
       </tr>
     </thead>
     <tbody id="pkg-tbody">
-      {% for pkg in packages %}
+      {% for row in rows %}
+      {% set pkg = row.pkg %}{% set m = row.metrics %}
       <tr draggable="true" data-id="{{ pkg.id }}" style="cursor:default">
         <td style="text-align:center;color:var(--text-muted);cursor:grab;padding:0 0.5rem" class="drag-handle">
           <i class="ph-light ph-dots-six-vertical" style="font-size:1.1rem;vertical-align:middle"></i>
         </td>
         <td style="font-weight:600;color:var(--text-h)">{{ pkg.name }}</td>
-        <td>{{ pkg.currency }} {{ '%.2f'|format(pkg.price_amount|float) }}</td>
+        <td>
+          {{ pkg.currency }} {{ '%.2f'|format(pkg.price_amount|float) }}
+          {% if m.price_usd is not none and pkg.currency != 'USD' %}
+            <div style="font-size:0.75rem;color:var(--text-muted)">≈ ${{ '%.2f'|format(m.price_usd) }}</div>
+          {% endif %}
+        </td>
         <td>{{ pkg.credits }}</td>
-        <td style="font-size:0.85rem;color:var(--text-muted)">{{ pkg.tag or '—' }}</td>
+        <td style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:0.8rem">
+          {% if m.eff_usd_per_credit is not none %}${{ '%.4f'|format(m.eff_usd_per_credit) }}{% else %}—{% endif %}
+        </td>
+        <td style="font-size:0.8rem">
+          {% if m.discount_pct is not none %}
+            {% if m.discount_pct > 0 %}
+              <span style="color:var(--success-fg)">−{{ '%.1f'|format(m.discount_pct) }}%</span>
+            {% elif m.discount_pct < 0 %}
+              <span style="color:var(--danger-fg)">+{{ '%.1f'|format(-m.discount_pct) }}%</span>
+            {% else %}<span style="color:var(--text-muted)">par</span>{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:0.8rem">
+          {% if m.raw_cost_usd is not none %}${{ '%.2f'|format(m.raw_cost_usd) }}{% else %}—{% endif %}
+        </td>
+        <td style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:0.8rem">
+          {% if m.gross_margin_usd is not none %}${{ '%.2f'|format(m.gross_margin_usd) }}{% else %}—{% endif %}
+        </td>
+        <td style="font-size:0.8rem;color:var(--text-muted)">{{ pkg.tag or '—' }}</td>
         <td>
           <form method="post" action="/admin/topup-packages/{{ pkg.id }}/feature" style="display:inline">
-            <button type="submit" class="btn {{ 'btn-primary' if pkg.is_featured else 'btn-secondary' }} btn-sm"
-                    style="font-size:0.75rem;padding:0.25rem 0.6rem">
-              {{ 'Featured' if pkg.is_featured else 'Make featured' }}
+            <button type="submit" class="btn btn-ghost btn-sm btn-icon"
+                    title="{{ 'Featured' if pkg.is_featured else 'Make featured' }}"
+                    aria-label="Toggle featured"
+                    style="color:{{ 'var(--accent)' if pkg.is_featured else 'var(--text-muted)' }}">
+              <i class="ph-light {{ 'ph-star-fill' if pkg.is_featured else 'ph-star' }}"></i>
             </button>
           </form>
         </td>
         <td>
           <form method="post" action="/admin/topup-packages/{{ pkg.id }}/publish" style="display:inline">
-            <button type="submit" class="btn {{ 'btn-primary' if pkg.is_published else 'btn-secondary' }} btn-sm"
-                    style="font-size:0.75rem;padding:0.25rem 0.6rem">
-              {{ 'Published' if pkg.is_published else 'Unpublished' }}
+            <button type="submit" class="btn btn-ghost btn-sm btn-icon"
+                    title="{{ 'Published' if pkg.is_published else 'Unpublished' }}"
+                    aria-label="Toggle published"
+                    style="color:{{ 'var(--success-fg)' if pkg.is_published else 'var(--text-muted)' }}">
+              <i class="ph-light {{ 'ph-eye' if pkg.is_published else 'ph-eye-slash' }}"></i>
             </button>
           </form>
         </td>
-        <td class="actions" style="justify-content:flex-end;gap:0.5rem">
-          <a href="/admin/topup-packages/{{ pkg.id }}/edit" class="btn btn-secondary"
-             style="font-size:0.75rem;padding:0.3rem 0.7rem">
-            <i class="ph-light ph-pencil-simple"></i> Edit
+        <td class="actions" style="white-space:nowrap;text-align:right">
+          <a href="/admin/topup-packages/{{ pkg.id }}/edit" class="btn btn-ghost btn-sm btn-icon" title="Edit" aria-label="Edit">
+            <i class="ph-light ph-pencil-simple"></i>
           </a>
-          <form method="post" action="/admin/topup-packages/{{ pkg.id }}/delete"
+          <form method="post" action="/admin/topup-packages/{{ pkg.id }}/delete" style="display:inline"
                 onsubmit="return confirm('Delete package {{ pkg.name }}?')">
-            <button type="submit" class="btn btn-danger" style="font-size:0.75rem;padding:0.3rem 0.7rem">
-              <i class="ph-light ph-trash"></i> Delete
+            <button type="submit" class="btn btn-ghost btn-sm btn-icon btn-danger" title="Delete" aria-label="Delete">
+              <i class="ph-light ph-trash"></i>
             </button>
           </form>
         </td>
@@ -69,6 +111,11 @@
   <div style="padding:2rem;text-align:center;color:var(--text-muted)">No packages yet. Create one to enable portal top-ups.</div>
   {% endif %}
 </div>
+
+<p style="margin-top:0.75rem;font-size:0.75rem;color:var(--text-muted);line-height:1.5">
+  <strong>Cost basis:</strong> raw = price / ((1 + margin) × (1 + IVA)). Margin = net (price excl. IVA) − raw cost.
+  Δ vs std compares effective $/credit against the configured sell rate. Non-USD/MZN currencies skip USD-conversion.
+</p>
 {% endblock %}
 
 {% block scripts %}

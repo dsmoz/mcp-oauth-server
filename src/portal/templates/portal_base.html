@@ -253,6 +253,9 @@ body {
 .btn-danger { color: var(--danger); }
 .btn-danger:hover { background: var(--danger-bg); border-color: var(--danger); }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-icon { padding: 5px; width: 28px; height: 28px; justify-content: center; }
+.btn-icon.btn-sm { padding: 4px; width: 24px; height: 24px; }
+.btn-icon svg { display: block; }
 
 /* ── Copy pill ── */
 .copy-pill {
@@ -286,6 +289,22 @@ body {
 }
 .copy-pill .pill-copy:hover { color: var(--accent); border-color: var(--accent); }
 .copy-pill .pill-copy.copied { color: var(--success); border-color: var(--success); }
+
+.pill-copy-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  padding: 0;
+  border-radius: var(--radius);
+  background: none; border: 1px solid var(--line);
+  color: var(--fg-3); cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.pill-copy-icon:hover { color: var(--accent); border-color: var(--accent); }
+.pill-copy-icon.copied { color: var(--success); border-color: var(--success); background: var(--success-bg); }
+.pill-copy-icon .icon-done { display: none; }
+.pill-copy-icon.copied .icon-idle { display: none; }
+.pill-copy-icon.copied .icon-done { display: block; }
 
 /* ── Chips ── */
 .chip {
@@ -455,7 +474,11 @@ input:focus { border-color: var(--bg-deep-alt); box-shadow: 0 0 0 3px rgba(17,94
 <script>
 function copyText(text, btn) {
   navigator.clipboard.writeText(text).then(function() {
-    if (btn) {
+    if (!btn) return;
+    if (btn.classList.contains('pill-copy-icon')) {
+      btn.classList.add('copied');
+      setTimeout(function() { btn.classList.remove('copied'); }, 1500);
+    } else {
       const orig = btn.textContent;
       btn.textContent = 'Copied';
       btn.classList.add('copied');

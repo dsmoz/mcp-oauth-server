@@ -14,11 +14,13 @@
 </div>
 {% endif %}
 
+<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:1rem;align-items:flex-start">
+
 <div class="card">
   <form method="post" action="{{ '/admin/topup-packages/' + pkg.id + '/edit' if pkg else '/admin/topup-packages' }}">
     <div class="form-group">
       <label class="form-label">Name</label>
-      <input type="text" name="name" class="form-input" required
+      <input type="text" id="f-name" name="name" class="form-input" required
              value="{{ pkg.name if pkg else '' }}"
              placeholder="e.g. Pro">
     </div>
@@ -26,21 +28,21 @@
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
       <div class="form-group">
         <label class="form-label">Price</label>
-        <input type="number" name="price_amount" class="form-input" step="0.01" min="0" required
+        <input type="number" id="f-price" name="price_amount" class="form-input" step="0.01" min="0" required
                value="{{ '%.2f'|format(pkg.price_amount|float) if pkg else '' }}"
-               placeholder="40.00">
+               placeholder="1500">
       </div>
       <div class="form-group">
         <label class="form-label">Currency</label>
-        <input type="text" name="currency" class="form-input" maxlength="8" required
-               value="{{ pkg.currency if pkg else 'USD' }}"
-               placeholder="USD" style="text-transform:uppercase">
+        <input type="text" id="f-currency" name="currency" class="form-input" maxlength="8" required
+               value="{{ pkg.currency if pkg else 'MZN' }}"
+               placeholder="MZN" style="text-transform:uppercase">
       </div>
       <div class="form-group">
         <label class="form-label">Credits</label>
-        <input type="number" name="credits" class="form-input" min="1" required
+        <input type="number" id="f-credits" name="credits" class="form-input" min="1" required
                value="{{ pkg.credits if pkg else '' }}"
-               placeholder="50">
+               placeholder="2500">
       </div>
     </div>
 
@@ -72,4 +74,110 @@
     </button>
   </form>
 </div>
+
+{# ── Live cost calculator ───────────────────────────────────────────────── #}
+<div class="card" id="calc-card" style="background:var(--bg-2,#fafafa)">
+  <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem">
+    <i class="ph-light ph-calculator" style="font-size:1.1rem;color:var(--accent)"></i>
+    <strong style="font-size:0.95rem">Cost calculator</strong>
+  </div>
+
+  <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.75rem;line-height:1.5">
+    Sell rate <strong>${{ '%.4f'|format(pricing.usd_per_credit) }}</strong>/credit ·
+    FX <strong>MT {{ '%.2f'|format(pricing.fx_usd_mzn) }}</strong>/USD ·
+    IVA <strong>{{ '%.0f'|format(pricing.iva_rate * 100) }}%</strong> ·
+    Margin <strong>{{ '%.0f'|format(pricing.margin_rate * 100) }}%</strong>
+  </div>
+
+  <table style="width:100%;font-size:0.85rem">
+    <tbody style="font-family:'JetBrains Mono',ui-monospace,monospace">
+      <tr><td style="color:var(--text-muted);padding:0.3rem 0">Price (USD)</td>           <td style="text-align:right" id="c-price-usd">—</td></tr>
+      <tr><td style="color:var(--text-muted);padding:0.3rem 0">Price (MZN)</td>           <td style="text-align:right" id="c-price-mzn">—</td></tr>
+      <tr><td colspan="2" style="border-top:1px solid var(--border);padding:0.2rem 0"></td></tr>
+      <tr><td style="color:var(--text-muted);padding:0.3rem 0">Effective $/credit</td>    <td style="text-align:right" id="c-eff">—</td></tr>
+      <tr><td style="color:var(--text-muted);padding:0.3rem 0">vs std sell rate</td>      <td style="text-align:right" id="c-delta">—</td></tr>
+      <tr><td style="color:var(--text-muted);padding:0.3rem 0">Nominal value @ std</td>   <td style="text-align:right" id="c-nominal">—</td></tr>
+      <tr><td colspan="2" style="border-top:1px solid var(--border);padding:0.2rem 0"></td></tr>
+      <tr><td style="color:var(--text-muted);padding:0.3rem 0">IVA portion (16%)</td>     <td style="text-align:right" id="c-iva">—</td></tr>
+      <tr><td style="color:var(--text-muted);padding:0.3rem 0">Net (excl. IVA)</td>       <td style="text-align:right" id="c-net">—</td></tr>
+      <tr><td style="color:var(--text-muted);padding:0.3rem 0">Raw cost (back-solved)</td><td style="text-align:right" id="c-raw">—</td></tr>
+      <tr><td style="color:var(--text-muted);padding:0.3rem 0">Gross margin</td>          <td style="text-align:right;font-weight:600" id="c-margin">—</td></tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:0.75rem;font-size:0.7rem;color:var(--text-muted);line-height:1.5">
+    Formula: <code>raw = price ÷ ((1 + margin) × (1 + IVA))</code>.
+    Only USD and MZN are FX-normalised; other currencies show as raw.
+  </p>
+</div>
+
+</div>
+
+<script>
+(function () {
+  const cfg = {
+    usd_per_credit: {{ pricing.usd_per_credit }},
+    fx: {{ pricing.fx_usd_mzn }},
+    iva: {{ pricing.iva_rate }},
+    margin: {{ pricing.margin_rate }},
+  };
+  const $ = (id) => document.getElementById(id);
+  const fmtUsd = (v) => v == null ? '—' : '$' + v.toFixed(v >= 1 ? 2 : 4);
+  const fmtMzn = (v) => v == null ? '—' : 'MT ' + v.toFixed(2);
+  const fmtPct = (v) => v == null ? '—' : (v >= 0 ? '−' : '+') + Math.abs(v).toFixed(1) + '%';
+
+  function recompute() {
+    const price = parseFloat($('f-price').value) || 0;
+    const credits = parseInt($('f-credits').value) || 0;
+    const cur = ($('f-currency').value || 'USD').trim().toUpperCase();
+
+    let priceUsd = null;
+    if (cur === 'USD') priceUsd = price;
+    else if (cur === 'MZN' || cur === 'MT') priceUsd = cfg.fx > 0 ? price / cfg.fx : null;
+
+    const priceMzn = priceUsd != null ? priceUsd * cfg.fx : null;
+    const eff = (priceUsd != null && credits > 0) ? priceUsd / credits : null;
+    const nominal = credits * cfg.usd_per_credit;
+    const deltaPct = (eff != null && cfg.usd_per_credit > 0)
+      ? (1 - eff / cfg.usd_per_credit) * 100 : null;
+    const iva = priceUsd != null ? priceUsd * cfg.iva / (1 + cfg.iva) : null;
+    const net = priceUsd != null ? priceUsd / (1 + cfg.iva) : null;
+    const raw = priceUsd != null ? priceUsd / ((1 + cfg.margin) * (1 + cfg.iva)) : null;
+    const margin = (net != null && raw != null) ? net - raw : null;
+
+    $('c-price-usd').textContent = fmtUsd(priceUsd);
+    $('c-price-mzn').textContent = fmtMzn(priceMzn);
+    $('c-eff').textContent = eff == null ? '—' : '$' + eff.toFixed(4);
+    $('c-nominal').textContent = fmtUsd(nominal);
+
+    const dEl = $('c-delta');
+    if (deltaPct == null) {
+      dEl.textContent = '—'; dEl.style.color = '';
+    } else if (Math.abs(deltaPct) < 0.05) {
+      dEl.textContent = 'par'; dEl.style.color = 'var(--text-muted)';
+    } else {
+      dEl.textContent = fmtPct(deltaPct);
+      dEl.style.color = deltaPct > 0 ? 'var(--success-fg)' : 'var(--danger-fg)';
+    }
+
+    $('c-iva').textContent = fmtUsd(iva);
+    $('c-net').textContent = fmtUsd(net);
+    $('c-raw').textContent = fmtUsd(raw);
+    const mEl = $('c-margin');
+    mEl.textContent = fmtUsd(margin);
+    mEl.style.color = (margin != null && margin < 0) ? 'var(--danger-fg)' : 'var(--success-fg)';
+  }
+
+  ['f-price', 'f-credits', 'f-currency'].forEach(id => {
+    const el = $(id); if (el) el.addEventListener('input', recompute);
+  });
+  recompute();
+})();
+</script>
+
+<style>
+@media (max-width: 900px) {
+  div[style*="grid-template-columns:1.4fr 1fr"] { grid-template-columns: 1fr !important; }
+}
+</style>
 {% endblock %}

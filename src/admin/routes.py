@@ -2046,20 +2046,98 @@ def _get_topup_package(db, pkg_id: str) -> dict | None:
     return res.data[0] if res.data else None
 
 
+def _pricing_config(db) -> dict:
+    res = db.table("pricing_config").select("*").eq("id", 1).limit(1).execute()
+    data = res.data[0] if res.data else {}
+    return {
+        "usd_per_credit": float(data.get("usd_per_credit") or 0.01),
+        "fx_usd_mzn": float(data.get("fx_usd_mzn") or 64.0),
+        "iva_rate": float(data.get("iva_rate") or 0.16),
+        "margin_rate": float(data.get("margin_rate") or 0.60),
+        "withholding_rate": float(data.get("withholding_rate") or 0.0),
+    }
+
+
+def _compute_pkg_metrics(pkg: dict, pricing: dict) -> dict:
+    """Compute economic metrics for a top-up package.
+
+    Returns USD-normalised view: price_usd, usd_per_credit_effective,
+    discount vs standard sell price, IVA breakdown, net to DS-MOZ,
+    and raw-cost margin (using usd_per_credit as the gross sell baseline).
+    """
+    price_amount = float(pkg.get("price_amount") or 0)
+    credits = int(pkg.get("credits") or 0)
+    currency = (pkg.get("currency") or "USD").upper()
+    fx = pricing["fx_usd_mzn"]
+    iva = pricing["iva_rate"]
+    margin = pricing["margin_rate"]
+    standard = pricing["usd_per_credit"]
+
+    if currency == "USD":
+        price_usd = price_amount
+    elif currency in ("MZN", "MT"):
+        price_usd = price_amount / fx if fx else 0.0
+    else:
+        price_usd = None  # unknown FX
+
+    eff_usd_per_credit = (price_usd / credits) if (price_usd and credits) else None
+    nominal_value_usd = credits * standard
+    discount_pct = None
+    if eff_usd_per_credit is not None and standard > 0:
+        discount_pct = (1 - eff_usd_per_credit / standard) * 100
+
+    # IVA-inclusive price → split
+    iva_portion_usd = (price_usd * iva / (1 + iva)) if price_usd is not None else None
+    net_excl_iva_usd = (price_usd / (1 + iva)) if price_usd is not None else None
+
+    # Raw cost back-solve from sell formula: sell = raw × (1+margin) × (1+iva)
+    raw_cost_usd = (
+        (price_usd / ((1 + margin) * (1 + iva)))
+        if price_usd is not None else None
+    )
+    gross_margin_usd = (
+        (net_excl_iva_usd - raw_cost_usd)
+        if (net_excl_iva_usd is not None and raw_cost_usd is not None) else None
+    )
+
+    return {
+        "price_amount": price_amount,
+        "currency": currency,
+        "credits": credits,
+        "price_usd": price_usd,
+        "price_mzn": (price_usd * fx) if price_usd is not None else None,
+        "eff_usd_per_credit": eff_usd_per_credit,
+        "standard_usd_per_credit": standard,
+        "discount_pct": discount_pct,
+        "nominal_value_usd": nominal_value_usd,
+        "iva_portion_usd": iva_portion_usd,
+        "net_excl_iva_usd": net_excl_iva_usd,
+        "raw_cost_usd": raw_cost_usd,
+        "gross_margin_usd": gross_margin_usd,
+    }
+
+
 @router.get("/topup-packages", response_class=HTMLResponse)
 async def list_topup_packages(request: Request, _: str = Depends(_require_admin)):
     db = get_db()
+    pricing = _pricing_config(db)
+    packages = _list_topup_packages(db)
+    rows = [
+        {"pkg": p, "metrics": _compute_pkg_metrics(p, pricing)}
+        for p in packages
+    ]
     return templates.TemplateResponse(
         request=request, name="topup_packages_list.html",
-        context={"packages": _list_topup_packages(db)},
+        context={"rows": rows, "pricing": pricing},
     )
 
 
 @router.get("/topup-packages/new", response_class=HTMLResponse)
 async def new_topup_package_form(request: Request, _: str = Depends(_require_admin)):
+    db = get_db()
     return templates.TemplateResponse(
         request=request, name="topup_packages_form.html",
-        context={"error": None, "pkg": None},
+        context={"error": None, "pkg": None, "pricing": _pricing_config(db)},
     )
 
 
@@ -2086,17 +2164,18 @@ async def create_topup_package(
 ):
     name = name.strip()
     currency = currency.strip().upper()[:8] or "USD"
+    db = get_db()
+    pricing = _pricing_config(db)
     if not name:
         return templates.TemplateResponse(
             request=request, name="topup_packages_form.html",
-            context={"error": "Name required", "pkg": None},
+            context={"error": "Name required", "pkg": None, "pricing": pricing},
         )
     if price_amount < 0 or credits <= 0:
         return templates.TemplateResponse(
             request=request, name="topup_packages_form.html",
-            context={"error": "Price must be ≥ 0 and credits > 0", "pkg": None},
+            context={"error": "Price must be ≥ 0 and credits > 0", "pkg": None, "pricing": pricing},
         )
-    db = get_db()
     featured = is_featured == "on"
     if featured:
         _clear_other_featured(db)
@@ -2123,7 +2202,7 @@ async def edit_topup_package_form(
         raise HTTPException(status_code=404, detail="Package not found")
     return templates.TemplateResponse(
         request=request, name="topup_packages_form.html",
-        context={"error": None, "pkg": pkg},
+        context={"error": None, "pkg": pkg, "pricing": _pricing_config(db)},
     )
 
 
@@ -2150,7 +2229,7 @@ async def update_topup_package(
     if not name or price_amount < 0 or credits <= 0:
         return templates.TemplateResponse(
             request=request, name="topup_packages_form.html",
-            context={"error": "Invalid input", "pkg": pkg},
+            context={"error": "Invalid input", "pkg": pkg, "pricing": _pricing_config(db)},
         )
     featured = is_featured == "on"
     if featured:

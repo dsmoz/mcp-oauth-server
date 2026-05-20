@@ -27,6 +27,16 @@ Any new MCP added to the catalogue MUST follow both before deployment. Upstream 
 - Telegram notifications: `src/telegram.py` (DB settings → env fallback)
 - Migrations: `migrations/*.sql` (apply via Supabase MCP `apply_migration`)
 
+## UI conventions
+
+**Prefer icons over text links for row actions and affordances.** Edit, Delete, Revoke, Copy, Connect, Disconnect, Re-link, Refresh — render as compact ghost icon buttons, not as text links or large colored buttons. Use `title=`/`aria-label=` for accessibility. Reference pattern: commit `285d49b` (M365 connect: ghost icon buttons + chip status).
+
+- **Portal** (`src/portal/templates/`) — lucide-style inline SVG icons (matches `portal_base.html` + `portal_mcps.html`). Use the `.btn` family with an icon-only child SVG. No CDN needed.
+- **Admin** (`src/admin/templates/`) — Phosphor icons via the existing CDN (`<i class="ph-light ph-*">`). Use `ph-pencil-simple` (edit), `ph-trash` (delete), `ph-copy`, `ph-arrow-clockwise` (refresh), `ph-plug` / `ph-plug-x` (connect/disconnect).
+- **Public marketing pages** (`portal_landing.html`, `public_catalog.html`) — lucide via CDN (`<i data-lucide="...">`), already wired.
+
+**Keep text labels for:** form-primary actions (Save, Submit, Add X), navigation Cancel buttons, and standalone CTAs ("Top up", "Manage gateway").
+
 ## Commit conventions
 
 - `feat(scope): ...` — new feature
