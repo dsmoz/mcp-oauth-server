@@ -385,6 +385,10 @@ _BILLING_ERROR_MSG = (
 )
 _INSUFFICIENT_CREDITS_MSG = "Insufficient credits. Visit your portal to buy more credits."
 
+# Tools that may be invoked directly on a stateful MCP — discovery only, no
+# state mutation. Anything else must go through `run(code)`.
+_STATEFUL_DISCOVERY_TOOLS = frozenset({"run", "list_modules", "get_module_docs"})
+
 
 def _log_tool_call(
     user_id: str, client_id: str, mcp_slug: str, tool_name: str,
@@ -846,7 +850,16 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                     "Returns: the upstream tool's JSON-encoded result, or "
                     "{\"error\": \"...\"} on upstream failure / timeout. "
                     "Note: replaces the legacy tool name `call_tool`, which also "
-                    "still works for one release."
+                    "still works for one release.\n\n"
+                    "**Stateful MCPs**: some MCPs (e.g. mcp-deck) hold in-process "
+                    "state that mutates across calls. The gateway transport is "
+                    "stateless — each invoke_mcp_tool call lands in a fresh "
+                    "upstream worker, so that state is discarded between calls. "
+                    "For stateful MCPs, only `run`, `list_modules`, and "
+                    "`get_module_docs` are accepted here; everything else must "
+                    "be wrapped in a single `run(code=\"...\")` call that "
+                    "executes the full script in one upstream invocation. "
+                    "Other tool_names return an error explaining this."
                 ),
                 inputSchema={
                     "type": "object",
@@ -1221,6 +1234,24 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
                 structured = {"error": f"MCP '{slug}' not found"}
             else:
                 mcp = mcp_by_slug[slug]
+                # Stateful MCPs: each invoke_mcp_tool call lands in a fresh
+                # upstream worker context, so cross-call state (e.g. a deck
+                # dict mutated by Create_deck) is discarded before the next
+                # call. Force the agent to use the code-execution tool, which
+                # runs the whole script in one upstream call.
+                if mcp.get("is_stateful") and tool_name not in _STATEFUL_DISCOVERY_TOOLS:
+                    structured = {
+                        "error": (
+                            f"MCP '{slug}' is stateful — direct invoke_mcp_tool "
+                            f"calls to '{tool_name}' would discard in-process state "
+                            f"between calls. Use the code-execution tool instead: "
+                            f"invoke_mcp_tool(mcp_slug='{slug}', tool_name='run', "
+                            f"arguments={{'code': '<full Python script>'}}). "
+                            f"Discover the API with list_modules / get_module_docs."
+                        )
+                    }
+                    text = json.dumps(structured)
+                    return [types.TextContent(type="text", text=text)], structured
                 # Pre-call balance precheck — cheap read-only guard against
                 # runaway free use when the user is broke. Actual billing
                 # happens post-call from observed effort (compute + LLM tokens).
