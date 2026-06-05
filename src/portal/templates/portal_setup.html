@@ -285,42 +285,70 @@
     </form>
 
     {% if agent_tokens %}
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead>
-        <tr style="text-align:left;color:var(--fg-3);border-bottom:1px solid var(--line)">
-          <th style="padding:8px 6px">Label</th>
-          <th style="padding:8px 6px">Prefix</th>
-          <th style="padding:8px 6px">Created</th>
-          <th style="padding:8px 6px">Last used</th>
-          <th style="padding:8px 6px">Status</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for t in agent_tokens %}
-        <tr style="border-bottom:1px solid var(--line)">
-          <td style="padding:8px 6px;color:var(--fg-1)">{{ t.label }}</td>
-          <td style="padding:8px 6px;font-family:'Courier New',monospace;color:var(--fg-2)">{{ t.prefix }}…</td>
-          <td style="padding:8px 6px;color:var(--fg-3)">{{ t.created_at[:10] if t.created_at else "" }}</td>
-          <td style="padding:8px 6px;color:var(--fg-3)">{{ t.last_used_at[:10] if t.last_used_at else "—" }}</td>
-          <td style="padding:8px 6px">
-            {% if t.revoked_at %}<span style="color:var(--fg-3)">revoked</span>
-            {% else %}<span style="color:var(--accent);font-weight:600">active</span>{% endif %}
-          </td>
-          <td style="padding:8px 6px;text-align:right">
-            {% if not t.revoked_at %}
-            <form method="post" action="/portal/setup/agent-tokens/revoke" style="display:inline" onsubmit="return confirm('Revoke this token? Agents using it will lose access immediately.')">
-              <input type="hidden" name="token_id" value="{{ t.id }}">
-              <button type="submit" class="btn btn-ghost btn-sm btn-icon btn-danger" title="Revoke token" aria-label="Revoke token">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
-              </button>
-            </form>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <form method="post" action="/portal/setup/agent-tokens/bulk" id="agent-token-bulk-form">
+      <div id="agent-token-bulkbar" style="display:none;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-card)">
+        <span style="font-size:12px;color:var(--fg-2)"><span id="agent-token-count">0</span> selected</span>
+        <button type="submit" name="action" value="revoke" class="btn btn-ghost btn-sm btn-danger"
+                onclick="return confirm('Revoke the selected tokens? Agents using them lose access immediately.')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          Revoke
+        </button>
+        <button type="submit" name="action" value="delete" class="btn btn-ghost btn-sm btn-danger"
+                onclick="return confirm('Permanently delete the selected tokens? This cannot be undone.')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+          Delete
+        </button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="text-align:left;color:var(--fg-3);border-bottom:1px solid var(--line)">
+            <th style="padding:8px 6px;width:28px"><input type="checkbox" id="agent-token-all" aria-label="Select all tokens"></th>
+            <th style="padding:8px 6px">Label</th>
+            <th style="padding:8px 6px">Prefix</th>
+            <th style="padding:8px 6px">Created</th>
+            <th style="padding:8px 6px">Last used</th>
+            <th style="padding:8px 6px">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in agent_tokens %}
+          <tr style="border-bottom:1px solid var(--line)">
+            <td style="padding:8px 6px"><input type="checkbox" class="agent-token-cb" name="token_ids" value="{{ t.id }}" aria-label="Select {{ t.label }}"></td>
+            <td style="padding:8px 6px;color:var(--fg-1)">{{ t.label }}</td>
+            <td style="padding:8px 6px;font-family:'Courier New',monospace;color:var(--fg-2)">{{ t.prefix }}…</td>
+            <td style="padding:8px 6px;color:var(--fg-3)">{{ t.created_at[:10] if t.created_at else "" }}</td>
+            <td style="padding:8px 6px;color:var(--fg-3)">{{ t.last_used_at[:10] if t.last_used_at else "—" }}</td>
+            <td style="padding:8px 6px">
+              {% if t.revoked_at %}<span style="color:var(--fg-3)">revoked</span>
+              {% else %}<span style="color:var(--accent);font-weight:600">active</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </form>
+    <script>
+      (function () {
+        var all = document.getElementById("agent-token-all");
+        var cbs = Array.prototype.slice.call(document.querySelectorAll(".agent-token-cb"));
+        var bar = document.getElementById("agent-token-bulkbar");
+        var count = document.getElementById("agent-token-count");
+        function sync() {
+          var sel = cbs.filter(function (c) { return c.checked; });
+          count.textContent = sel.length;
+          bar.style.display = sel.length ? "flex" : "none";
+          if (all) {
+            all.checked = sel.length === cbs.length && cbs.length > 0;
+            all.indeterminate = sel.length > 0 && sel.length < cbs.length;
+          }
+        }
+        if (all) all.addEventListener("change", function () {
+          cbs.forEach(function (c) { c.checked = all.checked; });
+          sync();
+        });
+        cbs.forEach(function (c) { c.addEventListener("change", sync); });
+      })();
+    </script>
     {% else %}
     <p style="font-size:12px;color:var(--fg-3)">No agent tokens yet.</p>
     {% endif %}
