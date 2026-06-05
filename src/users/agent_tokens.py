@@ -48,9 +48,26 @@ class AgentTokenProvider:
         return result.data or []
 
     def revoke(self, user_id: str, token_id: str) -> None:
+        """Soft-revoke a token — marks it revoked, row retained for audit."""
         self.db.table("user_agent_tokens").update(
             {"revoked_at": datetime.now(timezone.utc).isoformat()}
         ).eq("id", token_id).eq("user_id", user_id).execute()
+
+    def revoke_many(self, user_id: str, token_ids: list[str]) -> None:
+        """Soft-revoke multiple tokens owned by the user."""
+        if not token_ids:
+            return
+        self.db.table("user_agent_tokens").update(
+            {"revoked_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("user_id", user_id).in_("id", token_ids).execute()
+
+    def delete_many(self, user_id: str, token_ids: list[str]) -> None:
+        """Hard-delete multiple tokens owned by the user."""
+        if not token_ids:
+            return
+        self.db.table("user_agent_tokens").delete().eq(
+            "user_id", user_id
+        ).in_("id", token_ids).execute()
 
     def lookup(self, raw_token: str) -> Optional[dict]:
         """Return the token row if active (not revoked, not expired). None otherwise."""

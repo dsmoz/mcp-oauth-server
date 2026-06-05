@@ -1068,6 +1068,21 @@ async def portal_agent_token_revoke(
     return RedirectResponse(url="/portal/setup", status_code=303)
 
 
+@router.post("/setup/agent-tokens/bulk")
+async def portal_agent_token_bulk(
+    user_id: str = Depends(_require_portal_user),
+    action: str = Form(...),
+    token_ids: list[str] = Form(default=[]),
+):
+    """Bulk revoke or delete selected agent tokens owned by the user."""
+    provider = AgentTokenProvider()
+    if action == "delete":
+        provider.delete_many(user_id=user_id, token_ids=token_ids)
+    elif action == "revoke":
+        provider.revoke_many(user_id=user_id, token_ids=token_ids)
+    return RedirectResponse(url="/portal/setup", status_code=303)
+
+
 @router.post("/setup/rotate-secret")
 async def portal_rotate_secret(
     user_id: str = Depends(_require_portal_user),
@@ -1201,6 +1216,47 @@ async def portal_devices_delete(
     try:
         from src.gateway.routes import evict_transport
         evict_transport(client_id)
+    except Exception:
+        pass
+    return RedirectResponse(url="/portal/devices", status_code=303)
+
+
+@router.post("/devices/bulk")
+async def portal_devices_bulk(
+    user_id: str = Depends(_require_portal_user),
+    action: str = Form(...),
+    client_ids: list[str] = Form(default=[]),
+):
+    """Bulk revoke (soft) or delete (hard) selected devices owned by the user."""
+    if action not in ("revoke", "delete") or not client_ids:
+        return RedirectResponse(url="/portal/devices", status_code=303)
+
+    db = get_db()
+    owned = (
+        db.table("oauth_clients")
+        .select("client_id")
+        .eq("user_id", user_id)
+        .in_("client_id", client_ids)
+        .execute()
+    )
+    ids = [r["client_id"] for r in (owned.data or [])]
+    if not ids:
+        return RedirectResponse(url="/portal/devices", status_code=303)
+
+    if action == "revoke":
+        db.table("oauth_clients").update({"is_active": False}).in_("client_id", ids).execute()
+        db.table("oauth_access_tokens").update({"is_revoked": True}).in_("client_id", ids).execute()
+        db.table("oauth_refresh_tokens").update({"is_revoked": True}).in_("client_id", ids).execute()
+    else:
+        from src.oauth.provider import SupabaseOAuthProvider
+        provider = SupabaseOAuthProvider()
+        for cid in ids:
+            provider.delete_client(cid)
+
+    try:
+        from src.gateway.routes import evict_transport
+        for cid in ids:
+            evict_transport(cid)
     except Exception:
         pass
     return RedirectResponse(url="/portal/devices", status_code=303)
