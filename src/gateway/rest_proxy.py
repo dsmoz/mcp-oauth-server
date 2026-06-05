@@ -33,12 +33,32 @@ def _get_bearer(request: Request) -> Optional[str]:
 
 
 def _validate_token(token: str) -> Optional[Tuple[str, str]]:
-    """Validate an OAuth access_token.
+    """Validate a bearer credential for /api/plugin/* traffic.
+
+    Accepts two credential types:
+      • dsmoz_* personal connection tokens (agent tokens) — the universal
+        plugin credential, mintable by every account type including
+        Microsoft-SSO users who have no password.
+      • OAuth access_tokens issued by the portal password login.
 
     Returns (user_id, client_id) if valid and bound to a user; None otherwise.
     Falls back to oauth_clients.user_id lookup for legacy tokens issued before
     the users table existed.
     """
+    # Agent-token path — mirrors the MCP gateway handler in routes.py so the
+    # plugin's REST endpoints honour the same long-lived keys.
+    if token.startswith("dsmoz_"):
+        from src.users.agent_tokens import AgentTokenProvider
+        from src.gateway.routes import _ensure_agent_client
+        agent_row = AgentTokenProvider().lookup(token)
+        if not agent_row:
+            return None
+        try:
+            AgentTokenProvider().touch_last_used(agent_row["id"])
+        except Exception:
+            pass
+        return agent_row["user_id"], _ensure_agent_client(agent_row["user_id"])
+
     provider = SupabaseOAuthProvider()
     at = provider.load_access_token(token)
     if at is None or at.is_revoked:
