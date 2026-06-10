@@ -294,6 +294,33 @@ def _resolve_user_id_for_token(at) -> str | None:
     return None
 
 
+def _is_admin_user(user_id: str | None) -> bool:
+    """Return the admin flag for a user from the users table.
+
+    Mirrors the /introspect endpoint (oauth/routes.py) so upstream MCPs can gate
+    admin-only writes on the same source of truth. Upstreams cannot introspect the
+    caller themselves — the gateway forwards the shared upstream API key in
+    Authorization, not the user's token — so admin status must be forwarded
+    explicitly (as the X-Is-Admin header). Returns False on any lookup failure.
+    """
+    if not user_id:
+        return False
+    try:
+        row = (
+            get_db()
+            .table("users")
+            .select("is_admin")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if row.data:
+            return bool(row.data[0].get("is_admin", False))
+    except Exception:
+        pass
+    return False
+
+
 def _load_enabled_mcps(user_id: str) -> list[dict]:
     """Return MCPs the user has added, filtered to published and tier-allowed ones."""
     db = get_db()
@@ -627,11 +654,17 @@ def _build_mcp_server(user_id: str, client_id: str, enabled_mcps: list[dict], to
     _ui_tools: dict[str, dict] = {}
     # Resource origins: uri -> slug (populated lazily by list_resources_handler)
     _resource_origin: dict[str, str] = {}
+    # Resolve the caller's admin flag once per session. Forwarded to upstreams as
+    # X-Is-Admin so they can gate admin-only writes (upstreams cannot introspect
+    # the user — they only see the shared upstream API key in Authorization).
+    _is_admin = _is_admin_user(user_id)
 
     async def _user_extra_headers(mcp: dict) -> dict[str, str]:
         headers = await _extra_headers_for(mcp, user_id)
         if token:
             headers["X-User-Token"] = token
+        if _is_admin:
+            headers["X-Is-Admin"] = "true"
         return headers
 
     server = Server(
