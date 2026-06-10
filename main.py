@@ -11,11 +11,39 @@ if _sentry_dsn:
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
     from sentry_sdk.integrations.starlette import StarletteIntegration
+
+    def _before_send(event, hint):
+        """Drop benign anyio stream-teardown and client-disconnect noise.
+
+        Filters:
+        1. Exception types: ClosedResourceError, BrokenResourceError, EndOfStream (anyio)
+        2. Exception types: ClientDisconnect (starlette), ConnectionResetError
+        3. Logger message: "Received exception from stream:" (SDK streamable_http.py)
+        """
+        # Pattern 1: Exception type filtering
+        exc_values = event.get("exception", {}).get("values", [])
+        benign_exc_types = {
+            "ClosedResourceError", "BrokenResourceError", "EndOfStream",
+            "ClientDisconnect", "ConnectionResetError"
+        }
+        if any(v.get("type") in benign_exc_types for v in exc_values):
+            return None
+
+        # Pattern 2: Logger message filtering (SDK stream lifecycle logs)
+        msg = event.get("message", "").strip()
+        if msg.startswith("Received exception from stream:"):
+            logger_name = event.get("logger", "")
+            if "mcp.server" in logger_name or logger_name == "mcp.server.lowlevel.server":
+                return None
+
+        return event
+
     sentry_sdk.init(
         dsn=_sentry_dsn,
         traces_sample_rate=0.1,
         environment=os.getenv("RAILWAY_ENVIRONMENT", "development"),
         integrations=[StarletteIntegration(), FastApiIntegration()],
+        before_send=_before_send,
     )
     print("✅ Sentry error tracking enabled", file=sys.stderr)
 from fastapi import FastAPI
