@@ -16,57 +16,75 @@
 </div>
 
 {% if devices %}
-<div class="card" style="padding:0;overflow:hidden">
-  <div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse">
-      <thead>
-        <tr style="background:var(--bg)">
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--line)">Name</th>
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--line)">Device ID</th>
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--line)">Status</th>
-          <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--line)">Claimed</th>
-          <th style="padding:10px 16px;text-align:right;font-size:11px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--line)">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for d in devices %}
-        <tr class="dev-row" style="border-top:1px solid var(--line);transition:background 0.12s">
-          <td style="padding:14px 16px;font-size:13px;color:var(--fg-1);font-family:'Raleway',sans-serif;font-weight:600">{{ d.client_name }}</td>
-          <td style="padding:14px 16px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--fg-3)">{{ d.client_id }}</td>
-          <td style="padding:14px 16px">
-            {% if d.is_active %}
-            <span class="chip green"><span class="chip-dot"></span>active</span>
-            {% else %}
-            <span class="chip beige"><span class="chip-dot"></span>revoked</span>
-            {% endif %}
-          </td>
-          <td style="padding:14px 16px;font-size:12px;color:var(--fg-3)">{{ d.claimed_at[:10] if d.claimed_at else "—" }}</td>
-          <td style="padding:14px 16px;text-align:right">
-            <div class="dev-actions" style="display:inline-flex;gap:4px;justify-content:flex-end">
-              {% if d.is_active %}
-              <form method="post" action="/portal/devices/revoke" style="margin:0"
-                    onsubmit="return confirm('Revoke {{ d.client_name }}? The device will be signed out.')">
-                <input type="hidden" name="client_id" value="{{ d.client_id }}">
-                <button type="submit" class="btn btn-ghost btn-sm btn-icon" title="Revoke" aria-label="Revoke">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-                </button>
-              </form>
-              {% endif %}
-              <form method="post" action="/portal/devices/delete" style="margin:0"
-                    onsubmit="return confirm('Permanently delete {{ d.client_name }}? This cannot be undone.')">
-                <input type="hidden" name="client_id" value="{{ d.client_id }}">
-                <button type="submit" class="btn btn-ghost btn-sm btn-icon btn-danger" title="Delete" aria-label="Delete">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
-                </button>
-              </form>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<form method="post" action="/portal/devices/bulk" id="device-bulk-form">
+  <div id="device-bulkbar" style="display:none;align-items:center;gap:10px;margin-bottom:12px;padding:8px 14px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg-card)">
+    <span style="font-size:12px;color:var(--fg-2)"><span id="device-count">0</span> selected</span>
+    <button type="submit" name="action" value="revoke" class="btn btn-ghost btn-sm"
+            onclick="return confirm('Revoke the selected devices? They will be signed out.')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      Revoke
+    </button>
+    <button type="submit" name="action" value="delete" class="btn btn-ghost btn-sm btn-danger"
+            onclick="return confirm('Permanently delete the selected devices? This cannot be undone.')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+      Delete
+    </button>
   </div>
-</div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:var(--bg)">
+            <th style="padding:10px 16px;width:28px;border-bottom:1px solid var(--line)"><input type="checkbox" id="device-all" aria-label="Select all devices"></th>
+            <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--line)">Name</th>
+            <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--line)">Device ID</th>
+            <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--line)">Status</th>
+            <th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:700;color:var(--fg-3);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--line)">Claimed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in devices %}
+          <tr class="dev-row" style="border-top:1px solid var(--line);transition:background 0.12s">
+            <td style="padding:14px 16px"><input type="checkbox" class="device-cb" name="client_ids" value="{{ d.client_id }}" aria-label="Select {{ d.client_name }}"></td>
+            <td style="padding:14px 16px;font-size:13px;color:var(--fg-1);font-family:'Raleway',sans-serif;font-weight:600">{{ d.client_name }}</td>
+            <td style="padding:14px 16px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--fg-3)">{{ d.client_id }}</td>
+            <td style="padding:14px 16px">
+              {% if d.is_active %}
+              <span class="chip green"><span class="chip-dot"></span>active</span>
+              {% else %}
+              <span class="chip beige"><span class="chip-dot"></span>revoked</span>
+              {% endif %}
+            </td>
+            <td style="padding:14px 16px;font-size:12px;color:var(--fg-3)">{{ d.claimed_at[:10] if d.claimed_at else "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</form>
+<script>
+  (function () {
+    var all = document.getElementById("device-all");
+    var cbs = Array.prototype.slice.call(document.querySelectorAll(".device-cb"));
+    var bar = document.getElementById("device-bulkbar");
+    var count = document.getElementById("device-count");
+    function sync() {
+      var sel = cbs.filter(function (c) { return c.checked; });
+      count.textContent = sel.length;
+      bar.style.display = sel.length ? "flex" : "none";
+      if (all) {
+        all.checked = sel.length === cbs.length && cbs.length > 0;
+        all.indeterminate = sel.length > 0 && sel.length < cbs.length;
+      }
+    }
+    if (all) all.addEventListener("change", function () {
+      cbs.forEach(function (c) { c.checked = all.checked; });
+      sync();
+    });
+    cbs.forEach(function (c) { c.addEventListener("change", sync); });
+  })();
+</script>
 {% else %}
 <div class="card" style="padding:40px;text-align:center">
   <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--fg-3);margin:0 auto 14px"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
