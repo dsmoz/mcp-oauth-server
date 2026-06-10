@@ -87,6 +87,27 @@ async def fetch_tool_list(
     client_id: str = "",
     extra_headers: dict[str, str] | None = None,
 ) -> list[dict]:
+    """Fetch tool list from an upstream MCP server.
+
+    Tries multiple URL candidates (transport/trailing-slash variants) and
+    returns tools from the first successful response. Unwraps timeout errors
+    from BaseExceptionGroup so Sentry sees clear TimeoutError instead of
+    generic RuntimeError.
+
+    Args:
+        upstream_url: Base upstream URL (e.g., https://example.com/mcp)
+        api_key: Optional Bearer token.
+        user_id: Optional X-User-ID header value.
+        client_id: Optional X-Client-ID header value.
+        extra_headers: Additional headers to forward.
+
+    Returns:
+        List of tool descriptors {name, description, inputSchema, [_meta]}.
+
+    Raises:
+        TimeoutError: If all attempts time out after TOOL_LIST_TIMEOUT.
+        RuntimeError: If all attempts fail with non-timeout error.
+    """
     headers: dict[str, str] = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
@@ -102,12 +123,29 @@ async def fetch_tool_list(
         try:
             return await _list_tools_via_url(url, headers)
         except Exception as exc:
+            # Log DNS/connection errors at warning level; they're per-upstream
+            # and the aggregator will handle degrade gracefully.
+            if _is_dns_or_connect_error(exc):
+                logger.warning(
+                    "DNS/connection error fetching tools from %s: %s",
+                    url, exc, exc_info=False
+                )
             last_exc = exc
             continue
+
+    # All attempts failed. Check if any was a timeout.
+    if last_exc is not None:
+        timeout_exc = _extract_timeout_from_group(last_exc)
+        if timeout_exc is not None:
+            raise TimeoutError(
+                f"Tool discovery for {upstream_url} timed out after {TOOL_LIST_TIMEOUT}s"
+            ) from last_exc
 
     raise RuntimeError(
         f"Tool discovery failed for {upstream_url}: {last_exc}"
     ) from last_exc
+
+
 def _walk_exceptions(exc: BaseException):
     """Yield exc and every nested cause/context/sub-exception (incl. groups)."""
     seen: set[int] = set()
@@ -196,6 +234,61 @@ def _is_timeout_error(exc: Exception) -> bool:
         if isinstance(cause, (TimeoutError, httpx.TimeoutException)):
             return True
         cause = getattr(cause, "__cause__", None) or getattr(cause, "__context__", None)
+    return False
+
+
+def _extract_timeout_from_group(exc: BaseException) -> TimeoutError | None:  # noqa: E501
+    """Extract TimeoutError from exception group if present.
+
+    Uses _walk_exceptions to traverse nested groups and find timeout leaf.
+    Used by fetch_tool_list to detect timeouts even when wrapped in
+    BaseExceptionGroup from anyio.fail_after.
+
+    Args:
+        exc: The exception (possibly wrapped in BaseExceptionGroup).
+
+    Returns:
+        TimeoutError if found, else None.
+    """
+    for e in _walk_exceptions(exc):
+        if isinstance(e, TimeoutError):
+            return e
+        if isinstance(e, httpx.TimeoutException):
+            # httpx.TimeoutException is not a TimeoutError, but represents timeout
+            timeout_err = TimeoutError(str(e))
+            timeout_err.__cause__ = e
+            return timeout_err
+    return None
+
+
+def _is_dns_or_connect_error(exc: BaseException) -> bool:
+    """Check if exception indicates DNS or connection failure.
+
+    DNS errors (socket.gaierror 'name or service not known') and connection
+    refused errors are transient per-upstream and should be logged but not
+    crash the entire discovery flow.
+
+    Args:
+        exc: The exception to inspect.
+
+    Returns:
+        True if the exception looks like DNS/connection failure.
+    """
+    for e in _walk_exceptions(exc):
+        # Check exception type name for DNS/connection indicators
+        exc_name = type(e).__name__.lower()
+        if "gaierror" in exc_name or "resolverror" in exc_name:
+            return True
+        if "connectionrefused" in exc_name or "connectionerror" in exc_name:
+            return True
+        msg = str(e).lower()
+        if "name or service not known" in msg:
+            return True
+        if "connection refused" in msg or "connection reset" in msg:
+            return True
+        # httpx ConnectError for DNS failures
+        if isinstance(e, httpx.ConnectError):
+            return True
     return False
 
 
