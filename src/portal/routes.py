@@ -821,6 +821,113 @@ async def portal_mcp_config_save(
     return JSONResponse({"ok": True})
 
 
+# ── Scholar provisioning danger-zone (status / set-up / sync / delete) ────────
+#
+# These talk to mcp-scholar's /api/plugin/provision* endpoints with the ADMIN
+# token + X-User-ID, and DELIBERATELY send NO X-MCP-Credentials. The rest_proxy
+# path injects X-MCP-Credentials, which would trip scholar's middleware
+# self-heal (auto-provision) and make status always read "Set" — so these
+# routes cannot reuse rest_proxy.
+
+
+async def _scholar_call(method: str, path: str, user_id: str, json_body: dict | None = None):
+    """Call mcp-scholar /api/plugin/{path} as admin, scoped by X-User-ID.
+
+    No X-MCP-Credentials header (see module note). Returns (status_code, dict).
+    """
+    import httpx
+    from src.gateway.rest_proxy import _get_scholar_config
+
+    scholar = _get_scholar_config()
+    if not scholar:
+        return 503, {"error": "mcp-scholar not configured in catalogue"}
+
+    base_url = (
+        scholar["upstream_url"].rstrip("/").removesuffix("/mcp").removesuffix("/sse")
+    )
+    url = f"{base_url}/api/plugin/{path}"
+    headers = {
+        "Authorization": f"Bearer {scholar['upstream_api_key']}",
+        "X-User-ID": user_id,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.request(method, url, headers=headers, json=json_body)
+        try:
+            data = resp.json()
+        except Exception:
+            data = {"error": resp.text[:500]}
+        return resp.status_code, data
+    except Exception as exc:
+        return 502, {"error": f"scholar unreachable: {exc}"}
+
+
+@router.get("/mcps/scholar/status")
+async def portal_scholar_status(request: Request, user_id: str = Depends(_require_portal_user)):
+    status, data = await _scholar_call("GET", "provision/status", user_id)
+    return JSONResponse(data, status_code=status)
+
+
+@router.post("/mcps/scholar/provision")
+async def portal_scholar_provision(request: Request, user_id: str = Depends(_require_portal_user)):
+    # Pull the user's saved Zotero creds from user_mcp_configs.
+    db = get_db()
+    rows = (
+        db.table("user_mcp_configs")
+        .select("config")
+        .eq("user_id", user_id)
+        .eq("mcp_slug", "mcp-scholar")
+        .limit(1)
+        .execute()
+        .data or []
+    )
+    cfg = (rows[0]["config"] if rows else {}) or {}
+    if not cfg.get("api_key") or not cfg.get("user_id"):
+        return JSONResponse(
+            {"error": "Save your Zotero API Key and User ID first."}, status_code=400
+        )
+
+    provider_config = {
+        "api_key": cfg["api_key"],
+        "user_id": cfg["user_id"],
+        "library_type": cfg.get("library_type") or "user",
+    }
+    status, data = await _scholar_call(
+        "POST", "provision", user_id,
+        {"client_id": user_id, "provider": "zotero", "provider_config": provider_config},
+    )
+    return JSONResponse(data, status_code=status)
+
+
+@router.post("/mcps/scholar/sync")
+async def portal_scholar_sync(request: Request, user_id: str = Depends(_require_portal_user)):
+    status, data = await _scholar_call("POST", "sync", user_id, {})
+    return JSONResponse(data, status_code=status)
+
+
+@router.post("/mcps/scholar/deprovision")
+async def portal_scholar_deprovision(request: Request, user_id: str = Depends(_require_portal_user)):
+    # Two-gate confirm forwarded to scholar: confirm=true + confirm_tenancy=user_id.
+    status, data = await _scholar_call(
+        "DELETE", "provision", user_id,
+        {"confirm": True, "confirm_tenancy": user_id},
+    )
+    # True teardown: on success, drop the saved Zotero creds too. Otherwise the next
+    # gateway call (rest_proxy injects X-MCP-Credentials) auto-resurrects an empty
+    # tenant via the middleware self-heal path. User must re-enter the key to re-provision.
+    if status < 400 and data.get("success") is not False:
+        try:
+            db = get_db()
+            db.table("user_mcp_configs").delete().eq("user_id", user_id).eq(
+                "mcp_slug", "mcp-scholar"
+            ).execute()
+            from src.gateway.routes import _invalidate_user_config_cache
+            _invalidate_user_config_cache(user_id, "mcp-scholar")
+        except Exception as exc:  # noqa: BLE001 — teardown best-effort; DB delete already done
+            print(f"[scholar deprovision] cred cleanup skipped: {exc}")
+    return JSONResponse(data, status_code=status)
+
+
 # ── Catalog (browse + add to toolbox) ────────────────────────────────────────
 
 def _catalog_query(db, user):

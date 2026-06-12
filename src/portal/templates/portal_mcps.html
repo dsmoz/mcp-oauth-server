@@ -183,6 +183,34 @@
                     <button type="button" class="btn-cfg-save" onclick="saveCfg('{{ mcp.slug }}')">Save</button>
                     <span class="cfg-status" id="cfg-status-{{ mcp.slug }}"></span>
                   </div>
+
+                  {% if mcp.slug == 'mcp-scholar' %}
+                  <div class="scholar-prov" data-loaded="0">
+                    <div class="sp-divider"></div>
+                    <div class="sp-title">Databases</div>
+                    <div class="sp-rows">
+                      <div class="sp-row">
+                        <span class="sp-dot" id="sp-dot-synctracker"></span>
+                        <span class="sp-name">SyncTracker</span>
+                        <span class="sp-state" id="sp-state-synctracker">…</span>
+                      </div>
+                      <div class="sp-row">
+                        <span class="sp-dot" id="sp-dot-vector"></span>
+                        <span class="sp-name">Vector DB</span>
+                        <span class="sp-state" id="sp-state-vector">…</span>
+                      </div>
+                    </div>
+                    <div class="sp-actions">
+                      <button type="button" class="btn-sp btn-sp-setup" id="sp-setup-btn" onclick="scholarProvision()">Set it up</button>
+                      <button type="button" class="btn-sp" id="sp-sync-btn" onclick="scholarSync()">Sync</button>
+                    </div>
+                    <div class="sp-danger">
+                      <div class="sp-danger-head">Danger zone</div>
+                      <button type="button" class="btn-sp btn-sp-danger" onclick="scholarDeprovision()">Delete databases</button>
+                    </div>
+                    <div class="sp-msg" id="sp-msg"></div>
+                  </div>
+                  {% endif %}
                 </div>
               </div>
               {% endif %}
@@ -222,6 +250,30 @@
 </div>
 
 <style>
+/* Scholar provisioning danger-zone */
+.scholar-prov { margin-top: 4px; }
+.sp-divider { height: 1px; background: var(--line-2); margin: 14px 0 12px; }
+.sp-title { font-size: 12px; font-weight: 700; color: var(--fg-2); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.sp-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.sp-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.sp-dot { width: 9px; height: 9px; border-radius: 999px; background: var(--fg-3); flex: none; }
+.sp-dot.sp-on { background: var(--success, #22c55e); }
+.sp-dot.sp-off { background: var(--danger, #ef4444); }
+.sp-name { color: var(--fg-1); font-weight: 600; }
+.sp-state { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.sp-state.sp-on-t { color: var(--success, #22c55e); }
+.sp-state.sp-off-t { color: var(--danger, #ef4444); }
+.sp-actions { display: flex; gap: 8px; margin-bottom: 14px; }
+.btn-sp { font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--bg-card); color: var(--fg-1); cursor: pointer; }
+.btn-sp:hover { background: var(--bg-hover, rgba(0,0,0,.04)); }
+.btn-sp:disabled { opacity: .55; cursor: default; }
+.btn-sp-setup { border-color: var(--success-bg, #16a34a33); color: var(--success, #16a34a); }
+.sp-danger { border: 1px solid var(--danger-bg, #ef444433); border-radius: 8px; padding: 10px 12px; }
+.sp-danger-head { font-size: 11px; font-weight: 700; color: var(--danger, #ef4444); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.btn-sp-danger { border-color: var(--danger, #ef4444); color: var(--danger, #ef4444); background: transparent; }
+.btn-sp-danger:hover { background: var(--danger, #ef4444); color: #fff; }
+.sp-msg { font-size: 12px; color: var(--fg-2); margin-top: 10px; min-height: 16px; }
+.sp-msg.err { color: var(--danger, #ef4444); }
 .cost-chip {
   display: inline-flex;
   align-items: center;
@@ -723,6 +775,7 @@ function toggleCfg(slug) {
     document.body.style.overflow = 'hidden';
     const firstInput = panel.querySelector('.cfg-input');
     if (firstInput) firstInput.focus();
+    if (slug === 'mcp-scholar') scholarLoadStatus();
   }
 }
 
@@ -790,6 +843,73 @@ async function saveCfg(slug) {
   } finally {
     if (saveBtn) saveBtn.disabled = false;
   }
+}
+
+// ── Scholar provisioning (danger zone) ──────────────────────────────────────
+function _spSet(resource, state) {
+  const dot = document.getElementById('sp-dot-' + resource);
+  const lbl = document.getElementById('sp-state-' + resource);
+  const set = state === 'set';
+  if (dot) dot.className = 'sp-dot ' + (set ? 'sp-on' : 'sp-off');
+  if (lbl) { lbl.textContent = set ? 'Set' : 'Not set'; lbl.className = 'sp-state ' + (set ? 'sp-on-t' : 'sp-off-t'); }
+}
+
+function _spMsg(text, isErr) {
+  const m = document.getElementById('sp-msg');
+  if (!m) return;
+  m.textContent = text || '';
+  m.className = 'sp-msg' + (isErr ? ' err' : '');
+}
+
+async function scholarLoadStatus() {
+  const wrap = document.querySelector('.scholar-prov');
+  if (wrap) wrap.dataset.loaded = '1';
+  _spSet('synctracker', '…'); _spSet('vector', '…');
+  try {
+    const resp = await fetch('/portal/mcps/scholar/status', {credentials: 'same-origin'});
+    const data = await resp.json();
+    if (!resp.ok) { _spMsg(data.error || 'Status unavailable', true); return; }
+    _spSet('synctracker', data.synctracker);
+    _spSet('vector', data.vector_db);
+    const setupBtn = document.getElementById('sp-setup-btn');
+    if (setupBtn) setupBtn.style.display = data.provisioned ? 'none' : '';
+    _spMsg('');
+  } catch (e) {
+    _spMsg('Network error', true);
+  }
+}
+
+async function _spAction(btn, url, body, successMsg) {
+  if (btn) btn.disabled = true;
+  _spMsg('Working…');
+  try {
+    const opts = {method: 'POST', credentials: 'same-origin'};
+    if (body) { opts.headers = {'Content-Type': 'application/json'}; opts.body = JSON.stringify(body); }
+    const resp = await fetch(url, opts);
+    const data = await resp.json();
+    if (!resp.ok || data.success === false) { _spMsg(data.error || 'Failed', true); return false; }
+    _spMsg(successMsg);
+    await scholarLoadStatus();
+    return true;
+  } catch (e) {
+    _spMsg('Network error', true);
+    return false;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function scholarProvision() {
+  _spAction(document.getElementById('sp-setup-btn'), '/portal/mcps/scholar/provision', null, 'Databases provisioned.');
+}
+
+function scholarSync() {
+  _spAction(document.getElementById('sp-sync-btn'), '/portal/mcps/scholar/sync', null, 'Sync started.');
+}
+
+function scholarDeprovision() {
+  if (!confirm('Delete your SyncTracker and Vector DB? This permanently removes all indexed data and cannot be undone. You will need to re-enter your Zotero API Key to set up again.')) return;
+  _spAction(null, '/portal/mcps/scholar/deprovision', null, 'Databases deleted.');
 }
 </script>
 {% endblock %}
