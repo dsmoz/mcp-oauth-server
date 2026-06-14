@@ -176,6 +176,7 @@
                         autocomplete="off"
                         spellcheck="false"
                       >
+                      {% if field.help %}<p class="cfg-help">{{ field.help }}</p>{% endif %}
                     </div>
                     {% endfor %}
                   </div>
@@ -532,6 +533,13 @@
   font-family: 'Inter', sans-serif;
 }
 .cfg-req { color: var(--danger, #c0392b); margin-left: 2px; }
+.cfg-help {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--fg-3);
+  font-family: 'Inter', sans-serif;
+}
 .cfg-input {
   padding: 7px 10px;
   background: var(--bg-card);
