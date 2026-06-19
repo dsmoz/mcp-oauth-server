@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # tokens at rest. Generate with:
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     GRAPH_TOKEN_ENCRYPTION_KEY: str = ""
+    # Shared secret for service-to-service /api/internal/* calls (scholar-web BFF
+    # auto-linking a Connect user's Scholar library). Must match the value set in
+    # scholar-web's deployment env. Endpoints refuse (503) when left blank.
+    SCHOLAR_LINK_SERVICE_SECRET: str = ""
 
 
 @lru_cache()
