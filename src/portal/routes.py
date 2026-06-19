@@ -928,6 +928,110 @@ async def portal_scholar_deprovision(request: Request, user_id: str = Depends(_r
     return JSONResponse(data, status_code=status)
 
 
+# ── Internal service API (scholar-web auto-link) ─────────────────────────────
+#
+# Lets the scholar-web BFF auto-link a Connect user's Scholar library WITHOUT a
+# manual token paste. The join key is the verified email (both Connect and
+# scholar-web sign in via Google/Azure OAuth). Authed by a shared service secret
+# (X-Service-Secret), NOT a portal session — this is server-to-server only.
+
+internal_router = APIRouter(prefix="/api/internal")
+
+
+def _require_service_secret(request: Request) -> None:
+    """Constant-time check of the shared service secret. 503 if unconfigured."""
+    import secrets as _secrets
+
+    expected = get_settings().SCHOLAR_LINK_SERVICE_SECRET
+    if not expected:
+        raise HTTPException(status_code=503, detail="service link not configured")
+    presented = request.headers.get("X-Service-Secret", "")
+    if not _secrets.compare_digest(presented, expected):
+        raise HTTPException(status_code=401, detail="invalid service secret")
+
+
+@internal_router.post("/scholar-link")
+async def internal_scholar_link(request: Request):
+    """Resolve a Connect user by email and hand scholar-web a usable Scholar token.
+
+    Body: {"email": "..."}. Returns {client_id, token, display_name} on success.
+    404 if the email is not a Connect user or has no Scholar setup (no saved
+    Zotero creds). The returned token is the engine's clients.service_token — a
+    STABLE per-client credential for the tier-0 (BFF) path. It is READ, never
+    rotated: provision mints it for fresh tenants and the credentials PUT returns
+    the existing value for already-provisioned ones. This is the key fix for the
+    plugin logout bug — rotating api_token (the old behaviour) invalidated the
+    Zotero plugin's stored token on every re-link.
+    """
+    _require_service_secret(request)
+
+    body = await request.json()
+    email = (body.get("email") or "").strip().lower()
+    if not email:
+        return JSONResponse({"error": "email required"}, status_code=400)
+
+    user = _users().get_user_by_email(email)
+    if user is None:
+        return JSONResponse({"error": "not a Connect user"}, status_code=404)
+    user_id = user.user_id
+
+    # The user must already have saved Zotero creds — provision AND rotate both
+    # validate them against Zotero. No creds → nothing to link.
+    db = get_db()
+    rows = (
+        db.table("user_mcp_configs")
+        .select("config")
+        .eq("user_id", user_id)
+        .eq("mcp_slug", "mcp-scholar")
+        .limit(1)
+        .execute()
+        .data or []
+    )
+    cfg = (rows[0]["config"] if rows else {}) or {}
+    if not cfg.get("api_key") or not cfg.get("user_id"):
+        return JSONResponse(
+            {"error": "user has not set up Scholar (no Zotero credentials)"},
+            status_code=404,
+        )
+
+    provider_config = {
+        "api_key": cfg["api_key"],
+        "user_id": cfg["user_id"],
+        "library_type": cfg.get("library_type") or "user",
+    }
+
+    # Provisioned already? Update creds + READ the stable service_token (no
+    # rotation). Otherwise provision (which mints + returns it directly).
+    status, data = await _scholar_call("GET", "provision/status", user_id)
+    is_provisioned = status < 400 and bool(data.get("provisioned"))
+
+    if is_provisioned:
+        status, data = await _scholar_call(
+            "PUT", f"provision/{user_id}/credentials", user_id,
+            {"provider_config": provider_config},
+        )
+    else:
+        status, data = await _scholar_call(
+            "POST", "provision", user_id,
+            {"client_id": user_id, "provider": "zotero", "provider_config": provider_config},
+        )
+
+    # Prefer the stable service_token; fall back to api_token only if an older
+    # engine build hasn't deployed the service_token yet (transition safety).
+    token = (data or {}).get("service_token") or (data or {}).get("api_token")
+    if status >= 400 or not token:
+        return JSONResponse(
+            {"error": data.get("error") or "could not obtain Scholar token"},
+            status_code=status if status >= 400 else 502,
+        )
+
+    return JSONResponse({
+        "client_id": user_id,
+        "token": token,
+        "display_name": user.email,
+    })
+
+
 # ── Catalog (browse + add to toolbox) ────────────────────────────────────────
 
 def _catalog_query(db, user):
