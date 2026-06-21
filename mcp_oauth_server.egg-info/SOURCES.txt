@@ -39,11 +39,14 @@ src/users/agent_tokens.py
 src/users/provider.py
 tests/test_cache.py
 tests/test_candidate_urls.py
+tests/test_gateway_admin_flag 2.py
+tests/test_gateway_admin_flag.py
 tests/test_gateway_caches.py
 tests/test_gateway_deduct_credits.py
 tests/test_introspect_deduction.py
 tests/test_misdirected_error.py
 tests/test_public_clients.py
 tests/test_search_tools_parallel.py
+tests/test_sentry_before_send.py
 tests/test_token_cache.py
 tests/test_tool_discovery_timeout_unwrap.py
