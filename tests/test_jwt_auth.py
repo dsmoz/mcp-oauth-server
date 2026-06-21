@@ -1,11 +1,15 @@
 """Supabase JWT verification — gateway accepts scholar-signed JWTs."""
 import time
+import uuid
+from unittest.mock import MagicMock
+
 import jwt as pyjwt
 import pytest
 
 from src.gateway.jwt_auth import (
     InvalidJWT,
     JWTConfig,
+    resolve_or_create_user,
     verify_supabase_jwt,
 )
 
@@ -89,3 +93,24 @@ def test_wrong_secret_rejected():
     }, secret="wrong-secret-key")
     with pytest.raises(InvalidJWT):
         verify_supabase_jwt(token, _config())
+
+
+def test_resolve_existing_user():
+    sup = uuid.uuid4()
+    db = MagicMock()
+    db.table().select().eq().limit().execute.return_value.data = [
+        {"user_id": "u_existing", "supabase_user_id": str(sup)}
+    ]
+    user_id = resolve_or_create_user(db, str(sup), email="x@y")
+    assert user_id == "u_existing"
+
+
+def test_resolve_creates_new_user():
+    sup = uuid.uuid4()
+    db = MagicMock()
+    db.table().select().eq().limit().execute.return_value.data = []
+    db.table().insert().execute.return_value.data = [
+        {"user_id": "u_new", "supabase_user_id": str(sup)}
+    ]
+    user_id = resolve_or_create_user(db, str(sup), email="x@y")
+    assert user_id == "u_new"

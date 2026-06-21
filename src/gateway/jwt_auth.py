@@ -1,33 +1,39 @@
-"""jwt_auth.py — Supabase JWT verification for scholar-first identity bridge.
+"""jwt_auth.py — Supabase JWT verification and user identity resolution.
 
 Scholar signs short-lived JWTs (5-min) with its Supabase project JWT secret.
-This module verifies the signature, claims (iss, aud, exp, sub), and exposes
-``verify_supabase_jwt(token, config) -> claims dict``.
+This module verifies the signature, claims (iss, aud, exp, sub), resolves
+or provisions gateway users, and exposes a FastAPI dependency for authed routes.
 
 HS256 (Supabase's default) is the primary path — the secret is shared via env
 (``SCHOLAR_SUPABASE_JWT_SECRET``). RS256/JWKS support is included as a
 fall-forward when Supabase rolls out asymmetric signing per project.
 
 Public API:
-    JWTConfig            — env-resolved verification configuration
-    InvalidJWT           — exception raised on any failure
-    verify_supabase_jwt  — pure function; takes token + config, returns claims
-    load_config_from_env — convenience constructor for routes/middleware
+    JWTConfig                — env-resolved verification configuration
+    InvalidJWT               — exception raised on any failure
+    verify_supabase_jwt      — pure function; takes token + config, returns claims
+    load_config_from_env     — convenience constructor for routes/middleware
+    resolve_or_create_user   — map Supabase UUID to gateway user_id, insert if missing
+    current_jwt_user         — FastAPI dependency: Bearer JWT → gateway user_id
 """
 
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass, field
 from typing import Optional
 
 import jwt as pyjwt
+from fastapi import HTTPException, Request, status
 from jwt import (
     ExpiredSignatureError,
     InvalidAudienceError,
     InvalidTokenError,
     PyJWKClient,
 )
+
+from src.db import get_db
 
 
 class InvalidJWT(Exception):
@@ -134,3 +140,75 @@ def verify_supabase_jwt(token: str, config: JWTConfig) -> dict:
         raise InvalidJWT("missing sub claim")
 
     return claims
+
+
+def resolve_or_create_user(db, supabase_user_id: str, email: str = "") -> str:
+    """Map a Supabase user UUID to a gateway ``users.user_id`` (text).
+
+    Lookup first; on miss, insert a new users row with a stable
+    "scholar_" + 12-hex-char user_id. Idempotent under race via
+    the supabase_user_id unique index.
+    """
+    result = (
+        db.table("users")
+        .select("user_id")
+        .eq("supabase_user_id", supabase_user_id)
+        .limit(1)
+        .execute()
+    )
+    if result.data:
+        return result.data[0]["user_id"]
+
+    new_user_id = "scholar_" + secrets.token_hex(6)
+    try:
+        ins = (
+            db.table("users")
+            .insert({
+                "user_id": new_user_id,
+                "email": email or f"{new_user_id}@scholar.dsmoz.local",
+                "supabase_user_id": supabase_user_id,
+                "is_active": True,
+            })
+            .execute()
+        )
+    except Exception:
+        retry = (
+            db.table("users")
+            .select("user_id")
+            .eq("supabase_user_id", supabase_user_id)
+            .limit(1)
+            .execute()
+        )
+        if retry.data:
+            return retry.data[0]["user_id"]
+        raise
+    return ins.data[0]["user_id"]
+
+
+_CONFIG: Optional[JWTConfig] = None
+
+
+def _get_config() -> JWTConfig:
+    global _CONFIG
+    if _CONFIG is None:
+        _CONFIG = load_config_from_env()
+    return _CONFIG
+
+
+def current_jwt_user(request: Request) -> str:
+    """FastAPI dependency. Returns gateway ``users.user_id`` for a JWT-authed request.
+
+    Reads ``Authorization: Bearer <jwt>``. Verifies signature/claims, resolves
+    or provisions the gateway users row keyed by Supabase UUID. 401 on any
+    failure.
+    """
+    auth = request.headers.get("authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing_bearer")
+    token = auth[7:].strip()
+    try:
+        claims = verify_supabase_jwt(token, _get_config())
+    except InvalidJWT as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=f"invalid_jwt: {exc}")
+    db = get_db()
+    return resolve_or_create_user(db, claims["sub"], email=claims.get("email", ""))
