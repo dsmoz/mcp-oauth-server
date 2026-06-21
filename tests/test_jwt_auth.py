@@ -80,3 +80,12 @@ def test_missing_sub_rejected():
 def test_garbage_token_rejected():
     with pytest.raises(InvalidJWT):
         verify_supabase_jwt("not.a.jwt", _config())
+
+
+def test_wrong_secret_rejected():
+    now = int(time.time())
+    token = _mint({
+        "sub": "u", "iss": ISS, "aud": AUD, "iat": now, "exp": now + 60,
+    }, secret="wrong-secret-key")
+    with pytest.raises(InvalidJWT):
+        verify_supabase_jwt(token, _config())

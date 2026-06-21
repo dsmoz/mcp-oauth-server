@@ -25,7 +25,6 @@ import jwt as pyjwt
 from jwt import (
     ExpiredSignatureError,
     InvalidAudienceError,
-    InvalidIssuerError,
     InvalidTokenError,
     PyJWKClient,
 )
@@ -123,8 +122,6 @@ def verify_supabase_jwt(token: str, config: JWTConfig) -> dict:
         raise InvalidJWT("expired") from exc
     except InvalidAudienceError as exc:
         raise InvalidJWT("audience mismatch") from exc
-    except InvalidIssuerError as exc:
-        raise InvalidJWT("issuer mismatch") from exc
     except InvalidTokenError as exc:
         raise InvalidJWT(str(exc) or "invalid token") from exc
 
