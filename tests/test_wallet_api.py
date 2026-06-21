@@ -242,3 +242,63 @@ def test_debit_idempotent_on_request_id(monkeypatch):
     assert body["new_balance_credits"] == 88.0
     mock_settle.assert_not_called()
     mock_log.assert_not_called()
+
+
+def test_checkout_creates_session(monkeypatch):
+    from unittest.mock import patch
+    client, mock_db = _make_app_with_mocks(monkeypatch)
+    # Real DB columns: price_amount, credits, currency, is_published
+    pkg_row = {
+        "id": "p1",
+        "name": "Starter",
+        "price_amount": 5.0,
+        "credits": 500,
+        "currency": "USD",
+        "is_published": True,
+    }
+    with patch("src.gateway.wallet_api.get_db") as mock_db_getter, \
+         patch("src.gateway.wallet_api.create_checkout_session") as mock_stripe:
+        mock_db_getter.return_value = mock_db
+
+        def mock_table(table_name):
+            mock_table_obj = MagicMock()
+            if table_name == "topup_packages":
+                mock_table_obj.select().eq().limit().execute.return_value.data = [pkg_row]
+            return mock_table_obj
+
+        mock_db.table = mock_table
+        mock_stripe.return_value = {"session_id": "cs_1", "checkout_url": "https://stripe/x"}
+        r = client.post(
+            "/api/v1/wallet/checkout",
+            json={
+                "package_id": "p1",
+                "success_url": "https://scholar/ok",
+                "cancel_url": "https://scholar/cancel",
+            },
+            headers={"Authorization": "Bearer " + _mint_jwt("user-123")},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["session_id"] == "cs_1"
+    assert body["checkout_url"].startswith("https://stripe")
+
+
+def test_checkout_unknown_package_404(monkeypatch):
+    from unittest.mock import patch
+    client, mock_db = _make_app_with_mocks(monkeypatch)
+    with patch("src.gateway.wallet_api.get_db") as mock_db_getter:
+        mock_db_getter.return_value = mock_db
+
+        def mock_table(table_name):
+            mock_table_obj = MagicMock()
+            if table_name == "topup_packages":
+                mock_table_obj.select().eq().limit().execute.return_value.data = []
+            return mock_table_obj
+
+        mock_db.table = mock_table
+        r = client.post(
+            "/api/v1/wallet/checkout",
+            json={"package_id": "missing", "success_url": "x", "cancel_url": "y"},
+            headers={"Authorization": "Bearer " + _mint_jwt("user-123")},
+        )
+    assert r.status_code == 404

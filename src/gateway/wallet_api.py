@@ -14,6 +14,7 @@ from src.db import get_db
 from src.gateway.jwt_auth import current_jwt_user
 from src.gateway.billing import UsageMeta, compute_cost
 from src.gateway.routes import _settle_credits
+from src.gateway.stripe_client import StripeNotConfigured, create_checkout_session
 
 
 router = APIRouter(prefix="/api/v1/wallet", tags=["wallet"])
@@ -37,6 +38,17 @@ class Package(BaseModel):
 class PackagesResponse(BaseModel):
     """Published topup packages ordered by price."""
     packages: list[Package] = Field(..., description="Topup packages sorted by price (ascending)")
+
+
+class CheckoutIn(BaseModel):
+    package_id: str
+    success_url: str
+    cancel_url: str
+
+
+class CheckoutOut(BaseModel):
+    session_id: str
+    checkout_url: str
 
 
 def _usd_per_credit(db) -> float:
@@ -247,3 +259,52 @@ def post_debit(
         raw_usd=breakdown.raw_usd,
         credits_charged=breakdown.credits_charged,
     )
+
+
+@router.post("/checkout", response_model=CheckoutOut)
+def post_checkout(
+    payload: CheckoutIn,
+    user_id: str = Depends(current_jwt_user),
+) -> CheckoutOut:
+    """Create a Stripe Checkout Session from a topup package.
+
+    POST body: package_id, success_url, cancel_url
+    Returns: session_id, checkout_url
+
+    Looks up the published USD topup package from topup_packages table.
+    Returns 404 on unknown/unpublished package.
+    Returns 400 if package currency is not USD (v1 restriction).
+    Returns 503 if Stripe is not configured.
+
+    Requires JWT authentication.
+    """
+    db = get_db()
+    row = (
+        db.table("topup_packages")
+        .select("id, name, price_amount, credits, currency, is_published")
+        .eq("id", payload.package_id)
+        .limit(1)
+        .execute()
+    )
+    if not row.data or not row.data[0].get("is_published"):
+        raise HTTPException(status_code=404, detail="package_not_found")
+    pkg = row.data[0]
+
+    currency = (pkg.get("currency") or "USD").upper()
+    if currency != "USD":
+        # v1 only supports USD packages via Stripe Checkout.
+        raise HTTPException(status_code=400, detail="package_currency_unsupported")
+
+    try:
+        session = create_checkout_session(
+            user_id=user_id,
+            package_id=pkg["id"],
+            unit_amount_cents=int(round(float(pkg["price_amount"]) * 100)),
+            credits=float(pkg["credits"]),
+            success_url=payload.success_url,
+            cancel_url=payload.cancel_url,
+        )
+    except StripeNotConfigured as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    return CheckoutOut(**session)
