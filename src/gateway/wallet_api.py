@@ -12,6 +12,8 @@ from starlette.requests import Request
 
 from src.db import get_db
 from src.gateway.jwt_auth import current_jwt_user
+from src.gateway.billing import UsageMeta, compute_cost
+from src.gateway.routes import _settle_credits
 
 
 router = APIRouter(prefix="/api/v1/wallet", tags=["wallet"])
@@ -110,3 +112,138 @@ async def get_packages(user_id: str = Depends(current_jwt_user), db = Depends(ge
         ))
 
     return PackagesResponse(packages=packages)
+
+
+class DebitUsageIn(BaseModel):
+    """Optional LLM usage from the scholar BFF."""
+    usage_usd: Optional[float] = None
+    model: Optional[str] = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_input_tokens: int = 0
+
+
+class DebitIn(BaseModel):
+    """Request body for /wallet/debit endpoint."""
+    mcp_slug: str = Field(default="mcp-scholar-bff", description="MCP identifier (default: mcp-scholar-bff)")
+    duration_ms: int = Field(default=0, description="Execution duration in milliseconds")
+    response_bytes: int = Field(default=0, description="Response size in bytes")
+    usage: DebitUsageIn = Field(default_factory=DebitUsageIn, description="Optional LLM usage metrics")
+    request_id: str = Field(..., description="Unique idempotency key for this call")
+
+
+class DebitOut(BaseModel):
+    """Response body for /wallet/debit endpoint."""
+    new_balance_credits: float = Field(..., description="Credit balance after settlement")
+    sell_usd: float = Field(..., description="USD charged to the user (sell price)")
+    raw_usd: float = Field(..., description="Raw cost before margin (cost price)")
+    credits_charged: float = Field(..., description="Number of credits deducted")
+    idempotent: bool = Field(default=False, description="True if this was a duplicate call")
+
+
+def _already_logged(db, request_id: str) -> bool:
+    """Check if this request_id was already logged in oauth_usage_logs."""
+    row = (
+        db.table("oauth_usage_logs")
+        .select("request_id")
+        .eq("request_id", request_id)
+        .limit(1)
+        .execute()
+    )
+    return bool(row.data)
+
+
+def _write_usage_log(
+    db,
+    user_id: str,
+    mcp_slug: str,
+    request_id: str,
+    breakdown,
+    duration_ms: int,
+    response_bytes: int,
+) -> None:
+    """Write a usage record to oauth_usage_logs after billing."""
+    db.table("oauth_usage_logs").insert({
+        "user_id": user_id,
+        "mcp_slug": mcp_slug,
+        "request_id": request_id,
+        "caller_kind": "scholar_bff",
+        "duration_ms": duration_ms,
+        "response_bytes": response_bytes,
+        "compute_usd": breakdown.compute_usd,
+        "llm_usd": breakdown.llm_usd,
+        "raw_usd": breakdown.raw_usd,
+        "sell_usd": breakdown.sell_usd,
+        "credits_charged": breakdown.credits_charged,
+        "model_used": breakdown.model_used,
+        "input_tokens": breakdown.input_tokens,
+        "output_tokens": breakdown.output_tokens,
+    }).execute()
+
+
+@router.post("/debit", response_model=DebitOut)
+def post_debit(
+    payload: DebitIn,
+    user_id: str = Depends(current_jwt_user),
+) -> DebitOut:
+    """Bill scholar BFF usage by deducting credits.
+
+    Accepts usage metrics from the scholar BFF, computes cost via the existing
+    compute_cost pipeline, settles the charge atomically, and logs to oauth_usage_logs.
+
+    Idempotent on request_id: a duplicate call returns the current balance without
+    billing or logging again (backed by UNIQUE partial index on oauth_usage_logs.request_id).
+
+    Requires JWT authentication.
+    """
+    db = get_db()
+
+    # Idempotent path: already logged this request_id
+    if _already_logged(db, payload.request_id):
+        row = (
+            db.table("users")
+            .select("credit_balance")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        bal = float(row.data[0]["credit_balance"] or 0) if row.data else 0.0
+        return DebitOut(
+            new_balance_credits=bal,
+            sell_usd=0.0,
+            raw_usd=0.0,
+            credits_charged=0.0,
+            idempotent=True,
+        )
+
+    # Compute cost using the gateway's standard pipeline
+    breakdown = compute_cost(
+        mcp_slug=payload.mcp_slug,
+        duration_ms=payload.duration_ms,
+        response_bytes=payload.response_bytes,
+        usage=UsageMeta(
+            usage_usd=payload.usage.usage_usd,
+            model=payload.usage.model,
+            input_tokens=payload.usage.input_tokens,
+            output_tokens=payload.usage.output_tokens,
+            cached_input_tokens=payload.usage.cached_input_tokens,
+        ),
+    )
+
+    # Settle credits atomically
+    status_str, new_balance = _settle_credits(user_id, breakdown.credits_charged)
+    if status_str != "ok":
+        raise HTTPException(status_code=502, detail="billing_settle_failed")
+
+    # Log the usage
+    _write_usage_log(
+        db, user_id, payload.mcp_slug, payload.request_id,
+        breakdown, payload.duration_ms, payload.response_bytes,
+    )
+
+    return DebitOut(
+        new_balance_credits=new_balance or 0.0,
+        sell_usd=breakdown.sell_usd,
+        raw_usd=breakdown.raw_usd,
+        credits_charged=breakdown.credits_charged,
+    )

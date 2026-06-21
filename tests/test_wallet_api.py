@@ -166,3 +166,79 @@ def test_wallet_packages_missing_jwt(monkeypatch):
 
     response = client.get("/api/v1/wallet/packages")
     assert response.status_code == 401
+
+
+def test_debit_runs_compute_cost_and_settles(monkeypatch):
+    """POST /api/v1/wallet/debit runs compute_cost and settles credits."""
+    from unittest.mock import patch
+    client, mock_db = _make_app_with_mocks(monkeypatch)
+
+    payload = {
+        "mcp_slug": "mcp-scholar-bff",
+        "duration_ms": 800,
+        "response_bytes": 4096,
+        "usage": {"usage_usd": 0.002, "model": "claude-opus-4-7"},
+        "request_id": "req_test_001",
+    }
+    with patch("src.gateway.wallet_api._settle_credits") as mock_settle, \
+         patch("src.gateway.wallet_api._write_usage_log") as mock_log, \
+         patch("src.gateway.wallet_api._already_logged") as mock_seen, \
+         patch("src.gateway.wallet_api.get_db") as mock_db_getter:
+        mock_seen.return_value = False
+        mock_settle.return_value = ("ok", 99.5)
+        mock_db_getter.return_value = mock_db
+        r = client.post(
+            "/api/v1/wallet/debit",
+            json=payload,
+            headers={"Authorization": "Bearer " + _mint_jwt("user-123")},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["new_balance_credits"] == 99.5
+    assert body["sell_usd"] > 0
+    assert body["credits_charged"] > 0
+    assert body["idempotent"] is False
+    mock_log.assert_called_once()
+
+
+def test_debit_idempotent_on_request_id(monkeypatch):
+    """POST /api/v1/wallet/debit is idempotent on request_id."""
+    from unittest.mock import patch
+    client, mock_db = _make_app_with_mocks(monkeypatch)
+
+    payload = {
+        "mcp_slug": "mcp-scholar-bff",
+        "duration_ms": 800,
+        "response_bytes": 4096,
+        "usage": {"usage_usd": 0.002, "model": "claude-opus-4-7"},
+        "request_id": "req_test_002",
+    }
+    with patch("src.gateway.wallet_api._already_logged") as mock_seen, \
+         patch("src.gateway.wallet_api._settle_credits") as mock_settle, \
+         patch("src.gateway.wallet_api._write_usage_log") as mock_log, \
+         patch("src.gateway.wallet_api.get_db") as mock_db_getter:
+        mock_seen.return_value = True
+
+        # Mock the users table select to return existing balance
+        def mock_table(table_name):
+            mock_table_obj = MagicMock()
+            if table_name == "users":
+                mock_table_obj.select().eq().limit().execute.return_value.data = [
+                    {"credit_balance": 88.0}
+                ]
+            return mock_table_obj
+
+        mock_db.table = mock_table
+        mock_db_getter.return_value = mock_db
+
+        r = client.post(
+            "/api/v1/wallet/debit",
+            json=payload,
+            headers={"Authorization": "Bearer " + _mint_jwt("user-123")},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["idempotent"] is True
+    assert body["new_balance_credits"] == 88.0
+    mock_settle.assert_not_called()
+    mock_log.assert_not_called()
