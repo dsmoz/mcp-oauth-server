@@ -1,8 +1,8 @@
 ---
 title: DS-MOZ Connect — MCP OAuth Server & Gateway
 date_created: 2026-06-12
-date_modified: 2026-06-12
-version: 1.0
+date_modified: 2026-06-21
+version: 1.1
 modified_by_agent: Claude Code
 keywords_and_tags:
   - mcp-oauth-server
@@ -13,6 +13,9 @@ keywords_and_tags:
   - supabase
   - portal
   - billing
+  - scholar-first
+  - stripe
+  - wallet-api
 ---
 
 # DS-MOZ Connect — MCP OAuth Server & Gateway

@@ -65,6 +65,21 @@ flowchart TD
 | `/gateway/{client_id}`      | GET/POST/DELETE | Streamable HTTP MCP endpoint |
 | `/gateway/{client_id}/mcp`  | GET/POST/DELETE | Alias — same handler         |
 
+### Scholar-first REST (v1)
+
+All endpoints below take a Supabase JWT in `Authorization: Bearer <jwt>` and resolve the gateway `user_id` via `current_jwt_user` (see `src/gateway/jwt_auth.py`). Spec: scholar repo `docs/superpowers/specs/2026-06-21-scholar-first-identity-billing-design.md`.
+
+| Endpoint                       | Method | Description                                                              |
+|--------------------------------|--------|--------------------------------------------------------------------------|
+| `/api/v1/wallet/balance`       | GET    | Credit balance + USD equivalent                                          |
+| `/api/v1/wallet/packages`      | GET    | Published USD top-up packages (source of truth for Stripe Checkout)      |
+| `/api/v1/wallet/debit`         | POST   | Bill a scholar BFF call via `compute_cost`; idempotent on `request_id`   |
+| `/api/v1/wallet/checkout`      | POST   | Create a Stripe Checkout Session for a package                           |
+| `/api/v1/tokens/mint`          | POST   | Mint an opaque `scl_*` bearer for the scholar MCP engine                 |
+| `/api/v1/tokens`               | GET    | List the user's active (non-revoked) tokens                              |
+| `/api/v1/tokens/{token_id}`    | DELETE | Revoke a token                                                           |
+| `/webhook/stripe`              | POST   | Stripe webhook (no JWT; signed by `STRIPE_WEBHOOK_SECRET`)               |
+
 ### Client Portal
 | Endpoint | Method | Description |
 |----------|--------|-------------|

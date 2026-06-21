@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [Unreleased] — 2026-06-21
+
+### Added
+- `/api/v1/wallet/{balance,packages,debit,checkout}` REST endpoints, JWT-authed via scholar Supabase identity (`current_jwt_user` dep at `src/gateway/jwt_auth.py`).
+- `/api/v1/tokens/{mint,list,revoke}` for scholar-issued MCP bearers (`scl_*`). Recognised by `/introspect` alongside `dsmoz_*` agent tokens and oauth access tokens.
+- `/webhook/stripe` handler — credits on `checkout.session.completed`, debits on `charge.refunded`. Idempotent on `stripe_session_id`.
+- `users.supabase_user_id` UUID column with unique index; `mcp_tokens` table (token_hash UNIQUE, RLS enabled service-role-only); `oauth_usage_logs.{caller_kind,request_id}` columns with UNIQUE partial index on `request_id`; `credit_topup_requests.{payment_provider,stripe_session_id,stripe_payment_intent}`.
+- `mcp_cost_profile` row for `mcp-scholar-bff` so in-app scholar chat costs flow through the same `compute_cost` formula as MCP traffic (`caller_kind = 'scholar_bff'`).
+- `credit_wallet_user(p_user_id, p_amount)` Postgres RPC for additive top-ups (counterpart to existing `settle_credits_user`).
+
+### Env
+- `SCHOLAR_JWT_ISS_ALLOWLIST`, `SCHOLAR_JWT_AUDIENCE`, `SCHOLAR_SUPABASE_JWT_SECRET` — Supabase JWT verification (HS256). `SCHOLAR_JWT_JWKS_URL` + `SCHOLAR_JWT_LEEWAY_S` are forward-compatible knobs.
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` — Stripe Checkout + webhook signature verification.
+
 ## [1.10.0] - 2026-04-22
 
 ### Added
