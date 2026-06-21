@@ -5,6 +5,9 @@ Both require JWT authentication via current_jwt_user dependency.
 """
 from __future__ import annotations
 
+import hashlib
+import secrets as _secrets
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -308,3 +311,125 @@ def post_checkout(
         raise HTTPException(status_code=503, detail=str(exc))
 
     return CheckoutOut(**session)
+
+
+# ── Token management (opaque bearer tokens) ──────────────────────────────────
+
+token_router = APIRouter(prefix="/api/v1/tokens", tags=["tokens"])
+
+
+def _hash_token(plaintext: str) -> str:
+    """Hash token with SHA-256."""
+    return hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
+
+
+class MintIn(BaseModel):
+    """Request body for /tokens/mint endpoint."""
+    scope: str = "mcp-scholar"
+    label: Optional[str] = None
+    expires_in_days: Optional[int] = None
+
+
+class MintOut(BaseModel):
+    """Response body for /tokens/mint endpoint."""
+    token: str
+    token_id: str
+    scope: str
+    expires_at: Optional[str] = None
+
+
+@token_router.post("/mint", response_model=MintOut)
+def mint_token(
+    payload: MintIn,
+    user_id: str = Depends(current_jwt_user),
+) -> MintOut:
+    """Mint an opaque scl_* bearer token.
+
+    Returns the plaintext token once at mint time. Only the SHA-256 hash is stored.
+    The token can be used to authenticate subsequent requests via /introspect.
+
+    Requires JWT authentication.
+    """
+    plaintext = "scl_" + _secrets.token_urlsafe(32)
+    token_hash = _hash_token(plaintext)
+    expires_at = (
+        (datetime.now(timezone.utc) + timedelta(days=payload.expires_in_days)).isoformat()
+        if payload.expires_in_days else None
+    )
+    db = get_db()
+    row = (
+        db.table("mcp_tokens")
+        .insert({
+            "user_id": user_id,
+            "token_hash": token_hash,
+            "scope": payload.scope,
+            "label": payload.label,
+            "expires_at": expires_at,
+        })
+        .execute()
+    )
+    token_id = row.data[0]["token_id"] if row.data else ""
+    return MintOut(token=plaintext, token_id=token_id,
+                   scope=payload.scope, expires_at=expires_at)
+
+
+class TokenSummary(BaseModel):
+    """Summary of a stored token (plaintext not included)."""
+    token_id: str
+    label: Optional[str] = None
+    scope: str
+    expires_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class TokensList(BaseModel):
+    """Response body for /tokens list endpoint."""
+    tokens: list[TokenSummary]
+
+
+@token_router.get("", response_model=TokensList)
+def list_tokens(user_id: str = Depends(current_jwt_user)) -> TokensList:
+    """List active (non-revoked) tokens for the authenticated user.
+
+    Requires JWT authentication.
+    """
+    db = get_db()
+    rows = (
+        db.table("mcp_tokens")
+        .select("token_id,label,scope,expires_at,created_at")
+        .eq("user_id", user_id)
+        .is_("revoked_at", None)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return TokensList(tokens=[TokenSummary(**r) for r in (rows.data or [])])
+
+
+class RevokeOut(BaseModel):
+    """Response body for /tokens/{token_id} delete endpoint."""
+    revoked: bool
+
+
+@token_router.delete("/{token_id}", response_model=RevokeOut)
+def revoke_token(
+    token_id: str,
+    user_id: str = Depends(current_jwt_user),
+) -> RevokeOut:
+    """Revoke a token by token_id.
+
+    Sets revoked_at to the current timestamp. The token remains in the database
+    but is no longer valid for authentication.
+
+    Requires JWT authentication. User can only revoke their own tokens.
+    """
+    db = get_db()
+    res = (
+        db.table("mcp_tokens")
+        .update({"revoked_at": datetime.now(timezone.utc).isoformat()})
+        .eq("token_id", token_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="not_found")
+    return RevokeOut(revoked=True)

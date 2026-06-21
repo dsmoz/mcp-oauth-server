@@ -61,7 +61,7 @@ from src.portal.social import router as portal_social_router
 from src.portal.integrations import router as portal_integrations_router
 from src.gateway.routes import GatewayASGI
 from src.gateway.rest_proxy import router as rest_proxy_router
-from src.gateway.wallet_api import router as wallet_router
+from src.gateway.wallet_api import router as wallet_router, token_router
 from src.gateway.stripe_webhook import router as stripe_router
 from src.config import get_settings
 
@@ -132,6 +132,7 @@ app.include_router(portal_social_router)
 app.include_router(portal_integrations_router)
 app.include_router(rest_proxy_router)
 app.include_router(wallet_router)
+app.include_router(token_router)
 app.include_router(stripe_router)
 
 # Serve portal static assets (brand icon, etc.)
