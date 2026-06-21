@@ -19,38 +19,37 @@ router = APIRouter(prefix="/api/v1/wallet", tags=["wallet"])
 
 class BalanceResponse(BaseModel):
     """User credit balance and USD equivalent."""
-    credit_balance: float = Field(..., description="Credit balance in credits")
-    usd_balance: float = Field(..., description="USD equivalent at current exchange rate")
+    balance_credits: float = Field(..., description="Credit balance in credits")
+    balance_usd: float = Field(..., description="USD equivalent at current exchange rate")
+    currency: str = Field(default="USD", description="Currency code (ISO 4217)")
 
 
-class TopupPackage(BaseModel):
+class Package(BaseModel):
     """A published topup package available for purchase."""
     id: str
     name: str
-    credit_amount: float
-    usd_price: float
+    credits_granted: float
+    price_usd: float
 
 
 class PackagesResponse(BaseModel):
     """Published topup packages ordered by price."""
-    packages: list[TopupPackage] = Field(..., description="Topup packages sorted by price (ascending)")
+    packages: list[Package] = Field(..., description="Topup packages sorted by price (ascending)")
 
 
 def _usd_per_credit(db) -> float:
-    """Fetch current USD-per-credit exchange rate from pricing_config."""
+    """Fetch current USD-per-credit exchange rate from pricing_config.
+
+    Falls back to 0.01 if not configured (standard rate).
+    """
     result = (
         db.table("pricing_config")
         .select("usd_per_credit")
-        .eq("is_active", True)
+        .eq("id", 1)
         .limit(1)
         .execute()
     )
-    if not result.data:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="pricing_config not found"
-        )
-    return float(result.data[0]["usd_per_credit"])
+    return float(result.data[0]["usd_per_credit"]) if result.data else 0.01
 
 
 @router.get("/balance", response_model=BalanceResponse)
@@ -78,8 +77,9 @@ async def get_balance(user_id: str = Depends(current_jwt_user), db = Depends(get
     usd_balance = credit_balance * usd_per_credit
 
     return BalanceResponse(
-        credit_balance=credit_balance,
-        usd_balance=usd_balance
+        balance_credits=credit_balance,
+        balance_usd=usd_balance,
+        currency="USD"
     )
 
 
@@ -87,24 +87,26 @@ async def get_balance(user_id: str = Depends(current_jwt_user), db = Depends(get
 async def get_packages(user_id: str = Depends(current_jwt_user), db = Depends(get_db)):
     """Get published topup packages ordered by price.
 
-    Requires JWT authentication.
+    Requires JWT authentication. Only USD-priced packages are exposed in this v1 endpoint.
     """
     result = (
         db.table("topup_packages")
-        .select("id, name, credit_amount, usd_price")
+        .select("id, name, price_amount, credits, currency, is_published")
         .eq("is_published", True)
-        .order("usd_price", desc=False)
+        .order("price_amount", desc=False)
         .execute()
     )
 
-    packages = [
-        TopupPackage(
+    packages = []
+    for row in result.data or []:
+        # Only USD-priced packages are exposed in this v1 endpoint
+        if (row.get("currency") or "USD").upper() != "USD":
+            continue
+        packages.append(Package(
             id=row["id"],
             name=row["name"],
-            credit_amount=float(row["credit_amount"]),
-            usd_price=float(row["usd_price"]),
-        )
-        for row in result.data or []
-    ]
+            price_usd=float(row["price_amount"]),
+            credits_granted=float(row["credits"]),
+        ))
 
     return PackagesResponse(packages=packages)
