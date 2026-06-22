@@ -441,6 +441,40 @@ async def introspect(
             expires_at=None,
             is_revoked=False,
         )
+    elif body.token and body.token.startswith("scl_"):
+        # Opaque scholar tokens (minted via /api/v1/tokens/mint).
+        # Early return: skip usage logging + admin lookup (scholar tokens are
+        # billed via /wallet/debit, not /introspect). Returns active/user_id only.
+        import hashlib
+        from datetime import datetime, timezone
+        row = (
+            get_db()
+            .table("mcp_tokens")
+            .select("user_id, scope, expires_at, revoked_at")
+            .eq("token_hash", hashlib.sha256(body.token.encode("utf-8")).hexdigest())
+            .limit(1)
+            .execute()
+        )
+        if not row.data:
+            return JSONResponse({"active": False})
+        r = row.data[0]
+        if r.get("revoked_at"):
+            return JSONResponse({"active": False})
+        exp = r.get("expires_at")
+        if exp:
+            try:
+                exp_dt = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+            except ValueError:
+                exp_dt = None
+            if exp_dt and exp_dt < datetime.now(timezone.utc):
+                return JSONResponse({"active": False})
+        return JSONResponse({
+            "active": True,
+            "user_id": r["user_id"],
+            "client_id": r["user_id"],
+            "scope": r.get("scope") or "mcp-scholar",
+            "exp": None,
+        })
     else:
         provider = _provider()
         at = provider.load_access_token(body.token)

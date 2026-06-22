@@ -110,7 +110,14 @@ class SupabaseUserProvider:
         oauth_sub: Optional[str] = None,
         avatar_url: Optional[str] = None,
     ) -> User:
-        """Create a new user. Raises ValueError if email already exists."""
+        """Create a new user. Raises ValueError if email already exists.
+
+        Email is normalized (trim + lowercase) at this single write chokepoint
+        so ``users.email`` is always canonical — the scholar shared-wallet merge
+        (jwt_auth.resolve_or_create_user) matches on a lowercased email, and a
+        stray mixed-case row would otherwise silently fork into a second wallet.
+        """
+        email = (email or "").strip().lower()
         existing = self.get_user_by_email(email)
         if existing is not None:
             raise ValueError(f"User with email {email!r} already exists")
