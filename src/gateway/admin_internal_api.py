@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from src.db import get_db
 from src.gateway.jwt_auth import resolve_or_create_user
+from src.gateway.wallet_api import _already_logged  # shared idempotency check
 from src.portal.routes import _require_service_secret  # shared X-Service-Secret check
 from src.users.provider import SupabaseUserProvider
 
