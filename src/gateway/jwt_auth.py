@@ -145,9 +145,27 @@ def verify_supabase_jwt(token: str, config: JWTConfig) -> dict:
 def resolve_or_create_user(db, supabase_user_id: str, email: str = "") -> str:
     """Map a Supabase user UUID to a gateway ``users.user_id`` (text).
 
-    Lookup first; on miss, insert a new users row with a stable
-    "scholar_" + 12-hex-char user_id. Idempotent under race via
-    the supabase_user_id unique index.
+    Resolution order, single shared wallet per real person:
+
+    1. Existing scholar link by ``supabase_user_id`` -> return it.
+    2. Existing gateway row with the SAME email -> share that wallet.
+       The Scholar JWT is only minted after Supabase verified the email,
+       so the email here is trusted. ``is_active`` is the gateway's
+       verified/confirmed flag (set by social sign-in and password
+       confirmation):
+         - active row  -> a native Connect account for the same person;
+           link ``supabase_user_id`` onto it (true shared wallet).
+         - inactive row with zero balance -> an abandoned/unconfirmed
+           shell; reclaim it (link + activate). This also avoids the
+           ``UNIQUE(email)`` collision a fresh insert would hit.
+         - inactive row that still holds credit -> anomalous (possible
+           deactivation); refuse rather than absorb the balance.
+       A row already linked to a *different* supabase_user_id is the one
+       case we refuse to merge (one verified email = one person; this
+       should be unreachable) and raise rather than cross wallets.
+    3. No match -> insert a new ``scholar_`` + 12-hex-char row.
+
+    Idempotent under race via the supabase_user_id unique index.
     """
     result = (
         db.table("users")
@@ -159,13 +177,58 @@ def resolve_or_create_user(db, supabase_user_id: str, email: str = "") -> str:
     if result.data:
         return result.data[0]["user_id"]
 
+    norm_email = (email or "").strip().lower()
+    if norm_email:
+        existing = (
+            db.table("users")
+            .select("user_id, is_active, supabase_user_id, credit_balance")
+            .eq("email", norm_email)
+            .limit(1)
+            .execute()
+        )
+        row = existing.data[0] if existing.data else None
+        if row is not None:
+            linked = row.get("supabase_user_id")
+            if linked and linked != supabase_user_id:
+                raise RuntimeError(
+                    "email already linked to a different supabase user; "
+                    "refusing to merge wallets"
+                )
+            if row.get("is_active"):
+                # Native Connect account for the same verified person ->
+                # link supabase_user_id onto it (true shared wallet).
+                (
+                    db.table("users")
+                    .update({"supabase_user_id": supabase_user_id})
+                    .eq("user_id", row["user_id"])
+                    .execute()
+                )
+                return row["user_id"]
+            # Inactive shell: reclaim ONLY a genuinely empty one (link +
+            # activate), avoiding the UNIQUE(email) insert collision. An
+            # inactive row that still holds credit is anomalous (e.g. a
+            # deactivated/suspended account) -> refuse rather than absorb its
+            # balance under a fresh supabase identity.
+            if (row.get("credit_balance") or 0) > 0:
+                raise RuntimeError(
+                    "inactive account holds a credit balance; "
+                    "refusing to reclaim wallet"
+                )
+            (
+                db.table("users")
+                .update({"supabase_user_id": supabase_user_id, "is_active": True})
+                .eq("user_id", row["user_id"])
+                .execute()
+            )
+            return row["user_id"]
+
     new_user_id = "scholar_" + secrets.token_hex(6)
     try:
         ins = (
             db.table("users")
             .insert({
                 "user_id": new_user_id,
-                "email": email or f"{new_user_id}@scholar.dsmoz.local",
+                "email": norm_email or f"{new_user_id}@scholar.dsmoz.local",
                 "supabase_user_id": supabase_user_id,
                 "is_active": True,
             })
