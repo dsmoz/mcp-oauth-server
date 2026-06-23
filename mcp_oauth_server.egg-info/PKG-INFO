@@ -17,3 +17,5 @@ Requires-Dist: mcp>=1.0.0
 Requires-Dist: itsdangerous>=2.1.0
 Requires-Dist: slowapi>=0.1.9
 Requires-Dist: sentry-sdk[fastapi]>=2.0.0
+Requires-Dist: PyJWT[crypto]>=2.8.0
+Requires-Dist: stripe>=8.0.0
