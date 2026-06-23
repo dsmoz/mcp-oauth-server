@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # auto-linking a Connect user's Scholar library). Must match the value set in
     # scholar-web's deployment env. Endpoints refuse (503) when left blank.
     SCHOLAR_LINK_SERVICE_SECRET: str = ""
+    # Base URL of the scholar-web deployment (no trailing slash). Used to fire
+    # the toolbox-disable webhook when a user removes scholar from their
+    # gateway toolbox; scholar-web revokes mcp-scope tokens in response.
+    SCHOLAR_WEB_BASE_URL: str = ""
 
 
 @lru_cache()
