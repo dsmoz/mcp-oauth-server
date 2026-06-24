@@ -1110,7 +1110,28 @@ async def portal_mcps_post(request: Request, user_id: str = Depends(_require_por
     valid_slugs = {row["slug"] for row in catalogue}
     selected = [slug for slug in form.getlist("mcps") if slug in valid_slugs]
 
+    prev = list((user.allowed_mcp_resources or []) if user else [])
     _users().set_allowed_mcps(user_id, selected)
+
+    # Notify scholar-web if the user just removed "scholar" from their toolbox,
+    # so it can revoke the matching mcp-scope sch_live_* tokens. Best-effort —
+    # the toolbox state is the source of truth; failure here only delays
+    # token revocation until the next /api/mcp/disable.
+    if "scholar" in prev and "scholar" not in selected and user is not None and user.email:
+        settings = get_settings()
+        base = (settings.SCHOLAR_WEB_BASE_URL or "").rstrip("/")
+        secret = settings.SCHOLAR_LINK_SERVICE_SECRET
+        if base and secret:
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=5.0) as cx:
+                    await cx.post(
+                        f"{base}/api/mcp/gateway_disabled",
+                        json={"email": user.email},
+                        headers={"X-Service-Secret": secret},
+                    )
+            except Exception as exc:  # noqa: BLE001 — best-effort webhook
+                print(f"[scholar toolbox webhook] failed: {exc}")
     return RedirectResponse(url="/portal/mcps", status_code=303)
 
 
